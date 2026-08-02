@@ -1,0 +1,179 @@
+/* ============================================================
+ * KALKULÁTOR PROJ – výpočetní jádro projekčních prací
+ * Zdroj: Kalkulator_projekce.xlsx (list STANDARDNÍ Kalkulace)
+ * Sekce: hodiny×sazba + fixní položky + doprava (bez marže),
+ * marže po sekcích, sleva/přirážka globální s možností přepisu
+ * u jednotlivých sekcí (ve vzoru: Zaměření +30 %, Kolaudace +20 %).
+ * ============================================================ */
+
+/* PRÁZDNÉ SAZBY – ze stejného důvodu jako u DEFAULT_CENIK v engine.js
+ * (tam je to rozepsané i s citací zadání z 30. 7. 2026). Skutečné hodinové
+ * sazby a fixní ceny subdodávek leží ve `_program.json` ve složce `_DB`;
+ * odtud je aplikace načte při spuštění a obsah tohoto objektu přepíše na
+ * místě. Značky `ukazkove` a `prazdny` tím zmizí a červený pruh zhasne.
+ * Zůstává jen struktura; `dph` je zákonná sazba, ne naše cena. */
+const DEFAULT_CENIK_PROJ = {  // HODNOTY VYNULOVÁNY pro GitHub (pripravit_github.py) – reálné sazby jen v lokální záloze
+  ukazkove: true,
+  prazdny: true,
+  dph: 0,                         // zákonná sazba DPH projekční části (nezávislá na ceníku OCK)
+  marze: 0,                          // globální přirážka sekcí
+  sazby: { projektant: 0, statik: 0, zamereni: 0 },
+  dopravaKmKc: 0,                    // Kč/km
+  dopravaPausalKc: 0,                // paušál mimo Prahu (po Praze 0)
+  fixy: {                            // fixní náklady po sekcích (Kč)
+    pamatkari: 0,                    // PROJEDNÁNÍ STUDIE
+    uzemniRozvoj: 0,
+    pbr: 0,                          // DPZ
+    studieOsvitu: 0,
+    elektroDpz: 0,
+    ic: 0,                           // IČ – inženýrská činnost
+    elektroDps: 0,                   // DPS
+    ezc: 0,                          // EZC
+    kolaudace: 0,                    // KOLAUDACE (1 ks výtahu)
+    geodet: 0,                       // GEODETICKÉ ZAMĚŘENÍ
+  },
+};
+
+// Definice sekcí a položek (hodnoty hodin/fixů = výchozí z předlohy, vše editovatelné)
+const DEFAULT_ZADANI_PROJ = {
+  slevaPct: 0,                       // globální sleva(−)/přirážka(+) v % (L2)
+  sekce: [
+    { key: 'zamereni', nazev: 'ZAMĚŘENÍ', doprava: { km: 0, pausal: 0 }, prirazkaPct: 0,
+      polozky: [
+        { nazev: 'Zaměření', typ: 'hod', sazba: 'zamereni', hodiny: 0, rezerva: 0 },
+        { nazev: 'Výstup', typ: 'hod', sazba: 'projektant', hodiny: 0, rezerva: 0 },
+      ] },
+    { key: 'studie', nazev: 'ST – STUDIE', prirazkaPct: null,
+      polozky: [
+        { nazev: 'Studie', typ: 'hod', sazba: 'projektant', hodiny: 0, rezerva: 0 },
+        { nazev: 'Konzultace', typ: 'hod', sazba: 'projektant', hodiny: 0, rezerva: 0 },
+      ] },
+    { key: 'projednani', nazev: 'PROJEDNÁNÍ STUDIE', prirazkaPct: null,
+      polozky: [
+        { nazev: 'Památkáři', typ: 'fix', fixKey: 'pamatkari' },
+        { nazev: 'Územní rozvoj', typ: 'fix', fixKey: 'uzemniRozvoj' },
+      ] },
+    { key: 'dpz', nazev: 'DPZ – DOKUMENTACE PRO POVOLENÍ ZÁMĚRU', doprava: { km: 0, pausal: 0 }, prirazkaPct: null,
+      polozky: [
+        { nazev: 'Projektová dokumentace pro DOSS', typ: 'hod', sazba: 'projektant', hodiny: 0, rezerva: 0 },
+        { nazev: 'Projektová dokumentace pro SÚ', typ: 'hod', sazba: 'projektant', hodiny: 0, rezerva: 0 },
+        { nazev: 'Statika', typ: 'hod', sazba: 'statik', hodiny: 0, rezerva: 0 },
+        { nazev: 'PBŘ', typ: 'fix', fixKey: 'pbr' },
+        { nazev: 'Studie osvitu (Praha 4 a 6)', typ: 'fix', fixKey: 'studieOsvitu' },
+        { nazev: 'Elektro projekt', typ: 'fix', fixKey: 'elektroDpz' },
+      ] },
+    { key: 'ic', nazev: 'IČ – INŽENÝRSKÁ ČINNOST', prirazkaPct: null,
+      polozky: [{ nazev: 'Inženýrská činnost', typ: 'fix', fixKey: 'ic' }] },
+    { key: 'dps', nazev: 'DPS – DOKUMENTACE PRO PROVEDENÍ STAVBY', prirazkaPct: null,
+      polozky: [
+        { nazev: 'Projekt pro DPS – stavební část', typ: 'hod', sazba: 'projektant', hodiny: 0, rezerva: 0 },
+        { nazev: 'Statika', typ: 'hod', sazba: 'statik', hodiny: 0, rezerva: 0 },
+        { nazev: 'Elektro projekt', typ: 'fix', fixKey: 'elektroDps' },
+      ] },
+    { key: 'ezc', nazev: 'EZC – EKONOMICKÁ ZADÁVACÍ ČÁST (celý projekt)', prirazkaPct: null,
+      polozky: [{ nazev: 'Ekonomická zadávací část', typ: 'fix', fixKey: 'ezc' }] },
+    { key: 'kolaudace', nazev: 'KOLAUDACE (pro 1 ks výtahu)', doprava: { km: 0, pausal: 0 }, prirazkaPct: 0,
+      polozky: [{ nazev: 'Kolaudace', typ: 'fix', fixKey: 'kolaudace' }] },
+    { key: 'geodet', nazev: 'GEODETICKÉ ZAMĚŘENÍ', prirazkaPct: null,
+      polozky: [{ nazev: 'Geodetické zaměření', typ: 'fix', fixKey: 'geodet' }] },
+  ],
+};
+
+/* Ruční přepis položky PROJ (#8, zadání z 30. 7. 2026).
+ *
+ * `cenaPrepis` a `sazbaPrepis` jsou hodnoty sjednané pro JEDNU zakázku.
+ * Do ceníku nesahají — ten je společný všem zakázkám a přepsat ho kvůli
+ * jedné stavbě znamená tiše posunout cenu i všem ostatním.
+ *
+ * Prázdno (undefined / null / '') znamená „přepis není" a hodnota se vezme
+ * z ceníku. NULA je naopak platný přepis: „tuhle činnost děláme zdarma" je
+ * legitimní ústupek a nesmí se tvářit jako nevyplněno. Proto se tu netestuje
+ * pravdivost, ale prázdnota. */
+function _prepisPlati(v) { return !(v === undefined || v === null || v === ''); }
+
+/* ---- přesun položky v rámci sekce (přetahování v kalkulaci PROJ) ----
+ * V PROJ drží pořadí samo pole `polozky`: vypocetProj mapuje položky 1:0,
+ * takže index v zadání a index ve výpočtu jsou tentýž řádek. (V OCK to takhle
+ * nejde – tam se sekce skládá z ceníku a pořadí se vede zvlášť v Z.poradi.)
+ * Sémantika je stejná jako u presunRadek v OCK: tažený řádek se vloží PŘED
+ * ten, na který se pustí. Funkce nesahá na vstupní pole a vrací nové – díky
+ * tomu jde otestovat bez prohlížeče a bez zbytku aplikace. */
+function presunPolozku(polozky, from, to) {
+  const out = Array.isArray(polozky) ? polozky.slice() : [];
+  const cele = n => typeof n === 'number' && isFinite(n) && Math.floor(n) === n;
+  if (!cele(from) || !cele(to)) return out;
+  if (from < 0 || from >= out.length || to < 0 || to >= out.length || from === to) return out;
+  const [x] = out.splice(from, 1);
+  out.splice(to > from ? to - 1 : to, 0, x);
+  return out;
+}
+
+function vypocetProj(zadani, cenik) {
+  const c = cenik;
+  const globalPct = (zadani.slevaPct || 0) / 100;
+
+  const sekce = zadani.sekce.map(s => {
+    const polozky = s.polozky.map(p => {
+      /* Vyřazená položka zůstane v seznamu i s hodinami a cenou, jen se
+       * nepočítá. Tím se liší od smazání: vrátí se jedním kliknutím a je
+       * pořád vidět, co u téhle stavby nakonec neděláme a za kolik.
+       * Vyřazení má přednost před přepisem — jinak by se položka s přepsanou
+       * cenou dál počítala a nikdo by nechápal proč. */
+      const vyrazeno = !!p.vyrazeno;
+
+      if (p.typ === 'hod') {
+        const hodiny = (+p.hodiny || 0) + (+p.rezerva || 0);
+        const zCeniku = c.sazby[p.sazba] != null ? c.sazby[p.sazba] : (+p.sazbaKc || 0);
+        const prepsana = _prepisPlati(p.sazbaPrepis);
+        const sazba = prepsana ? (+p.sazbaPrepis || 0) : zCeniku;
+        return { ...p, vyrazeno, hodinyCelkem: hodiny, sazbaKc: sazba,
+                 sazbaZCeniku: zCeniku, sazbaPrepsana: prepsana,
+                 naklad: vyrazeno ? 0 : hodiny * sazba };
+      }
+      // fixní položka: cena primárně z ceníku (fixy[fixKey]); vlastní položky mají cenu přímo
+      const zCeniku = p.fixKey && c.fixy && c.fixy[p.fixKey] != null ? +c.fixy[p.fixKey] : (+p.cena || 0);
+      const prepsana = _prepisPlati(p.cenaPrepis);
+      const fix = prepsana ? (+p.cenaPrepis || 0) : zCeniku;
+      return { ...p, vyrazeno, hodinyCelkem: 0, sazbaKc: null,
+               cenaZCeniku: zCeniku, cenaPrepsana: prepsana,
+               cenaEfekt: fix, naklad: vyrazeno ? 0 : fix };
+    });
+    const naklad = polozky.reduce((a, p) => a + p.naklad, 0);
+    const marze = naklad * c.marze;
+    const cena = naklad + marze;                      // O – nabídková cena sekce (bez dopravy)
+    // Doprava: bez marže, přičítá se k ceně sekce (vzor: O12 = O8 + O11).
+    // Paušál „mimo Prahu" jde Z CENÍKU (dopravaPausalKc) a přičítá se jen
+    // se zaškrtnutým s.doprava.mimoPrahu — do 2. 8. 2026 položka ceníku do
+    // výpočtu vůbec nevstupovala a editovala se naprázdno. Ruční Kč pole
+    // (s.doprava.pausal) zůstává jako příplatek navíc; stará zakázka bez
+    // pole mimoPrahu se počítá na haléř stejně jako dřív.
+    const dopravaKc = s.doprava
+      ? (+s.doprava.km || 0) * c.dopravaKmKc
+        + (s.doprava.mimoPrahu ? (+c.dopravaPausalKc || 0) : 0)
+        + (+s.doprava.pausal || 0)
+      : 0;
+    const cenaSDopravou = cena + dopravaKc;
+    const pct = s.prirazkaPct == null ? globalPct : s.prirazkaPct / 100;
+    const slevaKc = cenaSDopravou * pct;              // T – sleva/přirážka v Kč
+    const celkem = cenaSDopravou + slevaKc;           // V – celková cena sekce
+    return { key: s.key, nazev: s.nazev, polozky, naklad, marze, cena, dopravaKc,
+             cenaSDopravou, prirazkaPct: s.prirazkaPct == null ? null : s.prirazkaPct,
+             pouzitePct: pct * 100, slevaKc, celkem };
+  });
+
+  const sum = f => sekce.reduce((a, s) => a + s[f], 0);
+  return {
+    sekce,
+    souhrn: {
+      naklad: sum('naklad'),           // I61
+      marze: sum('marze'),             // M61
+      doprava: sum('dopravaKc'),
+      cena: sum('cenaSDopravou'),      // O61
+      sleva: sum('slevaKc'),           // T61
+      celkem: sum('celkem'),           // V61 – celková nabídková cena
+    },
+  };
+}
+
+if (typeof module !== 'undefined')
+  module.exports = { vypocetProj, presunPolozku, DEFAULT_ZADANI_PROJ, DEFAULT_CENIK_PROJ };

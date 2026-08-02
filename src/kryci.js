@@ -1,0 +1,235 @@
+/* ============================================================
+ * KRYCÍ LIST ZAKÁZKY – datový model (jeden zdroj pravdy)
+ * Používá jej záložka Krycí list (kryci_ui.js) i generování do Wordu.
+ * Každé pole má příslušnost k verzi: 'bo' (Backoffice) a/nebo 'techdata'
+ * (Technické oddělení) – dle vzoru „..._BOvsTECH.xlsx". Word se generuje
+ * VŽDY v obou verzích. Hodnota pole: ruční přepis > prefill > výchozí.
+ * ============================================================ */
+
+const KRYCI_SEKCE = [
+  { sekce: 'Základní údaje', pole: [
+    /* KL-4: obchodníka aplikace zná – nabídku vypracoval ten, kdo je uvedený
+     * v Nastavení → Firma. Přihlášeného uživatele aplikace nemá, takže je to
+     * jediný spolehlivý zdroj; ruční přepis zůstává (↺ vrátí automatiku). */
+    { id: 'obchodnik', label: 'Jméno obchodníka', verze: ['bo', 'techdata'], prefill: c => firmaHodnota(c.firma, 'zpracoval'), src: 'Nastavení → Firma (Vypracoval)' },
+    { id: 'nazevAkce', label: 'Název akce', verze: ['bo', 'techdata'], bind: 'ZAK.nazevAkce', prefill: c => c.zak.nazevAkce, src: 'hlavička kalkulace' },
+    { id: 'cisloCN', label: 'Číslo nabídky (CN)', verze: ['bo', 'techdata'], bind: 'ZAK.cislo', prefill: c => c.zak.cislo, src: 'hlavička kalkulace' },
+    { id: 'adresaStavby', label: 'Adresa stavby', verze: ['bo', 'techdata'], bind: 'ZAK.adresa', prefill: c => c.zak.adresa, src: 'hlavička kalkulace' },
+    /* KL-2: jen část OCK po slevě. Projekce má vlastní krycí list PROJ. */
+    { id: 'hodnotaBezDph', label: 'Hodnota zakázky bez DPH', verze: ['bo', 'techdata'], prefill: c => c.hodnota, src: 'z nabídky OCK (po slevě)' },
+    { id: 'priplatkyNabidka', label: 'Příplatky v nabídce', verze: ['bo', 'techdata'], prefill: c => c.priplatky, src: 'z nabídky' },
+  ] },
+  /* SET-3 – firemní údaje se doplní automaticky z Nastavení → Firma;
+   * ruční přepis v krycím listu je možný (např. jiná fakturační adresa). */
+  { sekce: 'Dodavatel (naše firma)', pole: [
+    { id: 'dodNazev', label: 'Zhotovitel', verze: ['bo', 'techdata'], prefill: c => firmaHodnota(c.firma, 'nazev'), src: 'Nastavení → Firma' },
+    { id: 'dodIcoDic', label: 'IČO / DIČ zhotovitele', verze: ['bo'], prefill: c => firmaIcoDic(c.firma), src: 'Nastavení → Firma' },
+    { id: 'dodSidlo', label: 'Sídlo zhotovitele', verze: ['bo'], prefill: c => firmaSidlo(c.firma), src: 'Nastavení → Firma' },
+    { id: 'dodBanka', label: 'Bankovní spojení zhotovitele', verze: ['bo'], prefill: c => firmaBankaRadek(c.firma), src: 'Nastavení → Firma' },
+    { id: 'dodKontakt', label: 'Kontakt na zhotovitele (telefon, e-mail)', verze: ['bo', 'techdata'], prefill: c => [firmaHodnota(c.firma, 'telefon'), firmaHodnota(c.firma, 'email')].filter(Boolean).join(', '), src: 'Nastavení → Firma' },
+    { id: 'dodZpracoval', label: 'Nabídku vypracoval', verze: ['bo', 'techdata'], prefill: c => [firmaHodnota(c.firma, 'zpracoval'), firmaHodnota(c.firma, 'zpracovalTelefon'), firmaHodnota(c.firma, 'zpracovalEmail')].filter(Boolean).join(', '), src: 'Nastavení → Firma' },
+  ] },
+  { sekce: 'Zákazník (smluvní partner)', pole: [
+    { id: 'jmenoPrijmeni', label: 'Jméno a příjmení kontaktu', verze: ['bo'], prefill: c => c.zak.kontakt, src: 'z hlavičky zakázky' },
+    { id: 'zakaznik', label: 'Zákazník (smluvní partner)', verze: ['bo', 'techdata'], prefill: c => c.zak.objednatel, src: 'z hlavičky zakázky' },
+    { id: 'kontaktObjednatel', label: 'Kontaktní údaje na objednatele (email, telefon)', verze: ['bo'] },
+    { id: 'ico', label: 'IČO', verze: ['bo'], prefill: c => c.zak.ico, src: 'z hlavičky zakázky' },
+    /* KL-1: sídlo objednatele, NE adresa stavby. Developer sídlí jinde, než
+     * staví; do smlouvy a na fakturu patří sídlo. Dokud není v hlavičce
+     * vyplněné, zůstane pole prázdné – raději prázdné než špatné. */
+    { id: 'adresaZakaznik', label: 'Adresa (sídlo) objednatele', verze: ['bo'], prefill: c => c.zak.adresaObjednatele, src: 'z hlavičky zakázky (sídlo)' },
+    { id: 'fakturacniEmail', label: 'Kontakt na fakturační oddělení (email, telefon)', verze: ['bo'] },
+    { id: 'kontaktStavba', label: 'Kontakt stavba (tel / email)', verze: ['bo', 'techdata'] },
+    /* KL-6: ve formuláři je odkaz, ne popis – proto typ 'link' (otevře se ↗) */
+    { id: 'scoring', label: 'Scoring Cribis / Pipedrive', verze: ['bo'], typ: 'link', ph: 'https://…' },
+  ] },
+  { sekce: 'Typ smlouvy a produktu', pole: [
+    { id: 'typSmlouvy', label: 'Typ smlouvy', verze: ['bo'], typ: 'radio', o: ['Naše bez úprav', 'Naše s úpravami', 'Cizí'], prefill: () => 'Naše bez úprav', src: 'výchozí' },
+    /* KL-3: formulář zná i třetí možnost „Projekce". Čistě projekční zakázka
+     * (OCK nula, PROJ oceněné) se nesmí označit jako šachta. Zůstává textové
+     * pole, ne přepínač – kombinovaná zakázka se do tří škatulek nevejde. */
+    { id: 'typProduktu', label: 'Typ produktu / služby', verze: ['bo', 'techdata'], prefill: c => c.typProduktu, src: 'z kalkulace (OCK + PROJ)' },
+  ] },
+  { sekce: 'Platební podmínky', pole: [
+    { id: 'splatnostDni', label: 'Splatnost faktur (dní)', verze: ['bo'], prefill: () => '14', src: 'výchozí' },
+    { id: 'zpusobFakturace', label: 'Způsob fakturace', verze: ['bo'], prefill: () => 'Náš standard / měsíční', src: 'výchozí' },
+    { id: 'zaloha1', label: 'Záloha / dílčí faktura č. 1', verze: ['bo'], prefill: () => '50 % – po podpisu smlouvy', src: 'výchozí' },
+    { id: 'faktura2', label: 'Dílčí faktura č. 2', verze: ['bo'], prefill: () => '40 % – po zahájení montáže', src: 'výchozí' },
+    { id: 'fakturaKonc', label: 'Konečná faktura', verze: ['bo'], prefill: () => '10 % – po předání', src: 'výchozí' },
+    /* KL-5: ve formuláři jsou dva samostatné řádky, každý s vlastním procentem
+     * („ANO do odstranění VaN | %" a „ANO po dobu záruky | %"). Původní id
+     * `zadrzne` zůstává (nic se neodstraňuje), jen se zúžilo na první řádek;
+     * starý volný text převede kryciMigraceZadrzne() níže. */
+    { id: 'zadrzne', label: 'Zádržné – do odstranění vad a nedodělků', verze: ['bo'], typ: 'radio', o: ['Ano', 'Ne'], prefill: () => 'Ano', src: 'výchozí' },
+    { id: 'zadrzneProc', label: 'Zádržné do odstranění VaN – %', verze: ['bo'], ph: 'např. 10' },
+    { id: 'zadrzneZaruka', label: 'Zádržné – po dobu záruky', verze: ['bo'], typ: 'radio', o: ['Ano', 'Ne'], prefill: () => 'Ne', src: 'výchozí' },
+    { id: 'zadrzneZarukaProc', label: 'Zádržné po dobu záruky – %', verze: ['bo'], ph: 'např. 5' },
+    { id: 'pokutaDodavka', label: 'Smluvní pokuta – prodlení dodávky', verze: ['bo', 'techdata'], prefill: () => '0,05 % / den', src: 'výchozí' },
+    { id: 'pokutaSplatnost', label: 'Smluvní pokuta – prodlení splatnosti', verze: ['bo', 'techdata'], prefill: () => '0,05 % / den', src: 'výchozí' },
+    { id: 'pokutaLimit', label: 'Limit smluvních pokut', verze: ['bo', 'techdata'], prefill: () => 'NEUPLATNĚN limit 10 %', src: 'výchozí' },
+    { id: 'pokutyJine', label: 'Jiné', verze: ['bo'], typ: 'textarea' },
+    { id: 'platceDph', label: 'Plátce DPH', verze: ['bo'], typ: 'radio', o: ['Ano', 'Ne'], prefill: () => 'Ano', src: 'výchozí' },
+    { id: 'sazbaDph', label: 'Sazba DPH', verze: ['bo'], prefill: c => c.dph + ' %', src: 'z ceníku OCK' },
+    { id: 'zarukaMesicu', label: 'Doba trvání záruky (měsíců)', verze: ['bo'], prefill: () => '60', src: 'výchozí' },
+  ] },
+  { sekce: 'Termíny', pole: [
+    { id: 'terminPrevzeti', label: 'Převzetí staveniště k montáži šachty', verze: ['bo', 'techdata'], typ: 'date' },
+    { id: 'terminMontaz', label: 'Ukončení montáže šachty a předání montáži výtahu', verze: ['bo', 'techdata'], typ: 'date' },
+    { id: 'terminPredani', label: 'Konečné předání díla', verze: ['bo', 'techdata'], typ: 'date' },
+    { id: 'terminJine', label: 'Jiné termíny', verze: ['bo', 'techdata'], typ: 'textarea' },
+  ] },
+  { sekce: 'Rozsah a odchylky', pole: [
+    { id: 'odchylky', label: 'Jiné odchylky oproti smluvnímu standardu', verze: ['bo'], typ: 'textarea', ph: 'popis odchylek…' },
+    /* KL-4: zaměření prostor je položka kalkulace (3D skener v režii OCK,
+     * v technické specifikaci pole `sken3d`). Není důvod se na ně ptát znovu. */
+    { id: 'zamereniStrojovna', label: 'Zaměření strojovna', verze: ['bo', 'techdata'], typ: 'radio', o: ['Ano', 'Ne'], prefill: c => c.sken3d, src: 'z technické specifikace (3D zaměření)' },
+    { id: 'situacniFoto', label: 'Situační fotografie', verze: ['bo', 'techdata'], prefill: () => 'Ve složce', src: 'výchozí' },
+    { id: 'cenaNezahrnuje', label: 'Cena nezahrnuje', verze: ['bo'], prefill: () => 'dle CN', src: 'výchozí' },
+    { id: 'rozsah', label: 'Rozsah', verze: ['bo'], prefill: () => 'je definován přílohou ke smlouvě (specifikace)', src: 'výchozí' },
+    { id: 'typProjektu', label: 'Typ projektu', verze: ['bo', 'techdata'], typ: 'radio', o: ['Nový projekt (novostavba)', 'Rekonstrukce objektu'], prefill: () => 'Nový projekt (novostavba)', src: 'výchozí' },
+    /* KL-4: obojí je oceněná sekce kalkulace PROJ – prováděcí dokumentace je
+     * DPS, DSP odpovídá dokumentaci pro povolení záměru (DPZ). Oceněná sekce
+     * = ANO, neoceněná = NE. */
+    { id: 'provadeciDok', label: 'Prováděcí dokumentace', verze: ['bo', 'techdata'], typ: 'radio', o: ['Ano', 'Ne'], prefill: c => c.projAno('dps'), src: 'z kalkulace PROJ (DPS)' },
+    { id: 'dsp', label: 'DSP', verze: ['bo', 'techdata'], typ: 'radio', o: ['Ano', 'Ne'], prefill: c => c.projAno('dpz'), src: 'z kalkulace PROJ (DPZ)' },
+  ] },
+  { sekce: 'Technická specifika', pole: [
+    { id: 'typSachty', label: 'Typ šachty', verze: ['techdata'], prefill: c => c.ext ? 'Exteriérová' : 'Interiérová', src: 'z kalkulace OCK' },
+    { id: 'popisProjektu', label: 'Stručný popis projektu', verze: ['techdata'], typ: 'textarea', prefill: () => 'Viz info CN', src: 'výchozí' },
+    { id: 'dodavatelStavby', label: 'Dodavatel stavby (kontakt email / telefon)', verze: ['techdata'] },
+    { id: 'dodavatelVytahu', label: 'Dodavatel výtahu (kontakt email / telefon)', verze: ['techdata'] },
+  ] },
+  { sekce: 'Atypy OCK', pole: [
+    { id: 'atypMustky', label: 'Můstky (rozměr, napojení stavba ↔ OCK)', verze: ['techdata'], typ: 'textarea' },
+    { id: 'atypOplasteni', label: 'Typ a způsob opláštění', verze: ['techdata'], typ: 'textarea' },
+    { id: 'atypHlava', label: 'Napojení hlavy OCK', verze: ['techdata'], typ: 'textarea' },
+    { id: 'atypStavbaVyska', label: 'Napojení na stavbu po výšce šachty', verze: ['techdata'], typ: 'textarea' },
+    { id: 'atypPodchozi', label: 'Podchozí OCK', verze: ['techdata'], typ: 'textarea' },
+    { id: 'atypProhluben', label: 'Atyp napojení u prohlubně', verze: ['techdata'], typ: 'textarea' },
+    { id: 'atypTvar', label: 'Netradiční tvar OCK (např. 5 stěn)', verze: ['techdata'], typ: 'textarea' },
+    { id: 'atypJiny', label: 'Jiný atyp (domluva na schůzce na stavbě)', verze: ['techdata'], typ: 'textarea' },
+  ] },
+  /* KL-7: patička z předlohy („Dne" / „Podpis obchodníka" / „Informován").
+   * V obou verzích – technické oddělení podepisuje převzetí stejně jako BO. */
+  { sekce: 'Podpis', pole: [
+    { id: 'podpisDne', label: 'Dne', verze: ['bo', 'techdata'], typ: 'date' },
+    { id: 'podpisObchodnik', label: 'Podpis obchodníka', verze: ['bo', 'techdata'], prefill: c => firmaHodnota(c.firma, 'zpracoval'), src: 'Nastavení → Firma (Vypracoval)' },
+    { id: 'podpisInformovan', label: 'Informován', verze: ['bo', 'techdata'], ph: 'kdo byl o zakázce informován…' },
+  ] },
+];
+
+/* KL-5: převod starého jednořádkového „Zádržné" na nové rozdělené řádky.
+ * Volá se při importu zakázky (zakazka.js). Hodnota bývala volný text typu
+ * „ANO do odstranění vad a nedodělků"; přepínač zná jen Ano/Ne, takže text,
+ * který se nedá bezpečně přeložit, se přesune do procentního pole, aby se
+ * ručně zadaný údaj neztratil. */
+function kryciMigraceZadrzne(h) {
+  if (!h || h.zadrzne == null) return h;
+  const p = String(h.zadrzne).trim();
+  if (p === 'Ano' || p === 'Ne') return h;        // už převedeno
+  if (/^\s*ano\b/i.test(p)) h.zadrzne = 'Ano';
+  else if (/^\s*ne\b/i.test(p)) h.zadrzne = 'Ne';
+  else if (p === '') { delete h.zadrzne; return h; }
+  else { h.zadrzne = 'Ano'; }
+  const proc = p.match(/(\d+(?:[.,]\d+)?)\s*%/);  // „ANO 10 %" → procento do vlastního pole
+  if (proc && !h.zadrzneProc) h.zadrzneProc = proc[1];
+  return h;
+}
+
+const kryciKc = n => Math.round(n || 0).toLocaleString('cs-CZ') + ' Kč';
+
+/* KL-4: „Zaměření strojovna" se v aplikaci už jednou zadává – jako 3D zaměření
+ * v technické specifikaci. Čte se přes tsHodnota(), aby platilo stejné pořadí
+ * ruční > z kalkulace > výchozí jako v samotné technické specifikaci. */
+function kryciSken3d(d, rOck) {
+  try {
+    if (typeof TECHSPEC_DEF === 'undefined' || typeof tsHodnota !== 'function') return '';
+    let pole = null;
+    TECHSPEC_DEF.forEach(s => (s.pole || []).forEach(p => { if (p.id === 'sken3d') pole = p; }));
+    if (!pole) return '';
+    const ts = d.techspec && d.techspec.hodnoty ? d.techspec : { hodnoty: {} };
+    const t = String(tsHodnota(pole, ts, rOck, d.ock.zadani, d.cenik).text || '');
+    return /^\s*ano/i.test(t) ? 'Ano' : (/^\s*ne/i.test(t) ? 'Ne' : '');
+  } catch (e) { return ''; }
+}
+
+/* kontext pro prefill: zakázka + odvozené hodnoty z NABÍDKY (KL-1).
+ * KL-2: hodnota zakázky = ocelová konstrukce po schválené slevě, tedy JEN
+ * část OCK. Tenhle krycí list je podkladem pro objednávku / SoD na dodávku
+ * konstrukce; projekční část má vlastní krycí list PROJ s vlastní hodnotou,
+ * takže sčítat obě části by znamenalo mít stejné peníze ve dvou smlouvách.
+ * Příplatky se do hodnoty nezapočítávají – nabízejí se zvlášť. */
+function kryciCtx(zak, varianta, jekly) {
+  const d = varianta.data, Zv = d.ock.zadani, Cv = d.cenik;
+  let priplatky = '—', ockKc = null, projKc = null, rOck = null;
+  const projSekce = {};
+  try {
+    rOck = vypocet(Zv, Cv, jekly, d.ock.fixes);
+    /* Hodnota krycího listu musí být přesně to, co je v nabídce – tedy včetně
+     * obchodního zaokrouhlení (#38). Skládá ji zaokrouhleni.js. */
+    const cn = (typeof cenaNabidkyOck === 'function') ? cenaNabidkyOck(rOck, d.sleva || {}, d.zaokr) : null;
+    const podil = (typeof slevaPodil === 'function') ? slevaPodil(d.sleva || {}) : 0;
+    ockKc = cn ? cn.cena : rOck.souhrn.zakladCena * (1 - podil);
+    const vynech = Zv.priplatkyVynechat || [];
+    const zahrn = (rOck.priplatky || []).filter(pp => !vynech.includes(pp.key));
+    priplatky = zahrn.length ? (zahrn.length + ' – ' + zahrn.map(pp => pp.nazev).join(', ')) : 'bez příplatků';
+  } catch (e) {}
+  try {
+    const rp = vypocetProj(d.proj.zadani, d.proj.cenik);
+    rp.sekce.forEach(s => { projSekce[s.key] = s.celkem; });
+    projKc = rp.souhrn.celkem;
+  } catch (e) {}
+
+  const hodnota = (ockKc != null) ? kryciKc(ockKc) : '—';
+  // KL-3: čistě projekční zakázka není šachta
+  const sachta = (Zv.typSachty === 'exteriérová') ? 'Exteriérová šachta' : 'Interiérová šachta';
+  const typProduktu = (ockKc > 0)
+    ? (projKc > 0 ? sachta + ' + projekce' : sachta)
+    : (projKc > 0 ? 'Projekce' : sachta);
+
+  const firma = (typeof firmaAktualni === 'function') ? firmaAktualni() : {};
+  return {
+    zak, ext: Zv.typSachty === 'exteriérová', dph: Math.round((Cv.dph || 0) * 100),
+    hodnota, priplatky, firma, typProduktu,
+    sken3d: kryciSken3d(d, rOck),
+    projAno: key => (projSekce[key] > 0 ? 'Ano' : 'Ne'),
+  };
+}
+/* hodnota pole: ruční přepis (data.kryci.hodnoty) > prefill > '' */
+function kryciHodnota(pole, kl, c) {
+  if (!pole.bind) {   // provázaná pole (bind) čtou přímo ze ZAK, ne z ručních přepisů
+    const h = (kl && kl.hodnoty) || {};
+    if (h[pole.id] !== undefined && h[pole.id] !== '') return h[pole.id];
+  }
+  if (pole.prefill) { try { const v = pole.prefill(c); if (v != null && v !== '') return v; } catch (e) {} }
+  return '';
+}
+/* data pro Word danou verzi: {nadpis, sekce:[{sekce,radky:[[label,val]]}], nazevSouboru} */
+function kryciData(zak, varianta, jekly, verze) {
+  const c = kryciCtx(zak, varianta, jekly);
+  const kl = varianta.data.kryci || { hodnoty: {} };
+  const sekce = KRYCI_SEKCE.map(s => {
+    const radky = s.pole.filter(p => p.verze.includes(verze)).map(p => [p.label, kryciHodnota(p, kl, c)]);
+    return radky.length ? { sekce: s.sekce, radky } : null;
+  }).filter(Boolean);
+  const verzeNazev = verze === 'techdata' ? 'Techdata' : 'Backoffice';
+  const cislo = (zak.cislo || 'CN').replace(/\s+/g, '');
+  const nazevSouboru = ('KRYCI_LIST_' + verzeNazev + '_' + cislo).replace(/[\\/:*?"<>|]+/g, '-');
+  return { nadpis: 'Krycí list objednávky / SoD — ' + verzeNazev, sekce, nazevSouboru, verze, verzeNazev };
+}
+
+/* registrace obou verzí do jednotného registru dokumentů (generují se od nuly) */
+if (typeof dokumentRegistruj === 'function') {
+  [['bo', 'Backoffice'], ['techdata', 'Techdata']].forEach(([verze, label]) => {
+    dokumentRegistruj('kryci_' + verze, {
+      nazev: 'Krycí list – ' + label,
+      generate: (zak, varianta, jekly) => {
+        const d = kryciData(zak, varianta, jekly, verze);
+        return { blob: docxDokumentBlob(d.nadpis, d.sekce), nazevSouboru: d.nazevSouboru, data: d };
+      },
+    });
+  });
+}
+
+if (typeof module !== 'undefined')
+  module.exports = { KRYCI_SEKCE, kryciCtx, kryciHodnota, kryciData, kryciMigraceZadrzne };

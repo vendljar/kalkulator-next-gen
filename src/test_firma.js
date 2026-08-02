@@ -1,0 +1,127 @@
+/* Test firma.js (SET-3) – firemní údaje pro dokumenty.
+   Čistá logika bez DOM: skládání adres, bankovního řádku, patičky,
+   zástupných symbolů {{FIRMA_…}} a neblokující kontroly povinných polí. */
+const fm = require('./firma.js');
+
+/* Očekávané hodnoty se ODVOZUJÍ z DEFAULT_FIRMA, nepíšou se jako text.
+ * V repozitáři je ukázková firma (skutečné údaje leží v _DB/_nastaveni.json),
+ * takže opsané jméno nebo IČO by test svázalo s konkrétním vzorkem – a hlavně
+ * by se skutečné údaje vrátily zpátky do zdrojáků, ze kterých je smyslem je
+ * dostat pryč. Test má hlídat SKLÁDÁNÍ řádků, ne obsah vzorku. */
+const D = fm.DEFAULT_FIRMA;
+const SIDLO = D.sidloUlice + ', ' + D.sidloPsc + ' ' + D.sidloMesto;
+const ICO = 'IČO: ' + D.ico;
+
+let ok = 0, fail = 0;
+const test = (n, cond, info) => { if (cond) { ok++; console.log('OK  ' + n); } else { fail++; console.log('FAIL ' + n, info || ''); } };
+
+/* --- 1) definice polí --- */
+test('FIRMA_POLE má unikátní id', new Set(fm.FIRMA_POLE.map(p => p.id)).size === fm.FIRMA_POLE.length);
+const symboly = fm.FIRMA_POLE.filter(p => p.symbol).map(p => p.symbol);
+test('symboly jsou unikátní', new Set(symboly).size === symboly.length);
+test('všechny symboly mají prefix FIRMA_', symboly.every(s => s.startsWith('FIRMA_')));
+test('každé pole patří do známé sekce', fm.FIRMA_POLE.every(p => fm.FIRMA_SEKCE.includes(p.sekce)),
+  (fm.FIRMA_POLE.find(p => !fm.FIRMA_SEKCE.includes(p.sekce)) || {}).id);
+test('6 povinných polí', fm.FIRMA_POLE.filter(p => p.povinne).length === 6,
+  fm.FIRMA_POLE.filter(p => p.povinne).length);
+test('korShodna je checkbox bez symbolu',
+  fm.firmaPole('korShodna').typ === 'check' && !fm.firmaPole('korShodna').symbol);
+test('neznámé pole = null', fm.firmaPole('neexistuje') === null);
+
+/* --- 2) výchozí údaje jsou samostatná kopie --- */
+const f = fm.firmaDefault();
+f.nazev = 'ZMĚNA';
+test('firmaDefault vrací hlubokou kopii', fm.DEFAULT_FIRMA.nazev !== 'ZMĚNA', fm.DEFAULT_FIRMA.nazev);
+
+const F = fm.firmaDefault();
+
+/* --- 3) adresy --- */
+test('sídlo na jeden řádek', fm.firmaSidlo(F) === SIDLO, fm.firmaSidlo(F));
+test('česká země se do adresy nepíše', !/Česká republika/.test(fm.firmaSidlo(F)), fm.firmaSidlo(F));
+const Fsk = fm.firmaDefault();
+Fsk.sidloZeme = 'Slovensko';
+test('cizí země se do adresy připojí', /, Slovensko$/.test(fm.firmaSidlo(Fsk)), fm.firmaSidlo(Fsk));
+test('prázdná adresa vrací prázdný řetězec', fm.firmaAdresaRadek({}, 'sidlo') === '');
+
+test('korShodna = true → korespondenční je sídlo',
+  fm.firmaKorespondencni(F) === fm.firmaSidlo(F), fm.firmaKorespondencni(F));
+const Fkor = fm.firmaDefault();
+Fkor.korShodna = false; Fkor.korUlice = 'Poštovní 1'; Fkor.korPsc = '110 00'; Fkor.korMesto = 'Praha 1';
+test('korShodna = false → vlastní adresa',
+  fm.firmaKorespondencni(Fkor) === 'Poštovní 1, 110 00 Praha 1', fm.firmaKorespondencni(Fkor));
+const Fprazd = fm.firmaDefault();
+Fprazd.korShodna = false;
+test('korShodna = false a prázdná adresa → fallback na sídlo',
+  fm.firmaKorespondencni(Fprazd) === fm.firmaSidlo(Fprazd), fm.firmaKorespondencni(Fprazd));
+
+/* --- 4) složené řádky --- */
+test('IČO bez prázdného DIČ', fm.firmaIcoDic(F) === ICO, fm.firmaIcoDic(F));
+const Fdic = fm.firmaDefault(); Fdic.dic = 'CZ00000000';
+test('IČO + DIČ', fm.firmaIcoDic(Fdic) === ICO + ', DIČ: CZ00000000', fm.firmaIcoDic(Fdic));
+test('prázdná identifikace = prázdný řetězec', fm.firmaIcoDic({}) === '');
+
+test('prázdné bankovní spojení = prázdný řetězec', fm.firmaBankaRadek(F) === '', fm.firmaBankaRadek(F));
+const Fb = fm.firmaDefault();
+Fb.banka = 'Komerční banka'; Fb.ucet = '123456789/0100'; Fb.iban = 'CZ6501000000000123456789'; Fb.swift = 'KOMBCZPP';
+test('bankovní spojení složené',
+  fm.firmaBankaRadek(Fb) === 'Komerční banka, č. ú. 123456789/0100, IBAN CZ6501000000000123456789, SWIFT KOMBCZPP',
+  fm.firmaBankaRadek(Fb));
+const Fb2 = fm.firmaDefault(); Fb2.ucet = '123456789/0100';
+test('bankovní spojení jen s účtem', fm.firmaBankaRadek(Fb2) === 'č. ú. 123456789/0100', fm.firmaBankaRadek(Fb2));
+
+test('patička obsahuje název, sídlo, IČO, telefon i web', (() => {
+  const pat = fm.firmaPaticka(F);
+  return [D.nazev, SIDLO, ICO, 'tel. ' + D.telefon, D.web].every(x => pat.includes(x));
+})(), fm.firmaPaticka(F));
+test('patička nemá prázdné části (žádné „, ,“)', !/, ,/.test(fm.firmaPaticka(F)), fm.firmaPaticka(F));
+test('patička prázdné firmy = prázdný řetězec', fm.firmaPaticka({}) === '');
+
+/* --- 5) zástupné symboly --- */
+const ph = fm.firmaPlaceholders(F);
+const chybi = fm.firmaSymboly().filter(s => ph[s] == null || String(ph[s]).includes('undefined'));
+test('všech ' + fm.firmaSymboly().length + ' symbolů vyplněno (bez undefined)', chybi.length === 0, chybi.join(','));
+test('firmaSymboly = pole se symbolem + 5 odvozených',
+  fm.firmaSymboly().length === symboly.length + 5, fm.firmaSymboly().length);
+test('FIRMA_NAZEV', ph.FIRMA_NAZEV === D.nazev, ph.FIRMA_NAZEV);
+test('FIRMA_SIDLO odvozený', ph.FIRMA_SIDLO === SIDLO, ph.FIRMA_SIDLO);
+test('FIRMA_KORESPONDENCNI = sídlo', ph.FIRMA_KORESPONDENCNI === ph.FIRMA_SIDLO, ph.FIRMA_KORESPONDENCNI);
+test('FIRMA_ICO_DIC odvozený', ph.FIRMA_ICO_DIC === ICO, ph.FIRMA_ICO_DIC);
+test('nevyplněné pole je prázdný řetězec, ne undefined', ph.FIRMA_DIC === '' && ph.FIRMA_BANKA === '');
+test('korShodna se do symbolů nedostane', ph.korShodna === undefined && ph.FIRMA_KORSHODNA === undefined);
+
+// překládá se JEN země – vlastní jména, adresy a čísla nikdy
+const phP = fm.firmaPlaceholders(F, t => t === 'Česká republika' ? 'Czech Republic' : 'PŘELOŽENO');
+test('země se přeloží', phP.FIRMA_SIDLO_ZEME === 'Czech Republic', phP.FIRMA_SIDLO_ZEME);
+test('název firmy se nepřekládá', phP.FIRMA_NAZEV === D.nazev, phP.FIRMA_NAZEV);
+test('ulice se nepřekládá', phP.FIRMA_SIDLO_ULICE === D.sidloUlice, phP.FIRMA_SIDLO_ULICE);
+test('prázdná země se nepřekládá', fm.firmaPlaceholders({}, () => 'X').FIRMA_SIDLO_ZEME === '');
+
+/* --- 6) řádky pro náhled a krycí list --- */
+const r = fm.firmaRadky(F);
+const labely = r.map(x => x[0]);
+test('řádky vynechávají prázdné hodnoty', !labely.includes('DIČ') && !labely.includes('Bankovní spojení'), labely.join('|'));
+test('řádky obsahují název, sídlo, telefon, web, vypracoval',
+  ['Název firmy', 'Sídlo', 'Telefon', 'Web', 'Vypracoval'].every(l => labely.includes(l)), labely.join('|'));
+test('korespondenční adresa se při shodě se sídlem neduplikuje',
+  !labely.includes('Korespondenční adresa'), labely.join('|'));
+test('korespondenční adresa se ukáže, liší-li se',
+  fm.firmaRadky(Fkor).map(x => x[0]).includes('Korespondenční adresa'));
+test('prázdná firma = žádné řádky', fm.firmaRadky({}).length === 0, fm.firmaRadky({}).length);
+test('popisky se překládají, hodnoty ne', (() => {
+  const rp = fm.firmaRadky(F, t => t === 'Název firmy' ? 'Company name' : t);
+  return rp[0][0] === 'Company name' && rp[0][1] === D.nazev;
+})());
+
+/* --- 7) kontrola vyplnění – NEBLOKUJE --- */
+const k = fm.firmaKontrola(F);
+test('výchozí údaje projdou kontrolou', k.ok && k.pocet === 0, JSON.stringify(k.chybi));
+const kPrazd = fm.firmaKontrola({});
+test('prázdná firma hlásí 6 chybějících', kPrazd.pocet === 6 && !kPrazd.ok, kPrazd.pocet);
+test('kontrola vrací popisky, ne id', kPrazd.chybi.includes('Název firmy') && kPrazd.chybi.includes('IČO'),
+  kPrazd.chybi.join('|'));
+const Fbez = fm.firmaDefault(); Fbez.telefon = '   ';
+test('bílé znaky se počítají jako nevyplněné', fm.firmaKontrola(Fbez).chybi.includes('Telefon'));
+test('kontrola nic nevyhazuje ani pro null', typeof fm.firmaKontrola(null) === 'object');
+
+console.log(fail ? `\n${fail} CHYB` : '\nVŠECHNY TESTY FIRMA OK');
+process.exit(fail ? 1 : 0);
