@@ -1,0 +1,8 @@
+{
+  "name": "kalkulator-next-gen-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Server Kalkulátoru Next Gen — bez závislostí, jádra sdílená s prohlížečovou aplikací",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" }
+}

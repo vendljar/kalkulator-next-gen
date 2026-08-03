@@ -375,7 +375,9 @@ function sirotciKarta(r) {
 function renderOutputs() {
   let r;
   try { r = vypocet(Z, C, JEKLY, OCK.fixes); }
-  catch (e) { document.getElementById('outputs').innerHTML = `<div class="card"><div class="body neg">Chyba výpočtu: ${esc(e.message)}</div></div>`; return; }
+  catch (e) {
+    const elS = document.getElementById('kalk-souhrn'); if (elS) elS.innerHTML = '';
+    document.getElementById('outputs').innerHTML = `<div class="card"><div class="body neg">Chyba výpočtu: ${esc(e.message)}</div></div>`; return; }
   // štítek režimu výpočtu se obnovuje v render() (viz renderRezimPill v common.js),
   // aby zůstal správný i tehdy, když výpočet spadne a tahle funkce skončí dřív
   const s = r.souctySekci, o = r.odvozene, p = r.parametry;
@@ -511,8 +513,14 @@ function renderOutputs() {
     <tr><td>Spojovací materiál</td><td>${fmt(r.spojovaci.celkem)}</td><td>Nýtování</td><td>${r.spojovaci.nytovaniKs} ks</td></tr>
     </table>`;
 
+  /* Souhrn (základní cena, DPH, náklad, marže) stojí NAD zadáním šachty —
+   * rozvržení 3. 8. 2026: souhrn → zadání → dimenze → práce a režie →
+   * cenová kalkulace, vše na plnou šířku jako v kalkulaci PROJ. */
+  const elSouhrn = document.getElementById('kalk-souhrn');
+  if (elSouhrn) elSouhrn.innerHTML =
+    `<div class="card"><div class="body">${hlava}${marzeLista({ cast: 'ock' })}</div></div>`;
   document.getElementById('outputs').innerHTML =
-    `<div class="card"><div class="body">${hlava}${marzeLista({ cast: 'ock' })}</div></div>` +
+    (elSouhrn ? '' : `<div class="card"><div class="body">${hlava}${marzeLista({ cast: 'ock' })}</div></div>`) +
     card('Cenová kalkulace', kalkulace, false, 'ock-kalkulace') +
     card('Příplatkové položky (ceník variant)', prip, false, 'ock-priplatky') +
     sirotciKarta(r) +
