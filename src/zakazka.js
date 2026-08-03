@@ -388,8 +388,10 @@ function porovnaniVariant(zak, vypocty, opts) {
       ? d.proj.cenik.dph : sazbaOck;
     h.dphOckSazba = bezOck ? null : sazbaOck;
     h.dphProjSazba = (projCast != null) ? sazbaProj : null;
-    h.dphOckKc = (!bezOck && sazbaOck != null && ockCast != null) ? ockCast * sazbaOck : null;
-    h.dphProjKc = (sazbaProj != null && projCast != null) ? projCast * sazbaProj : null;
+    /* #14 krok 1: DPH jedinou funkcí (Node testy bez zaokrouhleni.js mají záložku) */
+    const dphFn = (typeof cenaSDph === 'function') ? cenaSDph : (c, sz) => ({ dphKc: (+c || 0) * (sz || 0) });
+    h.dphOckKc = (!bezOck && sazbaOck != null && ockCast != null) ? dphFn(ockCast, sazbaOck).dphKc : null;
+    h.dphProjKc = (sazbaProj != null && projCast != null) ? dphFn(projCast, sazbaProj).dphKc : null;
     h.celkemSDph = (h.celkemBezDph != null && (h.dphOckKc != null || h.dphProjKc != null))
       ? h.celkemBezDph + (h.dphOckKc || 0) + (h.dphProjKc || 0) : null;
 

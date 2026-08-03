@@ -89,7 +89,11 @@ const DEFAULT_ZADANI_PROJ = {
  * z ceníku. NULA je naopak platný přepis: „tuhle činnost děláme zdarma" je
  * legitimní ústupek a nesmí se tvářit jako nevyplněno. Proto se tu netestuje
  * pravdivost, ale prázdnota. */
-function _prepisPlati(v) { return !(v === undefined || v === null || v === ''); }
+function _prepisPlati(v) {
+  /* #14 krok 2: pravidlo bydlí ve format.js; záložka pro samostatný Node běh */
+  if (typeof prepisPlati === 'function') return prepisPlati(v);
+  return !(v === undefined || v === null || v === '');
+}
 
 /* ---- přesun položky v rámci sekce (přetahování v kalkulaci PROJ) ----
  * V PROJ drží pořadí samo pole `polozky`: vypocetProj mapuje položky 1:0,

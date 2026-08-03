@@ -19,8 +19,11 @@ function nabidkaData(zak, varianta, jekly, lang) {
   const L = lang || 'cz';
   const P = t => (L !== 'cz' && typeof tr === 'function') ? tr(t, L) : t;
 
-  const kc = n => n.toLocaleString('cs-CZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kč';
-  const cislo = n => (+n).toLocaleString('cs-CZ', { maximumFractionDigits: 3 });
+  /* #14 krok 3: formát bydlí ve format.js (záložka pro samostatný Node běh) */
+  const kc = (typeof formatKc2 === 'function') ? formatKc2
+    : n => n.toLocaleString('cs-CZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kč';
+  const cislo = (typeof formatCislo === 'function') ? (n => formatCislo(n, 3))
+    : n => (+n).toLocaleString('cs-CZ', { maximumFractionDigits: 3 });
   const datumCz = iso => {
     if (!iso) return '';
     const [y, m, dd] = iso.split('-');
@@ -103,8 +106,9 @@ function nabidkaData(zak, varianta, jekly, lang) {
     CENA_BEZ_DPH: kc(cenaBezDphNum),
     DPH_SAZBA: String(Math.round(Cv.dph * 100)),
     DPH_NAZEV: P(Cv.dph <= 0.15 ? 'snížená' : 'základní'),
-    DPH_KC: kc(cenaBezDphNum * Cv.dph),
-    CENA_S_DPH: kc(cenaBezDphNum * (1 + Cv.dph)),
+    /* #14 krok 1: DPH jedinou funkcí (záložka pro Node test bez zaokrouhleni.js) */
+    DPH_KC: kc((typeof cenaSDph === 'function' ? cenaSDph(cenaBezDphNum, Cv.dph) : { dphKc: cenaBezDphNum * Cv.dph }).dphKc),
+    CENA_S_DPH: kc((typeof cenaSDph === 'function' ? cenaSDph(cenaBezDphNum, Cv.dph) : { sDph: cenaBezDphNum * (1 + Cv.dph) }).sDph),
     CENA_PRED_SLEVOU: kc(cenaPredSlevou),
     SLEVA_PROC: slevaP ? String(Math.round(slevaP * 10000) / 100) : '0',
     SLEVA_KC: kc(slevaKcNum),

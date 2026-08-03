@@ -141,12 +141,16 @@ function marzePrehled(ock, proj, sleva, nast, zaokr) {
 /* ---------- text ---------- */
 /* Typografické minus (−), ne spojovník: u záporné marže je to jediné místo,
  * kde se „mínus sto procent" opravdu čte jako mínus. */
+/* #14 krok 3: pravidlo (typografické minus, cs-CZ) bydlí ve format.js;
+ * záložka je jeho zrcadlo jen pro samostatný běh modulu v Node. */
 function marzePct(x) {
+  if (typeof formatPctTypo === 'function') return formatPctTypo(x);
   if (x == null) return '—';
   const v = Math.round(x * 1000) / 10;
   return (v < 0 ? '−' : '') + Math.abs(v).toString().replace('.', ',') + ' %';
 }
 function marzeKc(x) {
+  if (typeof formatKcTypo === 'function') return formatKcTypo(x);
   const v = Math.round(x || 0);
   return (v < 0 ? '−' : '') + Math.abs(v).toLocaleString('cs-CZ') + ' Kč';
 }

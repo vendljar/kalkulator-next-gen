@@ -220,5 +220,41 @@ test('cena staré varianty zůstává nezaokrouhlená',
   zo.cenaNabidkyOck(r, null, stara.data.zaokr).cena === r.souhrn.zakladCena);
 test('vypnuto není totéž co výchozí', zo.zaokrVypnuto().krok !== zo.zaokrDefault().krok);
 
+/* ---------- krok 1 konsolidace (#14, schváleno 3. 8. 2026) ----------
+ * DPH a „celkem s DPH" počítá JEDNA funkce. Dřív si násobení psala každá
+ * obrazovka sama — čtyři místa, a přesně z takové dvojkolejnosti vznikl
+ * nález N3 (jedna sazba na součet OCK+PROJ). */
+test('cenaSDph: základní výpočet', (() => {
+  const v = cenaSDph(100000, 0.21);
+  return Math.abs(v.dphKc - 21000) < 1e-9 && Math.abs(v.sDph - 121000) < 1e-9;
+})());
+test('cenaSDph: snížená sazba', (() => {
+  const v = cenaSDph(200000, 0.12);
+  return Math.abs(v.dphKc - 24000) < 1e-9 && Math.abs(v.sDph - 224000) < 1e-9;
+})());
+test('cenaSDph: bez sazby se nepřičítá nic', (() => {
+  const v = cenaSDph(100000, null);
+  return v.dphKc === 0 && v.sDph === 100000;
+})());
+test('cenaSDph: nečíselná cena je nula', cenaSDph(undefined, 0.21).sDph === 0);
+
+/* Obrazovky a dokumenty musí funkci opravdu POUŽÍVAT — jinak by konsolidace
+ * byla jen další (páté) místo. Hlídá se zdrojově. */
+{
+  const fs2 = require('fs');
+  const ock = fs2.readFileSync(__dirname + '/ui/kalk_ock.js', 'utf8');
+  const prj = fs2.readFileSync(__dirname + '/ui/kalk_proj.js', 'utf8');
+  const nab = fs2.readFileSync(__dirname + '/nabidka.js', 'utf8');
+  const nap = fs2.readFileSync(__dirname + '/nabidka_proj.js', 'utf8');
+  const zak2 = fs2.readFileSync(__dirname + '/zakazka.js', 'utf8');
+  test('hlavička OCK počítá DPH přes cenaSDph',
+    ock.includes('cenaSDph(') && !ock.includes('* (1 + C.dph)'));
+  test('hlavička PROJ počítá DPH přes cenaSDph',
+    prj.includes('cenaSDph(') && !prj.includes('* (1 + PC.dph)'));
+  test('nabídka OCK počítá DPH přes cenaSDph', nab.includes('cenaSDph('));
+  test('nabídka PROJ počítá DPH přes cenaSDph', nap.includes('cenaSDph('));
+  test('porovnání variant počítá DPH přes cenaSDph', zak2.includes('cenaSDph'));
+}
+
 console.log(`\n${ok} prošlo, ${fail} selhalo`);
 process.exit(fail ? 1 : 0);

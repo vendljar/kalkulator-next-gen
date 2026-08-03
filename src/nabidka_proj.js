@@ -267,7 +267,9 @@ function nabidkaProjData(zak, varianta, lang) {
   const pj = d.proj || {};
   const r = vypocetProj(pj.zadani || DEFAULT_ZADANI_PROJ, pj.cenik || DEFAULT_CENIK_PROJ);
 
-  const kc = n => (+n || 0).toLocaleString('cs-CZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kč';
+  /* #14 krok 3: formát bydlí ve format.js (záložka pro samostatný Node běh) */
+  const kc = (typeof formatKc2 === 'function') ? formatKc2
+    : n => (+n || 0).toLocaleString('cs-CZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kč';
   const datumCz = iso => {
     if (!iso) return '';
     const [y, m, dd] = String(iso).split('-');
@@ -291,7 +293,9 @@ function nabidkaProjData(zak, varianta, lang) {
   const celkemPred = NABIDKA_PROJ_SEKCE.reduce((a, k) => a + (cenaSekce(k) || 0), 0);
   const celkemBezDph = (typeof zaokrouhli === 'function') ? zaokrouhli(celkemPred, d.zaokr) : celkemPred;
   const zaokrKcNum = Math.round((celkemBezDph - celkemPred) * 100) / 100;
-  const dphKc = celkemBezDph * dphPct / 100;
+  /* #14 krok 1: DPH jedinou funkcí (záložka pro Node test bez zaokrouhleni.js) */
+  const dphKc = (typeof cenaSDph === 'function')
+    ? cenaSDph(celkemBezDph, dphPct / 100).dphKc : celkemBezDph * dphPct / 100;
 
   /* --- rozbalení definice do bloků připravených k vykreslení --- */
   const proza = o => (o && typeof o === 'object' && o.cz !== undefined) ? o.cz : P(o);

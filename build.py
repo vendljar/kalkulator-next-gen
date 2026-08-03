@@ -24,7 +24,7 @@ import datetime, pathlib, re, shutil, sys
 
 root = pathlib.Path(__file__).parent
 CORE = ['build_info.js',
-        'preklad.js', 'engine.js', 'engine_proj.js', 'techspec.js', 'zakazka.js', 'uloziste.js', 'zamek.js', 'seznam.js', 'archiv.js',
+        'preklad.js', 'format.js', 'engine.js', 'engine_proj.js', 'techspec.js', 'zakazka.js', 'uloziste.js', 'zamek.js', 'seznam.js', 'archiv.js',
         'docxgen.js', 'xlsx.js',
         'dokumenty.js', 'sleva.js', 'zaokrouhleni.js', 'marze.js', 'kontroly.js', 'ares.js', 'poznamky.js', 'protokol.js', 'firma.js', 'nabidka.js', 'nabidka_proj.js', 'kryci.js', 'kryci_proj.js',
         'cenik.js', 'cenik_stari.js', 'katalog.js', 'prepisy.js', 'slovnik.js',

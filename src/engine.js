@@ -344,11 +344,17 @@ function vypocet(zadani, cenik, jekly, fixes = true) {
     zapisNazev(nazev);
     // klíčem pro přepisy je PŮVODNÍ název položky
     // ruční přepis množství (Z.mnozstviPrepis[název]) má přednost před vypočteným
+    /* #14 krok 2: „prázdno není nula" — stejná sémantika jako v projekci.
+     * Formulář prázdný přepis maže, takže '' sem doteče jen z importu;
+     * dřív by z něj bylo množství 0, teď platí spočtené. */
     const prepis = z.mnozstviPrepis ? z.mnozstviPrepis[nazev] : null;
-    const mn = prepis != null ? +prepis : mnozstvi;
+    const prepisJe = (typeof prepisPlati === 'function') ? prepisPlati(prepis) : prepis != null;
+    const mn = prepisJe ? +prepis : mnozstvi;
     // jedn. cena: rows s ceníkovou vazbou (opts.cenaPath) berou cenu odtud (obousměrně s ceníkem),
     // ostatní mohou mít ruční přepis Z.cenyPrepis[název]; jinak vypočtená/ceníková cena
-    const cenaPrepis = (!opts.cenaPath && z.cenyPrepis && z.cenyPrepis[nazev] != null) ? +z.cenyPrepis[nazev] : null;
+    const cenaPrepisSurova = (!opts.cenaPath && z.cenyPrepis) ? z.cenyPrepis[nazev] : null;
+    const cenaPrepis = ((typeof prepisPlati === 'function') ? prepisPlati(cenaPrepisSurova)
+                        : cenaPrepisSurova != null) ? +cenaPrepisSurova : null;
     const cenaEff = cenaPrepis != null ? cenaPrepis : cena;
     let naklad;
     if (opts.fix != null) naklad = mn * cenaEff + opts.fix;                    // lešení: m×cena + fixní část

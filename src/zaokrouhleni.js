@@ -168,7 +168,20 @@ function cenaNabidkyProj(vysl, zaokr) {
            naklad: vysl.souhrn.naklad + (vysl.souhrn.doprava || 0) };
 }
 
+/* ---------- DPH (#14, krok 1 — 3. 8. 2026) ----------------------------
+ * Jediné místo, kde se z ceny bez DPH dělá DPH v Kč a celkem s DPH.
+ * Dřív si tohle násobení psala každá obrazovka i dokument sám (hlavička OCK,
+ * hlavička PROJ, porovnání variant, obě nabídky) a přesně z té dvojkolejnosti
+ * vznikl nález N3 auditu. Sazba, která není číslo, znamená „DPH nepočítej"
+ * — vrací se nula, ne NaN, aby dokument nikdy nenesl rozbité číslo. */
+function cenaSDph(cena, sazba) {
+  const c = +cena || 0;
+  const s = (typeof sazba === 'number' && isFinite(sazba)) ? sazba : 0;
+  const dphKc = c * s;
+  return { dphKc, sDph: c + dphKc };
+}
+
 if (typeof module !== 'undefined')
   module.exports = { ZAOKR_KROKY, ZAOKR_SMERY, zaokrDefault, zaokrVypnuto, zaokrKrok, zaokrSmer,
                      zaokrZapnuto, zaokrouhli, zaokrStav, zaokrKc, zaokrCastka,
-                     zaokrText, cenaNabidkyOck, cenaNabidkyProj };
+                     zaokrText, cenaNabidkyOck, cenaNabidkyProj, cenaSDph };
