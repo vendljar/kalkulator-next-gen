@@ -388,7 +388,7 @@ function renderOutputs() {
   const zaklad = r.souhrn.zakladCena;
   const slevaKc = cn ? cn.slevaKc : zaklad * podil;
   const cenaPoSleve = cn ? cn.cena : zaklad - slevaKc;
-  const dphKc = cenaPoSleve * C.dph, celkemSDph = cenaPoSleve * (1 + C.dph);
+  const _dph = cenaSDph(cenaPoSleve, C.dph), dphKc = _dph.dphKc, celkemSDph = _dph.sDph;   // #14 krok 1
   const naklad = r.souhrn.zakladNaklad, hrubyZisk = cenaPoSleve - naklad;
   const marze = cenaPoSleve > 0 ? hrubyZisk / cenaPoSleve : 0;
   const kv = NAST.kpiViditelne || {};

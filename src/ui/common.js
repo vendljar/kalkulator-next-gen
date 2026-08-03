@@ -96,9 +96,10 @@ function tabViditelny(t) {
   return true;
 }
 
-const fmt = n => n.toLocaleString('cs-CZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kč';
-const fmt0 = n => Math.round(n).toLocaleString('cs-CZ') + ' Kč';
-const num = (n, d = 2) => (+n).toLocaleString('cs-CZ', { maximumFractionDigits: d });
+/* #14 krok 3: pravidla formátů bydlí ve format.js — tady jen krátká jména. */
+const fmt = n => formatKc2(n);
+const fmt0 = n => formatKc0(n);
+const num = (n, d = 2) => formatCislo(n, d);
 /* ---------- escapování textu vkládaného do HTML (#6) ----------
  * Celé UI se skládá jako řetězec a přiřazuje přes innerHTML. Do těch řetězců
  * se dostávají jména položek ceníku, názvy variant, poznámky, popisky ze

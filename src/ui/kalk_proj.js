@@ -117,7 +117,7 @@ function renderProj() {
   const hrubyZisk = projCena - naklad;
   const marze = projCena > 0 ? hrubyZisk / projCena : 0;
   const slevaPodil = -(PJ.slevaPct || 0) / 100;
-  const dphKc = projCena * PC.dph, celkemSDph = projCena * (1 + PC.dph);
+  const _dph = cenaSDph(projCena, PC.dph), dphKc = _dph.dphKc, celkemSDph = _dph.sDph;   // #14 krok 1
   const kv = NAST.kpiViditelne || {};
   const vidKpi = k => col.admin || kv[k];
   const kpiChk = k => col.admin ? `<input type="checkbox" class="kpi-chk" ${kv[k] ? 'checked' : ''} onchange="kpiVidSet('${k}', this.checked)" title="zviditelnit pro běžného uživatele">` : '';
@@ -306,7 +306,11 @@ function renderProj() {
 
   document.getElementById('page-proj').innerHTML =
     zakazkaHlavicka(false) +
-    `<div class="card"><div class="body">${hlava}${marzeLista({ cast: 'proj' })}</div></div>` +
+    `<div class="card"><div class="body">${hlava}
+       <div class="row noprint" style="margin-top:6px"><label>Zakázka je jen projekce (bez OCK)
+         <span class="note">(vypne hlídání a porovnávání části OCK)</span></label>
+         <input type="checkbox" ${ZAK.jenProj ? 'checked' : ''} onchange="set('ZAK.jenProj', this.checked)"><span class="u"></span></div>
+       ${marzeLista({ cast: 'proj' })}</div></div>` +
     card('Cenová kalkulace PROJ', kalkulace, false, 'proj-kalkulace') +
     /* Sleva a obchodní zaokrouhlení stojí hned pod výpočtem, přesně jako
      * v Kalkulaci OCK (zadání 1. 8. 2026). Jsou to TYTÉŽ karty se stejným
