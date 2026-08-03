@@ -15,8 +15,12 @@
   header .sp { flex:1; }
   .layout { display:grid; grid-template-columns: 380px 1fr; gap:18px; padding:18px 22px; max-width:1500px; margin:0 auto; }
   @media (max-width:1000px){ .layout { grid-template-columns:1fr; } }
-  .kalk-grid { display:grid; grid-template-columns: 380px 1fr; gap:18px; }
-  @media (max-width:1000px){ .kalk-grid { grid-template-columns:1fr; } }
+  /* Karty zadání na plné šířce (3. 8. 2026): úzké řádky label+pole by se
+   * roztáhly do nečitelné nudle, proto uvnitř karty tečou do sloupců —
+   * na širokém monitoru tři vedle sebe, na užším méně, na mobilu jeden.
+   * Vysvětlivky (.note) se roztahují přes celou šířku karty. */
+  .inputs .card .body { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); column-gap:28px; align-content:start; }
+  .inputs .card .body > .note { grid-column:1 / -1; }
   /* sdílená hlavička zakázka + varianta (Kalkulace OCK i PROJ) */
   .zak-bar { border-color:var(--acc); }
   .zak-bar-h { font-size:13px; text-transform:uppercase; letter-spacing:.04em; margin:0; padding:10px 14px;
@@ -586,12 +590,14 @@
   <button id="tab-zakazka" onclick="prepniTab('zakazka')">Přehled cenových nabídek</button>
 </nav>
 
+<!-- Rozvržení OCK (zadání 3. 8. 2026): boční sloupec zrušen — Zadání šachty,
+     Dimenze profilů a Práce a režie stojí v hlavním sloupci mezi souhrnem
+     a Cenovou kalkulací, vše na plnou šířku jako v kalkulaci PROJ. -->
 <div class="page" id="page-kalk">
   <div id="kalk-hlavicka"></div>
-  <div class="kalk-grid">
-    <div class="inputs" id="inputs"></div>
-    <div class="outputs" id="outputs"></div>
-  </div>
+  <div id="kalk-souhrn"></div>
+  <div class="inputs" id="inputs"></div>
+  <div class="outputs" id="outputs"></div>
   <div id="kalk-nabidka" style="margin-top:2px"></div>
 </div>
 <div class="page" id="page-detail" style="display:none"></div>

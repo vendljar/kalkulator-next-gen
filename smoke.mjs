@@ -154,6 +154,30 @@ test('nastavení ATYP přirážky je dostupné',
   (await page.locator('#nastaveni-panel .body').innerText()).toUpperCase().includes('ATYP'));
 await page.evaluate(() => zavriNastaveni());
 
+/* ---- rozvržení OCK na plnou šířku (zadání 3. 8. 2026) ----
+ * Zadání šachty, Dimenze profilů a Práce a režie stojí v hlavním sloupci
+ * mezi souhrnem a Cenovou kalkulací — jako v kalkulaci PROJ. */
+const rozvrzeni = await page.evaluate(() => {
+  const deti = [...document.querySelectorAll('#page-kalk > *')].map(e => e.id || e.className);
+  const souhrnNadZadanim = (() => {
+    const s2 = document.getElementById('kalk-souhrn'), z = document.getElementById('ock-zadani');
+    return s2 && z && s2.getBoundingClientRect().top <= z.getBoundingClientRect().top;
+  })();
+  const poradiKaret = ['ock-zadani', 'ock-profily', 'ock-prace', 'ock-kalkulace']
+    .map(id => { const e = document.getElementById(id); return e ? e.getBoundingClientRect().top : null; });
+  const sirky = ['ock-zadani', 'ock-kalkulace'].map(id => document.getElementById(id).getBoundingClientRect().width);
+  return { deti, poradiKaret, souhrnNadZadanim, rozdilSirek: Math.abs(sirky[0] - sirky[1]),
+           gridPryc: !document.querySelector('#page-kalk .kalk-grid') };
+});
+test('vstupy stojí v hlavním sloupci (žádný boční sloupec)', rozvrzeni.gridPryc,
+  JSON.stringify(rozvrzeni.deti));
+test('souhrn kalkulace stojí NAD zadáním šachty', rozvrzeni.souhrnNadZadanim === true);
+test('pořadí: zadání → dimenze → práce a režie → cenová kalkulace',
+  rozvrzeni.poradiKaret.every((t, i, a) => t != null && (i === 0 || t >= a[i - 1])),
+  JSON.stringify(rozvrzeni.poradiKaret));
+test('karty zadání mají plnou šířku jako kalkulace', rozvrzeni.rozdilSirek < 2,
+  String(rozvrzeni.rozdilSirek));
+
 /* ---- nic se cestou nerozbilo ---- */
 test('za celý průchod nevznikla chyba v konzoli', chyby.length === 0, chyby);
 
