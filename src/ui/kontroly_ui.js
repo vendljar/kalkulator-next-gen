@@ -38,6 +38,7 @@ function kontrolyCtxAkt() {
   return {
     zadani: Z,
     vysledek: ock,
+    jenProj: (typeof ZAK !== 'undefined') && !!ZAK.jenProj,
     projZadani: PJ,
     projVysledek: proj,
     cenik: C,

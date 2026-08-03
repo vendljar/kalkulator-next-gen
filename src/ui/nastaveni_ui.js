@@ -251,7 +251,7 @@ function nastSlevy() {
     <tr>
       <td>${esc(r)}</td>
       <td style="text-align:right">
-        ${r === 'Jednatel'
+        ${r === 'Administrátor'
           ? '<span class="pill">bez limitu (jen pojistka marže)</span>'
           : `<input type="number" step="0.5" style="width:80px;text-align:right" value="${pct(NAST.slevy.stropy[r] || 0)}" onchange="slStrop('${escJs(r)}', this.value)"> %`}
       </td>

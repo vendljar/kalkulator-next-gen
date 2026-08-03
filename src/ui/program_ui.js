@@ -97,8 +97,12 @@ function progPouzij(zaznam) {
   konfigNahradVMiste(DEFAULT_CENIK, zaznam.cenik || {});
   konfigNahradVMiste(DEFAULT_CENIK_PROJ, zaznam.cenikProj || {});
   if (zaznam.katalog && typeof katalogImport === 'function') katalogImport(KATALOG, zaznam.katalog);
-  if (zaznam.slevy && typeof NAST !== 'undefined' && NAST.slevy)
+  if (zaznam.slevy && typeof NAST !== 'undefined' && NAST.slevy) {
     konfigNahradVMiste(NAST.slevy, zaznam.slevy);
+    // starší platný ceník nese stropy pro čtyři role → převod (2. 8. 2026)
+    if (typeof stropyMigruj === 'function' && NAST.slevy.stropy)
+      NAST.slevy.stropy = stropyMigruj(NAST.slevy.stropy);
+  }
   /* Verze se bere z použitého záznamu, ne z toho, co je zrovna platné –
    * kdyby se aplikace přepnula na starší verzi, razítko by jinak tvrdilo
    * číslo ceníku, ze kterého se nepočítá (#39). */

@@ -112,7 +112,14 @@ function renderZakazka() {
       inp('ZAK.projHlavicka.ico', { type: 'text', l: 'IČO objednatele' }) +
       (typeof aresRadek === 'function' ? aresRadek('proj', true) : '') +
       inp('ZAK.projHlavicka.datum', { type: 'date', l: 'Datum' }) +
-      `<div class="btns" style="margin-top:10px">
+      `<div class="row" style="margin-top:8px"><label>Zakázka je jen projekce (bez OCK)</label>
+        <input type="checkbox" ${ZAK.jenProj ? 'checked' : ''} onchange="set('ZAK.jenProj', this.checked)"><span class="u"></span></div>
+      <div class="note">Projekce se někdy prodává samostatně (2. 8. 2026). Se zaškrtnutím přestanou
+        platit kontroly nad zadáním OCK, sleva ZAK-10 (počítá se z ceny šachty) a část OCK
+        v porovnání variant i v marži nabídky — čistě projekční nabídka tak nesvítí varováními
+        o šachtě, kterou nikdo neprodává. Data OCK zůstávají, jen se nikam nepočítají;
+        odškrtnutím se vše vrátí.</div>
+      <div class="btns" style="margin-top:10px">
         <button onclick="zakHlavickaKopiruj('doProj')">⇦ Převzít údaje z hlavičky OCK</button>
         <button onclick="zakHlavickaKopiruj('doOck')">⇨ Přenést tyto údaje do hlavičky OCK</button>
       </div>

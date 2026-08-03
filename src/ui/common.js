@@ -42,7 +42,9 @@ const NAST = {
   firma: firmaDefault(),
 
   // --- Uživatelé (příprava účtů; zatím jen náhled, bez přihlášení – viz SET-1) ---
-  role: ['Obchodník', 'Vedoucí obchodu', 'Obchodní ředitel', 'Jednatel'],
+  /* Tři role (zjednodušení 2. 8. 2026, příprava na online #24). Starší data
+   * se čtyřmi rolemi převádí roleMigruj/stropyMigruj ve sleva.js. */
+  role: ['Obchodník', 'Vedoucí', 'Administrátor'],
   uzivatele: [
     { jmeno: 'Vzorový obchodník', email: 'obchodnik@priklad.cz', role: 'Obchodník', aktivni: true },
   ],
@@ -64,7 +66,7 @@ const NAST = {
      * shodovat (hlídá test_kontroly.js). */
     maxGlobalni: 0,
     stropy: {                  // max sleva bez schválení dle role (podíl z ceny bez DPH)
-      'Obchodník': 0, 'Vedoucí obchodu': 0, 'Obchodní ředitel': 0, 'Jednatel': 0,
+      'Obchodník': 0, 'Vedoucí': 0, 'Administrátor': 0,
     },
     schemata: [
       { nazev: 'Standardní obchodní sleva', typ: 'percentage', popis: 'Běžná vyjednávací sleva na cenu bez DPH.' },
@@ -458,7 +460,7 @@ function slevaKarta(kontext) {
   const roleOpts = NAST.role.map(rr => `<option ${rr === SL.role ? 'selected' : ''}>${esc(rr)}</option>`).join('');
   // nadřízení = role s vyšším stropem než zadavatel
   const strop = v.strop, nadrizeni = NAST.role.filter(rr => (NAST.slevy.stropy[rr] || 0) > strop + 1e-9);
-  const schvalitel = SL.schvalitel || (nadrizeni[0] || 'Jednatel');
+  const schvalitel = SL.schvalitel || (nadrizeni[0] || 'Administrátor');
   const schvalOpts = (nadrizeni.length ? nadrizeni : NAST.role).map(rr => `<option ${rr === schvalitel ? 'selected' : ''}>${esc(rr)}</option>`).join('');
 
   const stavMap = {
