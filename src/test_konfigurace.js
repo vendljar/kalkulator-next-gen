@@ -181,5 +181,24 @@ test('roundtrip export→import→export dá stejný obsah',
   JSON.stringify(A.nastaveni) === JSON.stringify(B.nastaveni) && JSON.stringify(A.katalog) === JSON.stringify(B.katalog),
   JSON.stringify(A.nastaveni) + '\n' + JSON.stringify(B.nastaveni));
 
+/* migrace rolí při importu konfigurace (zjednodušení 2. 8. 2026) */
+{
+  const sl2 = require('./sleva.js');
+  global.roleMigruj = sl2.roleMigruj; global.roleMigrujSeznam = sl2.roleMigrujSeznam;
+  global.stropyMigruj = sl2.stropyMigruj;
+  const NAST2 = { role: [], uzivatele: [], slevy: { stropy: {} } };
+  konfiguraceImport({ verze: 1, aplikace: 'Kalkulátor OCK', nastaveni: {
+    role: ['Obchodník', 'Vedoucí obchodu', 'Obchodní ředitel', 'Jednatel'],
+    uzivatele: [{ jmeno: 'X', role: 'Obchodní ředitel' }],
+    slevy: { stropy: { 'Vedoucí obchodu': 0.10, 'Obchodní ředitel': 0.15, 'Jednatel': 1 } },
+  } }, { NAST: NAST2 }, { nastaveni: true });
+  test('import konfigurace převede role na tři',
+    NAST2.role.join('|') === 'Obchodník|Vedoucí|Administrátor', NAST2.role.join('|'));
+  test('import převede roli uživatele', NAST2.uzivatele[0].role === 'Vedoucí');
+  test('import sloučí stropy na vyšší hodnotu',
+    NAST2.slevy.stropy['Vedoucí'] === 0.15 && NAST2.slevy.stropy['Administrátor'] === 1,
+    JSON.stringify(NAST2.slevy.stropy));
+}
+
 console.log(fail ? `\n${fail} CHYB (${ok} OK)` : `\nVŠECHNY TESTY KONFIGURACE OK (${ok})`);
 process.exit(fail ? 1 : 0);

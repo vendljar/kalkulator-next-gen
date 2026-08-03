@@ -306,5 +306,22 @@ const chybiP = POROVNANI_SKUPINY.map(g => g.popis)
   .filter(s => ['en', 'de', 'fr'].some(j => !pk.trStav(s, j).prelozeno));
 test('popisky detailu položek mají překlad v EN/DE/FR', chibiPrazdne(chybiP), chybiP.join(' | '));
 
+/* ---------- zakázka jen projekce (2. 8. 2026) ---------- */
+{
+  const zakJP = zk.novaZakazka();
+  zakJP.cislo = '2026 - OPR - CN - 0301';
+  zakJP.jenProj = true;
+  const vJP = zakJP.varianty[0];
+  vJP.data.cenik.dph = 0.21; vJP.data.proj.cenik.dph = 0.12; vJP.data.sleva = sl.slevaDefault();
+  const pJP = porovnaniVariant(zakJP, [{ id: vJP.id, ock: mkOck(1000000, 800000), proj: mkProj(200000) }]);
+  const vv = pJP.varianty[0];
+  test('jen PROJ: část OCK se neporovnává', vv.hodnoty.ockZaklad == null
+    && vv.hodnoty.ockPoSleve == null && vv.hodnoty.dphOckKc == null,
+    JSON.stringify(vv.hodnoty));
+  test('jen PROJ: celkem bez DPH = jen projekce', blizko(vv.hodnoty.celkemBezDph, 200000));
+  test('jen PROJ: celkem s DPH sazbou PROJ', blizko(vv.hodnoty.celkemSDph, 200000 * 1.12));
+  test('jen PROJ: chybějící OCK není chyba', !vv.chyba, vv.chyba);
+}
+
 console.log(`\n${ok} OK, ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

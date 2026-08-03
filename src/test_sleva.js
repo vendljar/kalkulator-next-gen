@@ -9,6 +9,7 @@ const tsm = require('./techspec.js');
 global.TECHSPEC_DEF = tsm.TECHSPEC_DEF; global.tsHodnota = tsm.tsHodnota; global.DEFAULT_TECHSPEC = tsm.DEFAULT_TECHSPEC;
 const zk = require('./zakazka.js');
 const sl = require('./sleva.js');
+Object.assign(global, sl);
 global.slevaPodil = sl.slevaPodil; global.slevaDefault = sl.slevaDefault;
 const { nabidkaData } = require('./nabidka.js');
 
@@ -77,6 +78,43 @@ test('placeholder CENA_PRED_SLEVOU = původní', Math.abs(parse(dSleva.placehold
 // neschválená sleva se NEpropíše
 v.data.sleva = { procenta: 10, role: 'Obchodník', stav: 'čeká na schválení' };
 test('čekající sleva cenu nemění', Math.abs(parse(nabidkaData(zak, v, JEKLY).placeholders.CENA_BEZ_DPH) - cenaBez) < 2);
+
+
+/* ---------- zjednodušení rolí (2. 8. 2026) ----------
+ * „Zatím bych role zjednodušil na obchodník, vedoucí a administrátor."
+ * Starší data (zakázky, _nastaveni.json, _program.json) nesou čtyři původní
+ * role — migrace je převádí a při sloučení dvou rolí do jedné bere vyšší
+ * strop, aby se nikomu potichu nesnížilo oprávnění, které už měl. */
+test('výchozí role jsou tři', Array.isArray(ROLE_VYCHOZI)
+  && ROLE_VYCHOZI.join('|') === 'Obchodník|Vedoucí|Administrátor');
+test('stará role se převede', roleMigruj('Vedoucí obchodu') === 'Vedoucí'
+  && roleMigruj('Obchodní ředitel') === 'Vedoucí' && roleMigruj('Jednatel') === 'Administrátor');
+test('nová i neznámá role projde beze změny', roleMigruj('Obchodník') === 'Obchodník'
+  && roleMigruj('Externista') === 'Externista');
+test('seznam rolí se převede bez duplicit a se zachováním pořadí',
+  roleMigrujSeznam(['Obchodník', 'Vedoucí obchodu', 'Obchodní ředitel', 'Jednatel']).join('|')
+    === 'Obchodník|Vedoucí|Administrátor');
+test('stropy: při sloučení rolí platí vyšší strop', (() => {
+  const s2 = stropyMigruj({ 'Obchodník': 0.05, 'Vedoucí obchodu': 0.10, 'Obchodní ředitel': 0.15, 'Jednatel': 1 });
+  return s2['Vedoucí'] === 0.15 && s2['Administrátor'] === 1 && s2['Obchodník'] === 0.05
+    && !('Vedoucí obchodu' in s2) && !('Jednatel' in s2);
+})());
+test('stropy: neznámá role zůstává', stropyMigruj({ 'Externista': 0.02 })['Externista'] === 0.02);
+
+/* migrace rolí při načtení starší zakázky: nezamčená varianta se převede,
+ * zamčená zůstává jak odešla (je to doklad) */
+{
+  global.roleMigruj = sl.roleMigruj;   // v prohlížeči je globální díky buildu
+  const zam = (typeof global.variantaUzamcena === 'function');
+  const stara = JSON.parse(JSON.stringify(zk.novaZakazka()));
+  stara.varianty[0].data.sleva = { procenta: 8, role: 'Obchodní ředitel',
+    stav: 'schváleno', schvalitel: 'Jednatel' };
+  const po = zk.importZakazka(stara);
+  test('import převede roli slevy nezamčené varianty',
+    po.varianty[0].data.sleva.role === 'Vedoucí'
+    && po.varianty[0].data.sleva.schvalitel === 'Administrátor',
+    JSON.stringify(po.varianty[0].data.sleva));
+}
 
 console.log(fail ? `\n${fail} CHYB` : '\nVŠECHNY TESTY SLEVA OK');
 process.exit(fail ? 1 : 0);

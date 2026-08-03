@@ -135,6 +135,15 @@ function konfiguraceImport(data, ctx, volby) {
       else ctx.NAST[k] = konfigKopie(data.nastaveni[k]);
       n++;
     });
+    /* Zjednodušení rolí (2. 8. 2026): starší konfigurace nese čtyři role.
+     * Migruje se hned při importu, ať se nikde neukáže rozbalovací seznam
+     * s rolí, která už neexistuje. */
+    if (typeof roleMigrujSeznam === 'function' && Array.isArray(ctx.NAST.role))
+      ctx.NAST.role = roleMigrujSeznam(ctx.NAST.role);
+    if (typeof roleMigruj === 'function' && Array.isArray(ctx.NAST.uzivatele))
+      ctx.NAST.uzivatele.forEach(u => { if (u && u.role) u.role = roleMigruj(u.role); });
+    if (typeof stropyMigruj === 'function' && ctx.NAST.slevy && ctx.NAST.slevy.stropy)
+      ctx.NAST.slevy.stropy = stropyMigruj(ctx.NAST.slevy.stropy);
     zmeneno.push('nastavení aplikace (' + n + ' oddílů)');
     if (data.nastaveni.jeAdmin !== undefined) varovani.push('role administrátora se z konfigurace nepřebírá (bezpečnost)');
   }

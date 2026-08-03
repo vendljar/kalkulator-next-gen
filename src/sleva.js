@@ -38,5 +38,43 @@ function slevaPlati(sleva) {
 /* Podíl slevy (0..1) k použití v nabídce – jen je-li schválená. */
 function slevaPodil(sleva) { return slevaPlati(sleva) ? Math.max(0, +sleva.procenta || 0) / 100 : 0; }
 
+
+/* ---------- role (zjednodušení 2. 8. 2026) ----------------------------
+ * „Zatím bych role zjednodušil na obchodník, vedoucí a administrátor."
+ * Tři role jsou příprava na online přihlašování (#24): obchodník zadává,
+ * vedoucí schvaluje slevy nad strop, administrátor vidí náklady a spravuje
+ * ceník. Starší data (uložené zakázky, _nastaveni.json, _program.json)
+ * nesou čtyři původní role — migrace je převádí na nové a při sloučení
+ * dvou starých rolí do jedné bere VYŠŠÍ strop: potichu snížit oprávnění,
+ * které někdo už měl, by znamenalo, že se rozpracovaná sleva po otevření
+ * zakázky začne tvářit jako neschválená. */
+const ROLE_VYCHOZI = ['Obchodník', 'Vedoucí', 'Administrátor'];
+const ROLE_MIGRACE = {
+  'Vedoucí obchodu': 'Vedoucí',
+  'Obchodní ředitel': 'Vedoucí',
+  'Jednatel': 'Administrátor',
+};
+function roleMigruj(nazev) {
+  return ROLE_MIGRACE[nazev] || nazev;
+}
+function roleMigrujSeznam(pole) {
+  const out = [];
+  (Array.isArray(pole) ? pole : []).forEach(r => {
+    const n = roleMigruj(r);
+    if (!out.includes(n)) out.push(n);
+  });
+  return out;
+}
+function stropyMigruj(stropy) {
+  const out = {};
+  Object.keys(stropy || {}).forEach(k => {
+    const n = roleMigruj(k);
+    const v = +stropy[k] || 0;
+    out[n] = Math.max(out[n] || 0, v);
+  });
+  return out;
+}
+
 if (typeof module !== 'undefined')
-  module.exports = { slevaDefault, slevaVyhodnot, slevaPlati, slevaPodil };
+  module.exports = { slevaDefault, slevaVyhodnot, slevaPlati, slevaPodil,
+                   ROLE_VYCHOZI, ROLE_MIGRACE, roleMigruj, roleMigrujSeznam, stropyMigruj };

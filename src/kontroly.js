@@ -68,7 +68,10 @@ function kontrolyMarze(ctx) {
   if (ctx.__marze !== undefined) return ctx.__marze;
   let p = ctx.marzePrehled || null;
   if (!p && typeof marzePrehled === 'function') {
-    try { p = marzePrehled(ctx.vysledek, ctx.projVysledek, ctx.sleva, ctx.nast, ctx.zaokr); }
+    /* Zakázka jen projekce (2. 8. 2026): OCK se neprodává, takže jeho čísla
+     * do marže nabídky nepatří — jinak by nepoužité zadání OCK tahalo celek. */
+    try { p = marzePrehled(ctx.jenProj ? null : ctx.vysledek, ctx.projVysledek,
+                           ctx.jenProj ? null : ctx.sleva, ctx.nast, ctx.zaokr); }
     catch (e) { p = null; }
   }
   try { ctx.__marze = p; } catch (e) { /* zmrazený kontext – nevadí */ }
@@ -189,6 +192,7 @@ const KONTROLY = [
   {
     kod: 'sleva', kde: 'Nabídka', nazev: 'Sleva mimo rozsah nebo bez schválení',
     zjisti(ctx) {
+      if (ctx.jenProj) return null;   // ZAK-10 se počítá z ceny OCK; bez OCK není co hlídat
       const s = ctx.sleva;
       if (!s) return null;
       /* Na zadanou hodnotu, ne na výsledek: slevaVyhodnot() zápornou slevu
@@ -356,6 +360,10 @@ function kontrolyProved(ctx) {
        * rozdělaným zadáním, kde může chybět cokoli; kdyby jediné pravidlo
        * spadlo na nedefinované hodnotě, zhasla by i varování, která fungují –
        * a nikdo by si toho nevšiml. */
+      /* Zakázka jen projekce: pravidla nad zadáním OCK mlčí (2. 8. 2026,
+       * „někdy jí prodáváme zvlášť") — čistě projekční nabídka nesmí svítit
+       * varováními o šachtě, kterou nikdo neprodává. */
+      if (ctx && ctx.jenProj && r.kde === 'Kalkulace OCK') return;
       try { v = r.zjisti(ctx); } catch (e) { v = null; }
       if (!v) return;
       nalezy.push({ kod: r.kod, kde: r.kde, nazev: r.nazev,

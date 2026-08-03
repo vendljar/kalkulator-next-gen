@@ -115,6 +115,25 @@ const mMax = COMMON_TXT.match(/maxGlobalni:\s*([0-9.]+)/);
 test('ui/common.js má výchozí maxGlobalni', !!mMax && Math.abs(parseFloat(mMax[1]) - 0.30) < 1e-9,
   mMax && mMax[1]);
 
+/* ---------- 0b) zakázka jen projekce (bez OCK), 2. 8. 2026 ----------
+ * „Někdy jí prodáváme zvlášť." Když je zakázka označená jako jen projekce,
+ * pravidla nad zadáním OCK mlčí — jinak by každá čistě projekční nabídka
+ * svítila varováními o šachtě, kterou nikdo neprodává. Pravidla PROJ a
+ * zábrana ukázkového ceníku platí dál. */
+{
+  const jenProj = kontrolyProved(ctxZdravy(c => {
+    c.jenProj = true;
+    c.zadani.sirka = 0;                       // rozbité zadání OCK…
+    c.projZadani.slevaPct = -50;              // …a zároveň chyba v PROJ
+  }));
+  test('u zakázky jen PROJ pravidla OCK mlčí', !kody(jenProj).includes('rozmery'),
+    kody(jenProj).join(','));
+  test('pravidla PROJ platí dál', kody(jenProj).includes('slevaProjMax'),
+    kody(jenProj).join(','));
+  const sOck = kontrolyProved(ctxZdravy(c => { c.zadani.sirka = 0; }));
+  test('bez příznaku se OCK hlídá jako dřív', kody(sOck).includes('rozmery'));
+}
+
 /* ---------- 1) katalog pravidel ---------- */
 const pravidla = kontrolyPravidla();
 /* Počet je tu schválně napevno: pravidlo přidané omylem (např. dvakrát

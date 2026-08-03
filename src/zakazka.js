@@ -48,6 +48,10 @@ function novaZakazka() {
     schema: ZAKAZKA_SCHEMA,
     cislo: ZAK_CISLO_PREDLOHA,
     nazevAkce: '', adresa: '', objednatel: '', kontakt: '',
+    /* Zakázka jen projekce (2. 8. 2026): projekce se někdy prodává samostatně.
+     * Příznak vypíná hlídání a porovnávání části OCK; data OCK zůstávají,
+     * jen se nikam nepočítají. */
+    jenProj: false,
     // IČO objednatele (zadání z 30. 7. 2026). V hlavičce stojí hned za kontaktní
     // osobou. Je to jediný údaj, kterým se objednatel dá jednoznačně určit –
     // název firmy se píše pokaždé jinak („Stavby s.r.o." / „STAVBY s. r. o.").
@@ -67,7 +71,8 @@ function novaZakazka() {
     // (zakazkaKopirujHlavicku / tlačítko „Převzít údaje…" v obou hlavičkách).
     projHlavicka: {
       cislo: ZAK_CISLO_PREDLOHA,
-      nazevAkce: '', adresa: '', objednatel: '', kontakt: '', ico: '', adresaObjednatele: '',
+      nazevAkce: '', adresa: '', objednatel: '', kontakt: '',
+      ico: '', adresaObjednatele: '',
       datum: new Date().toISOString().slice(0, 10),
     },
     varianty: [v],
@@ -230,6 +235,14 @@ function importZakazka(obj) {
       if (typeof kryciMigraceZadrzne === 'function') kryciMigraceZadrzne(d.kryci.hodnoty);
       if (!d.kryciProj) d.kryciProj = { hodnoty: {} };   // migrace: krycí list PROJ přibyl později
       if (!d.kryciProj.hodnoty) d.kryciProj.hodnoty = {};
+      /* Migrace rolí (zjednodušení 2. 8. 2026): role u slevy se převádí jen
+       * u NEZAMČENÝCH variant — zamčená nabídka je doklad a zůstává, jak
+       * odešla (jméno role v ní je historie, ne aktivní oprávnění). */
+      const zamceno = (typeof variantaUzamcena === 'function') && variantaUzamcena(v);
+      if (!zamceno && d.sleva && typeof roleMigruj === 'function') {
+        if (d.sleva.role) d.sleva.role = roleMigruj(d.sleva.role);
+        if (d.sleva.schvalitel) d.sleva.schvalitel = roleMigruj(d.sleva.schvalitel);
+      }
       v.data = d;
     });
     if (!obj.varianty.some(v => v.id === obj.aktivni)) obj.aktivni = obj.varianty[0].id;
@@ -238,6 +251,7 @@ function importZakazka(obj) {
     // PRÁZDNÉ – dosavadní hodnota v `adresa` je adresa stavby, ne sídlo, a
     // dosadit ji sem by jen zopakovalo chybu, kterou tato změna odstraňuje.
     if (obj.adresaObjednatele == null) obj.adresaObjednatele = '';
+    if (obj.jenProj == null) obj.jenProj = false;   // migrace: příznak jen projekce (2. 8. 2026)
     // migrace: IČO objednatele přibylo 30. 7. 2026. Zůstává PRÁZDNÉ – v žádném
     // dosavadním poli není nic, z čeho by se dalo odvodit, a odhadnuté IČO je
     // horší než žádné (skončilo by ve smlouvě).
@@ -317,6 +331,7 @@ function porovnaniVariant(zak, vypocty, opts) {
   (vypocty || []).forEach(x => { mapa[x.id] = x; });
 
   const rid = ridiciVarianta(zak);
+  const bezOck = !!zak.jenProj;   // jen projekce: část OCK se neporovnává
   const varianty = zak.varianty.map(v => {
     const c = mapa[v.id] || {};
     const d = v.data || {};
@@ -328,7 +343,11 @@ function porovnaniVariant(zak, vypocty, opts) {
     const zaokrouhliCenu = x => (typeof zaokrouhli === 'function') ? zaokrouhli(x, d.zaokr) : x;
     let zaokrCelkem = null;
 
-    if (c.ock && c.ock.souhrn) {
+    /* Zakázka jen projekce (2. 8. 2026): část OCK se neporovnává a chybějící
+     * výpočet OCK není chyba — šachtu nikdo neprodává. */
+    if (bezOck) {
+      // řádky OCK zůstanou prázdné (—)
+    } else if (c.ock && c.ock.souhrn) {
       const s = c.ock.souhrn;
       const p = Math.max(0, Math.min(1, +podil(d.sleva || {}) || 0));
       h.ockZaklad = s.zakladCena;
@@ -367,9 +386,9 @@ function porovnaniVariant(zak, vypocty, opts) {
     const sazbaOck = (d.cenik && typeof d.cenik.dph === 'number') ? d.cenik.dph : null;
     const sazbaProj = (d.proj && d.proj.cenik && typeof d.proj.cenik.dph === 'number')
       ? d.proj.cenik.dph : sazbaOck;
-    h.dphOckSazba = sazbaOck;
+    h.dphOckSazba = bezOck ? null : sazbaOck;
     h.dphProjSazba = (projCast != null) ? sazbaProj : null;
-    h.dphOckKc = (sazbaOck != null && ockCast != null) ? ockCast * sazbaOck : null;
+    h.dphOckKc = (!bezOck && sazbaOck != null && ockCast != null) ? ockCast * sazbaOck : null;
     h.dphProjKc = (sazbaProj != null && projCast != null) ? projCast * sazbaProj : null;
     h.celkemSDph = (h.celkemBezDph != null && (h.dphOckKc != null || h.dphProjKc != null))
       ? h.celkemBezDph + (h.dphOckKc || 0) + (h.dphProjKc || 0) : null;
