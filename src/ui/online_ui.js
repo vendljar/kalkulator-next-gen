@@ -36,6 +36,8 @@ const ONLINE_STAV = {
   ja: null,          // { email, jmeno, role } po přihlášení
   db: null,          // normalizovaná databáze programu ze serveru
   cenikPouzit: false,// online ceník je právě nasazený v aplikaci
+  firma: null,       // { udaje, kdo, kdy } – firemní údaje ze serveru
+  firmaPouzita: false,// online firemní údaje jsou právě nasazené v aplikaci
   rejstrik: [],      // rejstřík online zakázek
   soubor: '',        // pod jakým jménem je otevřená zakázka online
   razitko: '',
@@ -137,14 +139,16 @@ function onlinePoPrihlaseni(ja) {
     NAST.jeAdmin = ja.role === 'Administrátor';
   }
   onlineZprava('Přihlášen: ' + (ja.jmeno || ja.email) + ' (' + ja.role + ').');
-  return Promise.all([onlineNactiProgram(), onlineNactiRejstrik()])
+  return Promise.all([onlineNactiProgram(), onlineNactiFirmu(), onlineNactiRejstrik()])
     .then(() => { if (jeAdminOnline()) onlineZalohaAuto(); });
 }
 
 function onlineOdhlas() {
   return onlineApi('/api/odhlaseni', {}).catch(() => null).then(() => {
     const vladlOnline = ONLINE_STAV.cenikPouzit;
+    const vladlaFirma = ONLINE_STAV.firmaPouzita;
     ONLINE_STAV.ja = null; ONLINE_STAV.db = null; ONLINE_STAV.cenikPouzit = false;
+    ONLINE_STAV.firma = null; ONLINE_STAV.firmaPouzita = false;
     ONLINE_STAV.rejstrik = []; ONLINE_STAV.soubor = ''; ONLINE_STAV.razitko = ''; ONLINE_STAV.posledni = '';
     ONLINE_STAV.uzivatele = []; ONLINE_STAV.uzivateleNacteno = false; ONLINE_STAV.formHeslo = '';
     if (ONLINE_STAV.timer) { clearTimeout(ONLINE_STAV.timer); ONLINE_STAV.timer = null; }
@@ -152,6 +156,11 @@ function onlineOdhlas() {
      * návrat k ceníku ze sestavení, stejná úvaha jako při odpojení složky. */
     if (vladlOnline && typeof progJede === 'function' && !progJede()
       && typeof progZpetNaBuild === 'function') progZpetNaBuild();
+    /* Totéž s firemními údaji: odhlášený uživatel nemá čím doložit, že v
+     * hlavičce nabídky je skutečná firma. Vrátí se vzorek ze sestavení
+     * i s červenou lištou — raději viditelně vymyšlené než tiše zastaralé. */
+    if (vladlaFirma && typeof NAST !== 'undefined' && typeof konfigNahradVMiste === 'function')
+      konfigNahradVMiste(NAST.firma, firmaDefault());
     onlineZprava('Odhlášeno. Aplikace se vrátila k cenám, které má odkud doložit '
       + '(složka, jinak ceník ze sestavení).');
     render();
@@ -206,6 +215,82 @@ function onlineZverejni() {
     return onlineNactiProgram().then(() => true);
   }).catch(e => { onlineZprava('Zveřejnit online se nepodařilo: ' + e.message, 'chyba'); return false; })
     .then(v => { ONLINE_STAV.pracuje = false; render(); return v; });
+}
+
+/* ---------- firemní údaje ze serveru (4. 8. 2026) ----------
+ *
+ * Dokud byly firemní údaje jen v `_DB/_nastaveni.json`, měl je odkud vzít
+ * pouze administrátor — složku nikdo jiný nemapuje. Obchodníkovi proto
+ * zůstávala „Ukázková firma s.r.o." v hlavičce nabídky a červená lišta
+ * „Firemní údaje jsou ukázkové" nešla zhasnout ničím, co by mohl udělat.
+ * Online cesta je pro něj jediná — stejná jako u ceníku. */
+
+function onlineNactiFirmu() {
+  return onlineApi('/api/firma').then(o => {
+    ONLINE_STAV.firma = (o.firma && o.firma.udaje) ? o.firma : null;
+    /* Nasazení dělá onlineTik — jen tam se ví, jestli nevládne složka. */
+    ONLINE_STAV.firmaPouzita = false;
+    return true;
+  }).catch(e => {
+    onlineZprava('Firemní údaje se ze serveru nepodařilo načíst: ' + e.message, 'varovani');
+    return false;
+  });
+}
+
+/* Krátký popis stavu do Nastavení → Firma. */
+function onlineFirmaPopis() {
+  if (!ONLINE_STAV.ja) return 'Nepřihlášen – online firemní údaje se načtou po přihlášení.';
+  if (!ONLINE_STAV.firma)
+    return 'V online databázi firemní údaje zatím nejsou. Dokud je tam nezveřejníte, '
+      + 'mají obchodníci v hlavičce nabídky ukázkovou firmu ze sestavení.';
+  return 'Online zveřejněno ' + String(ONLINE_STAV.firma.kdy || '').slice(0, 16).replace('T', ' ')
+    + ' (' + (ONLINE_STAV.firma.kdo || '?') + ') · ' + (ONLINE_STAV.firma.udaje.nazev || '')
+    + (ONLINE_STAV.firmaPouzita ? ' · právě platí v aplikaci' : '');
+}
+
+/* Zveřejnění – posílá se to, co je právě v Nastavení → Firma. Posílají se
+ * ÚDAJE TAK, JAK JSOU (i se značkou ukázkových dat): server si musí umět sám
+ * říct ne, kdyby prohlížeč někdo obešel. Čistou kopii si udělá on. */
+function onlineZverejniFirmu() {
+  if (!jeAdminOnline()) {
+    onlineZprava('Firemní údaje smí zveřejnit jen administrátor.', 'varovani'); render();
+    return Promise.resolve(false);
+  }
+  const lze = firmaLzeZverejnit(typeof NAST !== 'undefined' ? NAST.firma : null);
+  if (!lze.ok) {
+    onlineZprava('Zveřejnit se nedají: ' + lze.duvod, 'varovani'); render();
+    return Promise.resolve(false);
+  }
+  if (!confirm('Zveřejnit firemní údaje online pro celý program?\n\n'
+    + (NAST.firma.nazev || '') + ', ' + firmaSidlo(NAST.firma) + '\n\n'
+    + 'Od této chvíle je uvidí v hlavičce nabídky všichni přihlášení, i ti, '
+    + 'kdo nemají připojenou složku _DB.')) return Promise.resolve(false);
+
+  ONLINE_STAV.pracuje = true; render();
+  return onlineApi('/api/firma', { udaje: NAST.firma })
+    .then(() => onlineNactiFirmu().then(() => {
+      onlineZprava('Firemní údaje jsou zveřejněné online – obchodníci je uvidí po přihlášení.');
+      return true;
+    }))
+    .catch(e => { onlineZprava('Zveřejnit firemní údaje se nepodařilo: ' + e.message, 'chyba'); return false; })
+    .then(v => { ONLINE_STAV.pracuje = false; render(); if (typeof nastRefresh === 'function') nastRefresh(); return v; });
+}
+
+/* Panel do Nastavení → Firma (jen administrátor, jen na serveru). */
+function onlineFirmaPanel() {
+  if (!onlineMozne() || !ONLINE_STAV.bezi || !jeAdminOnline()) return '';
+  const lze = firmaLzeZverejnit(typeof NAST !== 'undefined' ? NAST.firma : null);
+  return `<div class="sec-title">Firemní údaje v online databázi</div>
+    <div class="note" style="margin-top:0">${esc(onlineFirmaPopis())}</div>
+    ${lze.ok ? '' : `<div class="note" style="color:var(--warn)">⚠ ${esc(lze.duvod)}</div>`}
+    <div class="btns" style="margin-top:8px">
+      <button class="primary" onclick="onlineZverejniFirmu()"
+        ${ONLINE_STAV.pracuje || !lze.ok ? 'disabled' : ''}>Zveřejnit firemní údaje online</button>
+      <button class="mini" onclick="onlineNactiFirmu().then(function(){render();nastRefresh()})">Načíst online znovu</button>
+    </div>
+    <div class="note">Obchodník ani vedoucí složku <code>_DB</code> nemapují – hlavičku nabídky
+      mají odkud vzít jedině odsud. Dokud je připojená složka, má v aplikaci přednost ona;
+      bez ní platí tahle online verze.</div>`;
 }
 
 /* ---------- zakázky online ---------- */
@@ -424,6 +509,23 @@ function onlineTik() {
     ONLINE_STAV.cenikPouzit = false;
   }
 
+  /* Firemní údaje ze serveru. Pravidlo je úmyslně opatrné: nasadí se JEN
+   * tehdy, když je v aplikaci pořád vzorek ze sestavení (nese značku
+   * ukázkových dat). Cokoli skutečného – ze složky _nastaveni.json i ručně
+   * přepsaného v Nastavení → Firma – má přednost a online verze ho nepřepíše.
+   * Značka po nasazení zmizí sama (konfigNahradVMiste zahodí celý obsah),
+   * takže se to nemůže opakovat ani přepsat pozdější práci administrátora. */
+  if (ONLINE_STAV.ja && ONLINE_STAV.firma && !ONLINE_STAV.firmaPouzita
+      && typeof NAST !== 'undefined' && typeof ukazkoveJe === 'function'
+      && ukazkoveJe(NAST.firma) && typeof konfigNahradVMiste === 'function') {
+    ONLINE_STAV.firmaPouzita = true;
+    setTimeout(() => {
+      konfigNahradVMiste(NAST.firma, ONLINE_STAV.firma.udaje);
+      render();
+    }, 0);
+    return;
+  }
+
   if (!ONLINE_STAV.auto || !ONLINE_STAV.ja || !ONLINE_STAV.soubor || ONLINE_STAV.pracuje) return;
   let text = '';
   try { text = JSON.stringify(ZAK); } catch (e) { return; }
@@ -561,10 +663,13 @@ function renderZmenaHesla() {
       <div class="row"><label>Staré heslo</label>
         <input type="password" id="hesloStare" autocomplete="current-password"><span class="u"></span></div>
       <div class="row"><label>Nové heslo (min. 8 znaků)</label>
-        <input type="password" id="hesloNove" autocomplete="new-password"><span class="u"></span></div>
+        <input type="password" id="hesloNove" autocomplete="new-password" minlength="8"
+          placeholder="alespoň 8 znaků" title="Heslo musí mít alespoň 8 znaků."><span class="u"></span></div>
       <div class="row"><label>Nové heslo znovu</label>
         <input type="password" id="hesloNove2" autocomplete="new-password"
+          placeholder="alespoň 8 znaků"
           onkeydown="if(event.key==='Enter')onlineZmenHeslo()"><span class="u"></span></div>
+      <div class="note" style="margin-top:2px">Heslo musí mít <b>alespoň 8 znaků</b>.</div>
       <div class="btns" style="margin-top:12px">
         <button class="primary" onclick="onlineZmenHeslo()" ${ONLINE_STAV.pracuje ? 'disabled' : ''}>Změnit heslo</button>
       </div>
@@ -720,7 +825,8 @@ function onlineRadekUzivatele(u) {
   const resetRadek = ONLINE_STAV.hesloPro === u.email
     ? `<tr><td colspan="5" style="text-align:left;padding:6px 10px">
         Nové heslo pro ${esc(u.email)} (min. 8 znaků):
-        <input type="password" id="onlineUzNoveHeslo" style="width:180px"
+        <input type="password" id="onlineUzNoveHeslo" style="width:180px" minlength="8"
+          placeholder="alespoň 8 znaků" title="Heslo musí mít alespoň 8 znaků."
           onkeydown="if(event.key==='Enter')onlineUzHesloUloz('${escJs(u.email)}')">
         <button class="mini" onclick="onlineUzHesloUloz('${escJs(u.email)}')">Uložit heslo</button>
         <button class="mini" onclick="onlineUzHesloPanel('')">Zrušit</button></td></tr>` : '';
@@ -754,9 +860,13 @@ function onlineUzivateleHtml() {
     <div class="row"><label>Role</label><select id="onlineUzRole" onchange="ONLINE_STAV.uzForm.role=this.value">
       ${['Obchodník', 'Vedoucí', 'Administrátor'].map(r => `<option ${r === f.role ? 'selected' : ''}>${r}</option>`).join('')}
     </select><span class="u"></span></div>
-    <div class="row"><label>Počáteční heslo</label><input type="password" id="onlineUzHeslo" value="${esc(f.heslo)}"
+    <div class="row"><label>Počáteční heslo (min. 8 znaků)</label>
+      <input type="password" id="onlineUzHeslo" value="${esc(f.heslo)}" minlength="8"
+      placeholder="alespoň 8 znaků" title="Heslo musí mít alespoň 8 znaků."
       oninput="ONLINE_STAV.uzForm.heslo=this.value"
       onkeydown="if(event.key==='Enter')onlineUzZaloz()"><span class="u"></span></div>
+    <div class="note" style="margin-top:2px">Heslo musí mít <b>alespoň 8 znaků</b>. Kratší heslo
+      server odmítne a účet nevznikne.</div>
     <div class="btns" style="margin-top:8px"><button class="primary" onclick="onlineUzZaloz()"
       ${ONLINE_STAV.pracuje ? 'disabled' : ''}>Založit účet</button></div>
     <div class="note">Hlavnímu administrátorskému účtu nejde snížit role ani ho vypnout – hlídá to

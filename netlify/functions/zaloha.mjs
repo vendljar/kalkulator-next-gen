@@ -8,7 +8,12 @@ import { uloziste, vyzadujRoli, json } from '../lib/sdilene.mjs';
 export default async (req) => {
   const { chyba } = await vyzadujRoli(req, 'Administrátor');
   if (chyba) return chyba;
-  const prog = await (await uloziste('program')).cti('db');
+  const sProg = await uloziste('program');
+  const prog = await sProg.cti('db');
+  /* Firemní údaje jsou od 4. 8. 2026 taky online (obchodník složku nemapuje),
+   * takže patří do zálohy stejně jako ceník — jinak by se po obnově vrátila
+   * ukázková firma ze sestavení. */
+  const firma = await sProg.cti('firma');
   const zak = await uloziste('zakazky');
   const klice = await zak.seznam('z/');
   const zakazky = {};
@@ -22,6 +27,7 @@ export default async (req) => {
   }
   return json({ ok: true, zaloha: {
     porizena: new Date().toISOString(), zdroj: 'schaftscalc.netlify.app',
-    program: prog || null, rejstrik: rejstrik || null, zakazky, uzivatele } });
+    program: prog || null, firma: firma || null,
+    rejstrik: rejstrik || null, zakazky, uzivatele } });
 };
 export const config = { path: '/api/zaloha' };

@@ -2,7 +2,8 @@
  * Krycí list objednávky / SoD (dle přiloženého xlsx). Pole se předvyplňují
  * z kalkulace OCK, zakázky a technické specifikace; ruční hodnoty se ukládají
  * ve variantě (data.kryci.hodnoty), ruční přepis má přednost (↺ vrátí prefill).
- * Tisk do PDF přes Tisk / PDF v hlavičce. */
+ * Tisk do PDF vlastním tlačítkem u náhledu krycího listu (od 4. 8. 2026;
+ * z hlavičky aplikace společné tlačítko „Tisk / PDF" zmizelo). */
 
 function klSet(id, v) {
   if (!KL.hodnoty) KL.hodnoty = {};

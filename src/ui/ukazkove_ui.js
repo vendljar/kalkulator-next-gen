@@ -29,9 +29,28 @@ function ukazkoveStavAkt() {
   });
 }
 
+/* Smí tenhle uživatel vůbec mapovat složku _DB?
+ *
+ * Od zavedení online databáze (4. 8. 2026) je mapování Disku výhradně věcí
+ * administrátora: obchodníkovi teče ceník z online databáze a složku na
+ * disku správce nemá a mít nemá. Karta úložiště se mu už skryla, ale lišta
+ * ho pořád posílala „Připojit složku _DB" – hlášeno uživatelem tentýž den.
+ * Rozhoduje jediná funkce, aby se to příště nerozešlo. */
+function ukazkoveSlozkaSmi() {
+  return (typeof jeAdmin !== 'function') || jeAdmin();
+}
+
 function ukazkoveLista() {
   const s = ukazkoveStavAkt();
   if (!s.jsou) return '';
+  /* Běžný uživatel: žádné tlačítko, jiná věta – viz ukazkoveSlozkaSmi(). */
+  if (!ukazkoveSlozkaSmi())
+    return `<div class="ukazkove-lista">
+      <span class="ikona">⛔</span>
+      <span>${esc(ukazkoveText(s, '', '', true))}</span>
+      <span class="sp"></span>
+      <span class="kde">${esc(ukazkoveVyctem(s))}</span>
+    </div>`;
   /* Tlačítko rovnou v liště. Prohlížeč se na právo k zápisu do složky smí
    * zeptat jen v reakci na kliknutí, takže po restartu (a po otevření
    * nového sestavení, které je pro prohlížeč jiná stránka) zůstane složka
@@ -64,7 +83,7 @@ function renderUkazkoveLista() {
 function ukazkoveTiskLista() {
   const s = ukazkoveStavAkt();
   if (!s.jsou) return '';
-  return `<div class="ukazkove-tisk noprint">⛔ ${esc(ukazkoveKratce(s))}</div>`;
+  return `<div class="ukazkove-tisk noprint">⛔ ${esc(ukazkoveKratce(s, !ukazkoveSlozkaSmi()))}</div>`;
 }
 
 /* ---------- zábrana: nulový ceník ----------
@@ -76,7 +95,7 @@ function dokumentZabrana() {
   if (typeof ukazkoveBraniDokumentu !== 'function') return '';
   const s = ukazkoveStavAkt();
   if (!ukazkoveBraniDokumentu(s)) return '';
-  return ukazkoveKratce(s);
+  return ukazkoveKratce(s, !ukazkoveSlozkaSmi());
 }
 
 /* Panel na místo tlačítek. Vysvětluje, co se má stát, ne jen že to nejde –
@@ -85,11 +104,17 @@ function dokumentZabrana() {
 function ukazkoveZabranaPanel() {
   const duvod = dokumentZabrana();
   if (!duvod) return '';
+  /* Nastavení → Úložiště je jen pro administrátora; běžnému uživateli by
+   * tlačítko nabízelo obrazovku, na kterou se nedostane. Dostane místo něj
+   * větu, se kterou se dá něco dělat. */
+  const cesta = ukazkoveSlozkaSmi()
+    ? `<button class="mini" onclick="otevriNastaveni()">Otevřít Nastavení → Úložiště</button>`
+    : `<span class="pozn">Zveřejnění platného ceníku je práce administrátora – ozvěte se mu.</span>`;
   return `<div class="zabrana-panel">
     <div class="zabrana-hlava"><span class="ikona">⛔</span> <b>Ceník není nahraný – dokument nevznikne.</b></div>
     <div class="zabrana-txt">${esc(duvod)}</div>
     <div class="zabrana-btns">
-      <button class="mini" onclick="otevriNastaveni()">Otevřít Nastavení → Úložiště</button>
+      ${cesta}
       <span class="pozn">Tohle je jediná věc v aplikaci, která se nedá odklepnout.
         Nabídka s nulami by vypadala jako platná.</span>
     </div>

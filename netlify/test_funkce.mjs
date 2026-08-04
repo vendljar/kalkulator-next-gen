@@ -14,6 +14,7 @@ import prihlaseni from './functions/prihlaseni.mjs';
 import ja from './functions/ja.mjs';
 import uzivatele from './functions/uzivatele.mjs';
 import program from './functions/program.mjs';
+import firma from './functions/firma.mjs';
 import zakazky from './functions/zakazky.mjs';
 import zaloha from './functions/zaloha.mjs';
 import zalohaNocni from './functions/zaloha_nocni.mjs';
@@ -78,6 +79,30 @@ const cen2 = ZC.zkusebniCenik(); cen2.profilKgKc = (cen2.profilKgKc || 0) + 1;
 const pub3 = await (await post(program, 'http://x/api/program', { cenik: cen2, cenikProj: ZC.zkusebniCenikProj(), slevy: { minMarze: 0.1 } }, cookie)).json();
 test('změna ceny → verze 2 a stará verze do historie', pub3.ok && pub3.verze === 2, JSON.stringify(pub3));
 
+/* 4b) firemní údaje online (4. 8. 2026) — obchodník složku _DB nemapuje,
+ * takže skutečnou hlavičku nabídky má odkud vzít jen ze serveru. */
+const fmod = require('../src/firma.js');
+test('firma bez přihlášení odmítnuta', (await get(firma, 'http://x/api/firma')).status === 401);
+const fPrazdno = await (await get(firma, 'http://x/api/firma', cookieObch)).json();
+test('dokud nikdo nezveřejnil, vrací se prázdno', fPrazdno.ok === true && fPrazdno.firma === null, JSON.stringify(fPrazdno));
+const fUkazkova = await post(firma, 'http://x/api/firma', { udaje: fmod.firmaDefault() }, cookie);
+test('ukázkovou firmu server zveřejnit nenechá', fUkazkova.status === 400);
+test('a řekne proč', /ukázkov/i.test((await fUkazkova.json()).chyba || ''));
+const SKUT = fmod.firmaDefault(); delete SKUT.ukazkove;
+SKUT.nazev = 'Zkušební firma pro test s.r.o.'; SKUT.ico = '12345678';
+test('obchodník firmu zveřejnit NEsmí',
+  (await post(firma, 'http://x/api/firma', { udaje: SKUT }, cookieObch)).status === 403);
+const dira = JSON.parse(JSON.stringify(SKUT)); dira.telefon = '';
+test('firma bez povinného pole se odmítne',
+  (await post(firma, 'http://x/api/firma', { udaje: dira }, cookie)).status === 400);
+const fPub = await (await post(firma, 'http://x/api/firma', { udaje: SKUT }, cookie)).json();
+test('administrátor firmu zveřejní', fPub.ok === true && !!fPub.kdy, JSON.stringify(fPub));
+const fCteni = await (await get(firma, 'http://x/api/firma', cookieObch)).json();
+test('obchodník si firmu přečte', fCteni.ok && fCteni.firma.udaje.nazev === SKUT.nazev, JSON.stringify(fCteni.firma));
+test('zveřejněná firma nese, kdo a kdy',
+  fCteni.firma.kdo === 'vendl.jaroslav@engineers-cz.cz' && /^\d{4}-\d{2}-\d{2}T/.test(fCteni.firma.kdy));
+test('zveřejněná firma nenese značku ukázkových dat', fCteni.firma.udaje.ukazkove === undefined);
+
 /* 5) zakázky: uložení, rejstřík, načtení, ochrana zámku */
 Object.assign(globalThis, require('../src/format.js'), require('../src/engine.js'), require('../src/engine_proj.js'), require('../src/techspec.js'), require('../src/sleva.js'), require('../src/zaokrouhleni.js'), require('../src/zamek.js'));
 const zm = require('../src/zamek.js');
@@ -100,6 +125,8 @@ test('záloha jen pro administrátora', (await get(zaloha, 'http://x/api/zaloha'
 const zal = await (await get(zaloha, 'http://x/api/zaloha', cookie)).json();
 test('záloha nese program, rejstřík i zakázky', zal.ok && zal.zaloha.program.platny.verze === 2
   && Object.keys(zal.zaloha.zakazky).length === 1 && zal.zaloha.rejstrik.zakazky.length === 1);
+test('záloha nese i firemní údaje', !!zal.zaloha.firma && zal.zaloha.firma.udaje.nazev === SKUT.nazev,
+  JSON.stringify(zal.zaloha.firma));
 test('záloha neobsahuje otisky hesel', !JSON.stringify(zal.zaloha.uzivatele).includes(':')
   || zal.zaloha.uzivatele.every(u => !u.heslo));
 
@@ -111,6 +138,7 @@ test('noční otisk proběhne a vrátí dnešní den', noc.ok && noc.den === new
 const otisk = await (await globalThis.__TEST_ULOZISTE('zalohy')).cti(noc.den);
 test('otisk nese program, zakázky i rejstřík', !!otisk && otisk.program.platny.verze === 2
   && Object.keys(otisk.zakazky).length === 1 && otisk.rejstrik.zakazky.length === 1);
+test('noční otisk nese i firemní údaje', !!otisk.firma && otisk.firma.udaje.ico === SKUT.ico);
 test('otisk nese celé účty (obnova bez resetu hesel)', Array.isArray(otisk.uzivatele)
   && otisk.uzivatele.length === 2 && otisk.uzivatele.every(u => typeof u.heslo === 'string' && u.heslo.includes(':')));
 

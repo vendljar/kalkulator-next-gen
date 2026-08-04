@@ -20,7 +20,9 @@ import { uloziste } from '../lib/sdilene.mjs';
 export default async () => {
   const den = new Date().toISOString().slice(0, 10);
 
-  const prog = await (await uloziste('program')).cti('db');
+  const sProg = await uloziste('program');
+  const prog = await sProg.cti('db');
+  const firma = await sProg.cti('firma');   // od 4. 8. 2026 online (viz functions/firma.mjs)
   const zak = await uloziste('zakazky');
   const zakazky = {};
   for (const k of await zak.seznam('z/')) zakazky[k.slice(2)] = await zak.cti(k);
@@ -34,7 +36,8 @@ export default async () => {
 
   await (await uloziste('zalohy')).zapis(den, {
     porizena: new Date().toISOString(), zdroj: 'nocni-otisk',
-    program: prog || null, rejstrik: rejstrik || null, zakazky, uzivatele,
+    program: prog || null, firma: firma || null,
+    rejstrik: rejstrik || null, zakazky, uzivatele,
   });
   return new Response(JSON.stringify({ ok: true, den }), {
     headers: { 'Content-Type': 'application/json; charset=utf-8' } });

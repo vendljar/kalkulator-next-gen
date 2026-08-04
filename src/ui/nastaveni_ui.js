@@ -57,6 +57,12 @@ function firmaObnovVychozi() {
   if (!jeAdmin()) return alert('Firemní údaje smí měnit jen administrátor.');
   if (!confirm('Vrátit firemní údaje na výchozí hodnoty? Ruční změny se ztratí.')) return;
   konfigNahradVMiste(NAST.firma, firmaDefault());
+  /* Vzorek nese značku ukázkových dat, a onlineTik má nasazovat online firmu
+   * právě podle ní – bez tohohle řádku by se do vteřiny vrátila zpátky a
+   * tlačítko by vypadalo rozbitě. Vědomé vrácení vzorku má přednost;
+   * online verze se nasadí zas až po novém přihlášení nebo „Načíst online
+   * znovu". (4. 8. 2026) */
+  if (typeof ONLINE_STAV !== 'undefined') ONLINE_STAV.firmaPouzita = true;
   nastRefresh();
 }
 
@@ -213,6 +219,8 @@ function nastFirma() {
     <div class="note" style="margin-top:6px">Odvozené symboly skládají více polí do jednoho řádku:
       <code>{{FIRMA_SIDLO}}</code>, <code>{{FIRMA_KORESPONDENCNI}}</code>, <code>{{FIRMA_BANKA_RADEK}}</code>,
       <code>{{FIRMA_ICO_DIC}}</code> a <code>{{FIRMA_PATICKA}}</code> (celá firemní patička dokumentu).</div>
+
+    ${typeof onlineFirmaPanel === 'function' ? onlineFirmaPanel() : ''}
 
     <div class="btns" style="margin-top:12px"><button class="mini" onclick="firmaObnovVychozi()">↺ Obnovit výchozí údaje</button></div>`;
 }
