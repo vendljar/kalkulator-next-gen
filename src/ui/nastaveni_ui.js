@@ -217,31 +217,28 @@ function nastFirma() {
     <div class="btns" style="margin-top:12px"><button class="mini" onclick="firmaObnovVychozi()">↺ Obnovit výchozí údaje</button></div>`;
 }
 
-/* ---------- vnitřní záložka: Uživatelé ---------- */
+/* ---------- vnitřní záložka: Uživatelé ----------
+ * Od 4. 8. 2026 je tohle SKUTEČNÁ správa účtů online databáze (schaftscalc):
+ * založení uživatele s rolí a počátečním heslem, reset hesla, změna role,
+ * vypnutí účtu. Obsluhu i vykreslení dodává ui/online_ui.js – táž logika,
+ * kterou hlídá server. Bez spojení se serverem (nouzovka ze souboru) zůstává
+ * jen vysvětlení; místní seznam NAST.uzivatele se dál nikde needituje, ale
+ * v datech se ponechává (nic se nemaže bez dotazu). */
 function nastUzivatele() {
-  const roleOpts = (sel) => NAST.role.map(r => `<option ${r === sel ? 'selected' : ''}>${esc(r)}</option>`).join('');
-  const rows = NAST.uzivatele.map((u, i) => `
-    <tr>
-      <td><input type="text" value="${esc(u.jmeno)}" onchange="uzSet(${i},'jmeno',this.value)"></td>
-      <td><input type="text" value="${esc(u.email)}" onchange="uzSet(${i},'email',this.value)" placeholder="email@…"></td>
-      <td><select onchange="uzSet(${i},'role',this.value)">${roleOpts(u.role)}</select></td>
-      <td style="text-align:center"><input type="checkbox" ${u.aktivni ? 'checked' : ''} onchange="uzSet(${i},'aktivni',this.checked)"></td>
-      <td style="text-align:center"><button class="mini noprint" onclick="uzDel(${i})">✕</button></td>
-    </tr>`).join('');
-  return `
-    <div class="note" style="margin-bottom:8px">Příprava správy účtů. Zatím jde o <b>náhled</b> – účty se aktivují,
-      až přidáme přihlášení (viz <code>SET-1</code>) a napojení na databázi na rosti.cz. Role zde odpovídají stropům slev.</div>
-    <table class="sd-tbl">
-      <thead><tr><th>Jméno</th><th>E-mail</th><th>Role</th><th>Aktivní</th><th></th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="5" class="note">Žádní uživatelé.</td></tr>'}</tbody>
-    </table>
-    <div class="noprint" style="margin-top:8px"><button class="mini" onclick="uzAdd()">+ přidat uživatele</button></div>
-    <div class="sec-title">Plánováno</div>
-    <ul style="margin:6px 0 0;padding-left:20px;font-size:13px">
-      <li>Přihlášení + skutečné uzamčení admin-only prvků dle role.</li>
-      <li>Napojení účtů na Pipedrive users (vlastník dealu = obchodník).</li>
-      <li>Historie akcí (kdo co změnil), reset hesla, deaktivace účtu.</li>
-    </ul>`;
+  const online = typeof onlineMozne === 'function' && onlineMozne()
+    && typeof ONLINE_STAV !== 'undefined' && ONLINE_STAV.bezi;
+  if (!online)
+    return `<div class="note">Účty žijí v online databázi (schaftscalc.netlify.app) – spravují se tam,
+      kde se proti nim lidé přihlašují. Tady v nouzovém režimu (aplikace spuštěná ze souboru,
+      bez serveru) se účty spravovat nedají.</div>`;
+  if (!(typeof jeAdminOnline === 'function' && jeAdminOnline()))
+    return `<div class="note">Správa účtů je přístupná jen přihlášenému administrátorovi.</div>`;
+  if (!ONLINE_STAV.uzivateleNacteno) {
+    // seznam se donačte jednou a panel si o překreslení řekne sám
+    onlineUzivateleNacti().then(() => { if (nastOtevreno()) renderNastaveni(); });
+    return `<div class="note">Načítám seznam účtů…</div>`;
+  }
+  return onlineUzivateleHtml();
 }
 
 /* ---------- vnitřní záložka: Slevy ---------- */

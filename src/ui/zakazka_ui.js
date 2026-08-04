@@ -101,7 +101,9 @@ function renderZakazka() {
       převedou se na zakázku s jednou variantou. Chcete-li se ručnímu ukládání vyhnout, připojte
       níže složku – zakázky se pak ukládají do ní samy.</div>`) +
     (typeof renderOnlineKarta === 'function' ? renderOnlineKarta() : '') +
-    (typeof renderUlozisteKarta === 'function' ? renderUlozisteKarta() : '') +
+    /* Složka _DB je věc administrátora (zadání 4. 8. 2026): běžný uživatel
+     * pracuje čistě s online databází a mapování Disku nikdy nevidí. */
+    (jeAdmin() && typeof renderUlozisteKarta === 'function' ? renderUlozisteKarta() : '') +
     card('Zakázka – hlavička PROJ (cenová nabídka projekce)',
       inp('ZAK.projHlavicka.cislo', { type: 'text', l: 'Číslo nabídky (CN)' }) +
       inp('ZAK.projHlavicka.nazevAkce', { type: 'text', l: 'Název akce' }) +

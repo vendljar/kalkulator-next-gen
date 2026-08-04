@@ -435,8 +435,9 @@ function uloStavPopis() {
     return 'Tenhle prohlížeč ukládání do složky neumí (funguje v Chrome a Edge). Zakázky se ukládají souborem.';
   if (!ULO_STAV.koren) return 'Složka zatím není vybraná – zakázky se ukládají jen ručně jako soubor.';
   if (!ULO_STAV.pripraveno) return 'Složka „' + ULO_STAV.jmeno + '" je zapamatovaná, ale prohlížeč čeká na potvrzení přístupu.';
-  return 'Složka „' + ULO_STAV.jmeno + '" · ' + ULO_STAV.rejstrik.length + ' '
-    + (ULO_STAV.rejstrik.length === 1 ? 'zakázka' : (ULO_STAV.rejstrik.length < 5 ? 'zakázky' : 'zakázek'))
+  const n = ULO_STAV.rejstrik.length;
+  return 'Složka „' + ULO_STAV.jmeno + '" · ' + n + ' '
+    + (n === 1 ? 'zakázka' : (n >= 2 && n < 5 ? 'zakázky' : 'zakázek'))
     + ' · otevřeno: ' + (ULO_STAV.soubor || 'zatím neuloženo do složky');
 }
 

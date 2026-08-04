@@ -31,6 +31,8 @@
 
 const ONLINE_STAV = {
   bezi: false,       // /api/zdravi odpovědělo → běžíme na serveru s funkcemi
+  sondaHotova: false,// první dotaz na /api/zdravi už doběhl (ať tak, či tak)
+  nouzove: false,    // uživatel vědomě pokračuje bez přihlášení (server neběží)
   ja: null,          // { email, jmeno, role } po přihlášení
   db: null,          // normalizovaná databáze programu ze serveru
   cenikPouzit: false,// online ceník je právě nasazený v aplikaci
@@ -41,15 +43,21 @@ const ONLINE_STAV = {
   auto: true,
   timer: null,
   hledat: '',
-  panel: 'zakazky',  // co ukazuje overlay: 'zakazky' | 'uzivatele'
   uzivatele: [],
+  uzivateleNacteno: false, // seznam účtů už byl (aspoň jednou) vyžádán
   hesloPro: '',      // e-mail účtu, u kterého je rozbalený reset hesla
   formEmail: '',     // přihlašovací formulář přežívá překreslení
   formHeslo: '',
   hlaska: '',
   hlaskaTyp: '',     // '' | 'varovani' | 'chyba'
+  hesloHlaska: '',   // hláška v okně změny vlastního hesla
   pracuje: false,
 };
+
+/* Počet zakázek česky: 1 zakázka, 2–4 zakázky, jinak (i 0) zakázek. */
+function onlinePocetText(n) {
+  return n + ' ' + (n === 1 ? 'zakázka' : (n >= 2 && n < 5 ? 'zakázky' : 'zakázek'));
+}
 
 function onlineMozne() {
   return typeof location !== 'undefined' && /^https?:$/.test(location.protocol)
@@ -89,6 +97,8 @@ function onlineApi(cesta, telo) {
 
 function onlineStart() {
   if (!onlineMozne()) return;
+  ONLINE_STAV.sondaHotova = false;
+  renderPrihlaseni();
   fetch('/api/zdravi').then(r => (r.ok ? r.json() : null)).then(z => {
     if (!z || !z.ok) return null;
     ONLINE_STAV.bezi = true;
@@ -98,7 +108,7 @@ function onlineStart() {
       .then(ja => (ja && ja.ok ? onlinePoPrihlaseni(ja) : null))
       .catch(() => null);
   }).catch(() => null)
-    .then(() => { if (typeof render === 'function') render(); });
+    .then(() => { ONLINE_STAV.sondaHotova = true; if (typeof render === 'function') render(); });
 }
 
 function onlinePrihlas() {
@@ -117,6 +127,7 @@ function onlinePrihlas() {
  * server – upravenému klientovi role v prohlížeči nepomůže). */
 function onlinePoPrihlaseni(ja) {
   ONLINE_STAV.ja = { email: ja.email, jmeno: ja.jmeno || '', role: ja.role };
+  ONLINE_STAV.uzivateleNacteno = false;   // seznam účtů se načte čerstvý
   if (typeof NAST !== 'undefined') {
     NAST.uzivatel = ja.jmeno || ja.email;
     NAST.jeAdmin = ja.role === 'Administrátor';
@@ -131,6 +142,7 @@ function onlineOdhlas() {
     const vladlOnline = ONLINE_STAV.cenikPouzit;
     ONLINE_STAV.ja = null; ONLINE_STAV.db = null; ONLINE_STAV.cenikPouzit = false;
     ONLINE_STAV.rejstrik = []; ONLINE_STAV.soubor = ''; ONLINE_STAV.razitko = ''; ONLINE_STAV.posledni = '';
+    ONLINE_STAV.uzivatele = []; ONLINE_STAV.uzivateleNacteno = false; ONLINE_STAV.formHeslo = '';
     if (ONLINE_STAV.timer) { clearTimeout(ONLINE_STAV.timer); ONLINE_STAV.timer = null; }
     /* Když v aplikaci vládl online ceník, po odhlášení k němu už není zdroj –
      * návrat k ceníku ze sestavení, stejná úvaha jako při odpojení složky. */
@@ -304,35 +316,43 @@ function onlineZalohaAuto() {
 function onlineUzivateleNacti() {
   return onlineApi('/api/uzivatele')
     .then(o => { ONLINE_STAV.uzivatele = o.uzivatele || []; return true; })
-    .catch(e => { onlineZprava('Seznam účtů se nepodařilo načíst: ' + e.message, 'varovani'); return false; });
+    .catch(e => { onlineZprava('Seznam účtů se nepodařilo načíst: ' + e.message, 'varovani'); return false; })
+    .then(v => { ONLINE_STAV.uzivateleNacteno = true; return v; });
+}
+
+/* Správa účtů se vykresluje v panelu Nastavení (záložka Uživatelé). Po každé
+ * akci se překreslí ten, kdo je zrovna otevřený. */
+function onlineUzivateleObnov() {
+  if (typeof nastOtevreno === 'function' && nastOtevreno() && typeof renderNastaveni === 'function')
+    renderNastaveni();
 }
 
 function onlineUzAkce(telo, hotovo) {
-  ONLINE_STAV.pracuje = true; renderOnlinePanel();
+  ONLINE_STAV.pracuje = true; onlineUzivateleObnov();
   return onlineApi('/api/uzivatele', telo)
     .then(() => { onlineZprava(hotovo); return onlineUzivateleNacti(); })
     .catch(e => { onlineZprava(e.message, 'varovani'); return false; })
-    .then(v => { ONLINE_STAV.pracuje = false; renderOnlinePanel(); return v; });
+    .then(v => { ONLINE_STAV.pracuje = false; onlineUzivateleObnov(); return v; });
 }
 
 function onlineUzZaloz() {
   const g = id => { const el = document.getElementById(id); return el ? el.value : ''; };
   const email = g('onlineUzEmail').trim(), jmeno = g('onlineUzJmeno').trim();
   const role = g('onlineUzRole'), heslo = g('onlineUzHeslo');
-  if (!email || !heslo) { onlineZprava('Vyplňte e-mail i počáteční heslo (min. 8 znaků).', 'varovani'); renderOnlinePanel(); return; }
+  if (!email || !heslo) { onlineZprava('Vyplňte e-mail i počáteční heslo (min. 8 znaků).', 'varovani'); onlineUzivateleObnov(); return; }
   onlineUzAkce({ akce: 'zaloz', email, jmeno, role, heslo },
     'Účet ' + email + ' (' + role + ') je založený. Heslo předejte osobně – e-mailem se neposílá.');
 }
 
 function onlineUzHesloPanel(email) {
   ONLINE_STAV.hesloPro = (ONLINE_STAV.hesloPro === email) ? '' : email;
-  renderOnlinePanel();
+  onlineUzivateleObnov();
 }
 
 function onlineUzHesloUloz(email) {
   const el = document.getElementById('onlineUzNoveHeslo');
   const heslo = el ? el.value : '';
-  if (!heslo || heslo.length < 8) { onlineZprava('Nové heslo musí mít aspoň 8 znaků.', 'varovani'); renderOnlinePanel(); return; }
+  if (!heslo || heslo.length < 8) { onlineZprava('Nové heslo musí mít aspoň 8 znaků.', 'varovani'); onlineUzivateleObnov(); return; }
   ONLINE_STAV.hesloPro = '';
   onlineUzAkce({ akce: 'heslo', email, heslo },
     'Heslo účtu ' + email + ' je nastavené. Předejte ho osobně.');
@@ -356,6 +376,11 @@ function onlineUzAktivni(email, aktivni) {
  *    říká sám – synchronně by se render volal rekurzivně.
  * 2) automatické uložení online po chvíli klidu (stejný rytmus jako složka). */
 function onlineTik() {
+  /* Přihlašovací stránka a roh hlavičky se udržují při každém překreslení –
+   * obě místa jen čtou stav, takže je to levné. */
+  renderPrihlaseni();
+  renderOnlineLista();
+
   const slozkaVladne = (typeof progJede === 'function') && progJede();
   if (ONLINE_STAV.ja && ONLINE_STAV.db && !slozkaVladne) {
     if (!ONLINE_STAV.cenikPouzit) {
@@ -400,9 +425,141 @@ function onlineStavPopis() {
   if (!ONLINE_STAV.ja)
     return 'Server běží. Přihlaste se e-mailem a heslem.';
   return 'Přihlášen: ' + (ONLINE_STAV.ja.jmeno || ONLINE_STAV.ja.email) + ' (' + ONLINE_STAV.ja.role + ') · '
-    + ONLINE_STAV.rejstrik.length + ' '
-    + (ONLINE_STAV.rejstrik.length === 1 ? 'zakázka' : (ONLINE_STAV.rejstrik.length < 5 ? 'zakázky' : 'zakázek'))
+    + onlinePocetText(ONLINE_STAV.rejstrik.length)
     + ' online · otevřeno: ' + (ONLINE_STAV.soubor || 'zatím neuloženo online');
+}
+
+/* ---------- přihlašovací stránka (celoplošná, jen nad http/https) ---------- */
+
+/* Kdy stránku ukázat: běžíme nad http(s), nikdo není přihlášený a uživatel
+ * vědomě nezvolil nouzový režim (server neodpovídá). Ze souboru nikdy. */
+function prihlaseniViditelne() {
+  return onlineMozne() && !ONLINE_STAV.ja && !ONLINE_STAV.nouzove;
+}
+
+function onlineNouzove() {
+  ONLINE_STAV.nouzove = true;
+  onlineZprava('Pokračujete bez přihlášení – online databáze není dostupná. '
+    + 'Zakázky lze ukládat jen ručně souborem.', 'varovani');
+  render();
+}
+
+function onlineZpetKPrihlaseni() {
+  ONLINE_STAV.nouzove = false;
+  onlineZprava('');
+  if (!ONLINE_STAV.bezi) onlineStart();
+  render();
+}
+
+function renderPrihlaseni() {
+  const o = document.getElementById('prihlaseni-overlay');
+  const box = document.getElementById('prihlaseni-box');
+  if (!o || !box) return;
+  if (!prihlaseniViditelne()) { o.style.display = 'none'; return; }
+  o.style.display = 'flex';
+
+  const hlaska = ONLINE_STAV.hlaska
+    ? `<div class="${zapisTridaHlasky(ONLINE_STAV.hlaskaTyp)}">${esc(ONLINE_STAV.hlaska)}</div>` : '';
+  let telo;
+  if (!ONLINE_STAV.sondaHotova) {
+    telo = `<div class="note">Připojuji se k serveru…</div>`;
+  } else if (!ONLINE_STAV.bezi) {
+    telo = `${hlaska}
+      <div class="seznam-varovani">Serverová část (/api) neodpovídá. Zkuste to za chvíli znovu;
+        pokud výpadek trvá, dejte vědět administrátorovi.</div>
+      <div class="btns" style="margin-top:12px">
+        <button class="primary" onclick="onlineStart()">Zkusit znovu</button>
+        <button onclick="onlineNouzove()">Pokračovat bez přihlášení</button>
+      </div>`;
+  } else {
+    telo = `${hlaska}
+      <div class="row"><label>E-mail (uživatelské jméno)</label>
+        <input type="email" id="onlineEmail" value="${esc(ONLINE_STAV.formEmail)}" autocomplete="username"
+          oninput="ONLINE_STAV.formEmail=this.value"
+          onkeydown="if(event.key==='Enter')onlinePrihlas()"><span class="u"></span></div>
+      <div class="row"><label>Heslo</label>
+        <input type="password" id="onlineHeslo" value="${esc(ONLINE_STAV.formHeslo)}" autocomplete="current-password"
+          oninput="ONLINE_STAV.formHeslo=this.value"
+          onkeydown="if(event.key==='Enter')onlinePrihlas()"><span class="u"></span></div>
+      <div class="btns" style="margin-top:14px">
+        <button class="primary" onclick="onlinePrihlas()" ${ONLINE_STAV.pracuje ? 'disabled' : ''}>Přihlásit</button>
+      </div>
+      <div class="note" style="margin-top:12px">Účty zakládá a hesla nastavuje administrátor – žádná
+        samoobslužná registrace ani obnova hesla e-mailem. Zapomenuté heslo vám administrátor resetuje.</div>`;
+  }
+  box.innerHTML = `<h1>Kalkulátor Next Gen</h1>
+    <span class="ver">${esc((typeof buildVerze === 'function' && buildVerze()) || '')} · ENGINEERS CZ</span>
+    ${telo}`;
+}
+
+/* ---------- pravý horní roh: kdo je přihlášený ---------- */
+
+function renderOnlineLista() {
+  const el = document.getElementById('onlineLista');
+  if (!el) return;
+  if (!onlineMozne()) { el.innerHTML = ''; return; }
+  if (!ONLINE_STAV.ja) {
+    el.innerHTML = ONLINE_STAV.nouzove
+      ? `<button class="mini" onclick="onlineZpetKPrihlaseni()">Přihlásit se</button>` : '';
+    return;
+  }
+  el.innerHTML = `<b>👤 ${esc(ONLINE_STAV.ja.jmeno || ONLINE_STAV.ja.email)}</b>
+    <span>(${esc(ONLINE_STAV.ja.role)})</span>
+    <button class="mini" onclick="otevriZmenaHesla()">Změnit heslo</button>
+    <button class="mini" onclick="onlineOdhlas()">Odhlásit</button>`;
+}
+
+/* ---------- změna vlastního hesla (staré + nové, viz server 'mojeheslo') ---------- */
+
+function otevriZmenaHesla() {
+  ONLINE_STAV.hesloHlaska = '';
+  renderZmenaHesla();
+  const o = document.getElementById('heslo-overlay');
+  if (o) o.style.display = 'flex';
+  const el = document.getElementById('hesloStare');
+  if (el) el.focus();
+}
+
+function zavriZmenaHesla() {
+  const o = document.getElementById('heslo-overlay');
+  if (o) o.style.display = 'none';
+}
+
+function renderZmenaHesla() {
+  const el = document.getElementById('heslo-panel');
+  if (!el) return;
+  el.innerHTML = `<h2>Změna hesla
+      <button class="mini" style="margin-left:auto" onclick="zavriZmenaHesla()">Zavřít</button></h2>
+    <div class="body">
+      ${ONLINE_STAV.hesloHlaska ? `<div class="seznam-varovani">${esc(ONLINE_STAV.hesloHlaska)}</div>` : ''}
+      <div class="row"><label>Staré heslo</label>
+        <input type="password" id="hesloStare" autocomplete="current-password"><span class="u"></span></div>
+      <div class="row"><label>Nové heslo (min. 8 znaků)</label>
+        <input type="password" id="hesloNove" autocomplete="new-password"><span class="u"></span></div>
+      <div class="row"><label>Nové heslo znovu</label>
+        <input type="password" id="hesloNove2" autocomplete="new-password"
+          onkeydown="if(event.key==='Enter')onlineZmenHeslo()"><span class="u"></span></div>
+      <div class="btns" style="margin-top:12px">
+        <button class="primary" onclick="onlineZmenHeslo()" ${ONLINE_STAV.pracuje ? 'disabled' : ''}>Změnit heslo</button>
+      </div>
+      <div class="note">Staré heslo se vyžaduje schválně: relace je jen cookie a bez něj by heslo
+        mohl změnit kdokoli u odemčeného počítače. Zapomenuté heslo řeší administrátor resetem.</div>
+    </div>`;
+}
+
+function onlineZmenHeslo() {
+  const g = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+  const stare = g('hesloStare'), nove = g('hesloNove'), nove2 = g('hesloNove2');
+  if (!nove || nove.length < 8) { ONLINE_STAV.hesloHlaska = 'Nové heslo musí mít aspoň 8 znaků.'; renderZmenaHesla(); return; }
+  if (nove !== nove2) { ONLINE_STAV.hesloHlaska = 'Nová hesla se neshodují.'; renderZmenaHesla(); return; }
+  ONLINE_STAV.pracuje = true; renderZmenaHesla();
+  onlineApi('/api/uzivatele', { akce: 'mojeheslo', stare, nove })
+    .then(() => {
+      zavriZmenaHesla();
+      onlineZprava('Heslo je změněné. Od teď platí to nové.');
+    })
+    .catch(e => { ONLINE_STAV.hesloHlaska = e.message; })
+    .then(() => { ONLINE_STAV.pracuje = false; renderZmenaHesla(); render(); });
 }
 
 function renderOnlineKarta() {
@@ -416,32 +573,24 @@ function renderOnlineKarta() {
       ukládáním souborů.</div>`;
   } else if (!ONLINE_STAV.bezi) {
     telo = `${hlaska}<div class="btns" style="margin-top:10px">
-      <button onclick="onlineStart()">Zkusit spojení znovu</button></div>`;
+      <button onclick="onlineZpetKPrihlaseni()">Zkusit spojení znovu</button></div>`;
   } else if (!ONLINE_STAV.ja) {
+    /* Přihlášení řeší celoplošná přihlašovací stránka – sem se nepřihlášený
+     * dostane jen v nouzovém režimu (server neběžel). */
     telo = `${hlaska}
-      <div class="row"><label>E-mail</label>
-        <input type="email" id="onlineEmail" value="${esc(ONLINE_STAV.formEmail)}" autocomplete="username"
-          oninput="ONLINE_STAV.formEmail=this.value"
-          onkeydown="if(event.key==='Enter')onlinePrihlas()"><span class="u"></span></div>
-      <div class="row"><label>Heslo</label>
-        <input type="password" id="onlineHeslo" value="${esc(ONLINE_STAV.formHeslo)}" autocomplete="current-password"
-          oninput="ONLINE_STAV.formHeslo=this.value"
-          onkeydown="if(event.key==='Enter')onlinePrihlas()"><span class="u"></span></div>
       <div class="btns" style="margin-top:10px">
-        <button class="primary" onclick="onlinePrihlas()" ${ONLINE_STAV.pracuje ? 'disabled' : ''}>Přihlásit</button>
-      </div>
-      <div class="note">Účty zakládá a hesla nastavuje administrátor – žádná samoobslužná registrace
-        ani obnova hesla e-mailem. Zapomenuté heslo řeší administrátor nastavením nového.</div>`;
+        <button class="primary" onclick="onlineZpetKPrihlaseni()">Přihlásit se</button>
+      </div>`;
   } else {
     const adminTlacitka = jeAdminOnline()
-      ? `<button onclick="otevriOnline('uzivatele')">Uživatelé…</button>
+      ? `<button onclick="otevriNastaveni();nastPanel('uzivatele')">Uživatelé…</button>
          ${typeof ULO_STAV !== 'undefined' && ULO_STAV.pripraveno
     ? `<button onclick="onlineZaloha(true)" ${ONLINE_STAV.pracuje ? 'disabled' : ''}>Odlít zálohu do složky (Disk)</button>` : ''}
          <button onclick="onlineZaloha(false)" ${ONLINE_STAV.pracuje ? 'disabled' : ''}>Stáhnout zálohu</button>` : '';
     telo = `${hlaska}
       <div class="btns" style="margin-top:10px">
         <button class="primary" onclick="onlineUloz()" ${ONLINE_STAV.pracuje ? 'disabled' : ''}>Uložit online</button>
-        <button onclick="otevriOnline('zakazky')">Zakázky online…</button>
+        <button onclick="otevriOnline()">Zakázky online…</button>
         ${adminTlacitka}
         <button onclick="onlineOdhlas()">Odhlásit</button>
       </div>
@@ -483,12 +632,10 @@ function renderOnlineCenikKarta() {
        online verze.</div>`);
 }
 
-/* ---------- overlay: zakázky online / uživatelé ---------- */
+/* ---------- overlay: zakázky online ---------- */
 
-function otevriOnline(panel) {
-  ONLINE_STAV.panel = panel || 'zakazky';
-  const nacti = ONLINE_STAV.panel === 'uzivatele' ? onlineUzivateleNacti() : onlineNactiRejstrik();
-  nacti.then(() => renderOnlinePanel());
+function otevriOnline() {
+  onlineNactiRejstrik().then(() => renderOnlinePanel());
   renderOnlinePanel();
   const o = document.getElementById('online-overlay');
   if (o) o.style.display = 'flex';
@@ -561,7 +708,9 @@ function onlineRadekUzivatele(u) {
   </tr>${resetRadek}`;
 }
 
-function onlinePanelUzivatele() {
+/* HTML správy účtů. Vykresluje se v panelu Nastavení (vnitřní záložka
+ * Uživatelé) – tam, kde uživatel správu hledá (zadání 4. 8. 2026). */
+function onlineUzivateleHtml() {
   return `<table class="vartbl archtbl">
       <tr><th style="text-align:left">E-mail</th><th style="text-align:left">Jméno</th>
           <th>Role</th><th>Aktivní</th><th></th></tr>
@@ -576,21 +725,19 @@ function onlinePanelUzivatele() {
     <div class="btns" style="margin-top:8px"><button class="primary" onclick="onlineUzZaloz()">Založit účet</button></div>
     <div class="note">Hlavnímu administrátorskému účtu nejde snížit role ani ho vypnout – hlídá to
       server, aby si správce omylem nezamkl dveře. Reset hesla dělá vždy administrátor tady;
-      žádná obnova e-mailem není.</div>`;
+      žádná obnova e-mailem není. Každý uživatel si navíc může změnit vlastní heslo sám
+      (tlačítko „Změnit heslo" vpravo nahoře – vyžaduje znalost starého hesla).</div>`;
 }
 
 function renderOnlinePanel() {
   const el = document.getElementById('online-panel');
   if (!el) return;
-  const zakazkyAkt = ONLINE_STAV.panel !== 'uzivatele';
-  el.innerHTML = `<h2>${zakazkyAkt ? 'Zakázky online' : 'Uživatelé online databáze'}
+  el.innerHTML = `<h2>Zakázky online
       <span class="note" style="font-weight:400">${esc(ONLINE_STAV.ja ? (ONLINE_STAV.ja.jmeno || ONLINE_STAV.ja.email) : '')}</span>
-      ${jeAdminOnline() ? `<button class="mini" style="margin-left:auto" onclick="otevriOnline('${zakazkyAkt ? 'uzivatele' : 'zakazky'}')">
-        ${zakazkyAkt ? 'Uživatelé…' : 'Zakázky…'}</button>` : '<span style="margin-left:auto"></span>'}
-      <button class="mini" onclick="zavriOnline()">Zavřít</button></h2>
+      <button class="mini" style="margin-left:auto" onclick="zavriOnline()">Zavřít</button></h2>
     <div class="body">
       ${ONLINE_STAV.hlaska ? `<div class="${zapisTridaHlasky(ONLINE_STAV.hlaskaTyp)}">${esc(ONLINE_STAV.hlaska)}</div>` : ''}
-      ${zakazkyAkt ? onlinePanelZakazky() : onlinePanelUzivatele()}
+      ${onlinePanelZakazky()}
     </div>`;
 }
 
