@@ -286,11 +286,13 @@ function zakazkaHlavicka(ock) {
         <div class="zak-head-col">${variantaRow}${ridiciBtn}${prirazkaRowProj}</div>
       </div>${puvodRadek}
       <div class="zak-cena noprint">
+        ${zakTrojice()}
+        <span class="zak-cena-del"></span>
         ${kopieBtn('doProj')}
         <button class="mini" onclick="varNova()">+ Nová varianta (kopie otevřené)</button>
         ${archivBtn}
         <button class="mini" onclick="prepniTab('zakazka')">Přehled cenových nabídek →</button>
-      </div>`;
+      </div>${zakUlozeniRadek()}`;
     return `<div class="card zak-bar"><div class="zak-bar-h">Zakázka a varianta</div><div class="body">${inner}</div></div>`
       + kalkLista(false);
   }
@@ -307,11 +309,13 @@ function zakazkaHlavicka(ock) {
       </div>
     </div>${puvodRadek}
     <div class="zak-cena noprint">
+      ${zakTrojice()}
+      <span class="zak-cena-del"></span>
       ${kopieBtn('doOck')}
       <button class="mini" onclick="varNova()">+ Nová varianta (kopie otevřené)</button>
       ${archivBtn}
       <button class="mini" onclick="prepniTab('zakazka')">Přehled cenových nabídek →</button>
-    </div>`;
+    </div>${zakUlozeniRadek()}`;
   return `<div class="card zak-bar"><div class="zak-bar-h">Zakázka a varianta</div><div class="body">${inner}</div></div>`
     + kalkLista(true);
 }

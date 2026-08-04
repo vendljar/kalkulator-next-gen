@@ -18,6 +18,7 @@ import firma from './functions/firma.mjs';
 import zakazky from './functions/zakazky.mjs';
 import zaloha from './functions/zaloha.mjs';
 import zalohaNocni from './functions/zaloha_nocni.mjs';
+import zalohaVynuceno from './functions/zaloha_vynuceno.mjs';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const zk = require('../src/zakazka.js');
@@ -141,6 +142,40 @@ test('otisk nese program, zakázky i rejstřík', !!otisk && otisk.program.platn
 test('noční otisk nese i firemní údaje', !!otisk.firma && otisk.firma.udaje.ico === SKUT.ico);
 test('otisk nese celé účty (obnova bez resetu hesel)', Array.isArray(otisk.uzivatele)
   && otisk.uzivatele.length === 2 && otisk.uzivatele.every(u => typeof u.heslo === 'string' && u.heslo.includes(':')));
+
+/* 8) VYNUCENÁ záloha (zadání 4. 8. 2026 – „proč nefunguje automatické ani
+ * vynucené online zálohování"). Noční otisk se do 4. 8. spouštět ručně
+ * NEDAL: zaloha_nocni.mjs vyváží jen `schedule`, žádnou cestu, takže
+ * neexistoval endpoint, kterým by šel vyvolat, ani způsob, jak zjistit,
+ * jestli kdy proběhl. Otisk proto pořizuje sdílená knihovna a vedle
+ * plánované funkce stojí obyčejná cesta pro administrátora. */
+test('vynucená záloha jen pro administrátora',
+  (await post(zalohaVynuceno, 'http://x/api/zaloha_vynuceno', {}, cookieObch)).status === 403);
+test('seznam otisků jen pro administrátora',
+  (await get(zalohaVynuceno, 'http://x/api/zaloha_vynuceno', cookieObch)).status === 403);
+const vyn = await (await post(zalohaVynuceno, 'http://x/api/zaloha_vynuceno', {}, cookie)).json();
+test('administrátor vynutí otisk', vyn.ok === true && vyn.den === new Date().toISOString().slice(0, 10), JSON.stringify(vyn));
+test('vynucený otisk hlásí, kolik zakázek uložil', vyn.pocetZakazek === 1, JSON.stringify(vyn));
+const vynOtisk = await (await globalThis.__TEST_ULOZISTE('zalohy')).cti(vyn.den);
+test('vynucený otisk nese celou databázi', !!vynOtisk && vynOtisk.program.platny.verze === 2
+  && Object.keys(vynOtisk.zakazky).length === 1 && !!vynOtisk.firma);
+test('vynucený otisk je poznat od nočního podle zdroje',
+  typeof vynOtisk.zdroj === 'string' && vynOtisk.zdroj.includes('vynuc'), vynOtisk && vynOtisk.zdroj);
+test('vynucený otisk nese, kdo ho pořídil', vynOtisk.kdo === 'vendl.jaroslav@engineers-cz.cz', vynOtisk && vynOtisk.kdo);
+const seznamOt = await (await get(zalohaVynuceno, 'http://x/api/zaloha_vynuceno', cookie)).json();
+test('seznam otisků vrátí dnešní zálohu', seznamOt.ok && seznamOt.otisky.length >= 1
+  && seznamOt.otisky[0].den === vyn.den, JSON.stringify(seznamOt));
+test('seznam otisků nese zdroj i čas pořízení',
+  !!seznamOt.otisky[0].porizena && !!seznamOt.otisky[0].zdroj);
+/* Seznam je hlášení pro obrazovku, ne záloha sama – nesmí z Blobs vytáhnout
+ * data zakázek ani otisky hesel (jinak by stačilo otevřít vývojářskou
+ * konzoli a číst celou databázi jedním požadavkem). */
+const seznamText = JSON.stringify(seznamOt);
+test('seznam otisků neveze data zakázek', !seznamText.includes('Online test'), seznamText.slice(0, 200));
+test('seznam otisků neveze otisky hesel', !seznamText.includes('heslo'), seznamText.slice(0, 200));
+test('seznam otisků nese jen souhrn (den, čas, zdroj, počty)',
+  Object.keys(seznamOt.otisky[0]).every(k => ['den', 'porizena', 'zdroj', 'kdo', 'pocetZakazek', 'pocetUctu'].includes(k)),
+  Object.keys(seznamOt.otisky[0]).join(','));
 
 console.log(`\n${ok} prošlo, ${fail} selhalo`);
 process.exit(fail ? 1 : 0);

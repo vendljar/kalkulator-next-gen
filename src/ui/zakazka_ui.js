@@ -56,6 +56,10 @@ function varSet(id, k, val) {
 function novaZakazkaUI() {
   if (!confirm('Založit novou prázdnou zakázku? Neuložené změny aktuální zakázky se ztratí.')) return;
   ZAK = novaZakazka(); syncVarianta();
+  /* Nová zakázka nesmí zdědit jméno té předchozí – jinak by ji brána
+   * automatického ukládání považovala za „už uloženou" a hned by ji sama
+   * zapsala do databáze jako záznam bez čísla (4. 8. 2026). */
+  if (typeof zakOdpojUlozeni === 'function') zakOdpojUlozeni();
   if (typeof seznamReset === 'function') seznamReset();   // #18 – viz nactiZakazku
   render(); prepniTab('kalk');
 }
@@ -74,6 +78,11 @@ function renderZakazka() {
 
   document.getElementById('page-zakazka').innerHTML =
     card('Zakázka – hlavička OCK',
+      /* Trojice stojí i tady, na začátku karty (zadání 4. 8. 2026: „na
+       * začátek lišty"). Právě v téhle kartě se hlavička vyplňuje, takže
+       * hláška „vyplňte CN a název akce, pak uložte" musí být vidět přesně
+       * tady — ne o dvě obrazovky jinde. */
+      `<div class="zak-cena noprint" style="margin-top:0">${zakTrojice()}</div>${zakUlozeniRadek()}` +
       inp('ZAK.cislo', { type: 'text', l: 'Číslo nabídky (CN)' }) +
       inp('ZAK.nazevAkce', { type: 'text', l: 'Název akce' }) +
       inp('ZAK.adresa', { type: 'text', l: 'Adresa stavby' }) +
@@ -91,15 +100,20 @@ function renderZakazka() {
       `<div class="note">Adresa stavby a sídlo objednatele se často liší (developer sídlí jinde,
       než staví). Krycí list bere <b>Adresu stavby</b> do řádku „Adresa stavby" a <b>sídlo</b>
       do řádku „Adresa objednatele" – dokud sídlo nevyplníte, zůstane v krycím listu prázdné.</div>` +
+      /* Původní trojice se 4. 8. 2026 přestěhovala nahoru a míří do databáze.
+       * Tady zůstala jen práce se SOUBOREM – nic se nemazalo, jen se
+       * tlačítka jmenují podle toho, co opravdu dělají (dřív se „Uložit
+       * zakázku (JSON)" tvářilo jako uložení zakázky a přitom jen stáhlo
+       * soubor do Stažených; do databáze se nezapsalo nic). Soubor je
+       * záchrana pro každého: funguje i bez serveru a bez složky. */
       `<div class="btns" style="margin-top:10px">
-        <button class="primary" onclick="ulozZakazku()">Uložit zakázku (JSON)</button>
-        <button onclick="document.getElementById('fileIn').click()">Načíst zakázku</button>
-        <button onclick="novaZakazkaUI()">Nová zakázka</button>
+        <button onclick="ulozZakazku()">Uložit do souboru (JSON)</button>
+        <button onclick="document.getElementById('fileIn').click()">Načíst ze souboru</button>
       </div>
       <div class="note">Soubor zakázky obsahuje všechny varianty včetně zadání OCK, technické specifikace,
       kalkulace PROJ i ceníků. Starší soubory „zadání“ z předchozí verze aplikace lze také načíst –
-      převedou se na zakázku s jednou variantou. Chcete-li se ručnímu ukládání vyhnout, připojte
-      níže složku – zakázky se pak ukládají do ní samy.</div>`) +
+      převedou se na zakázku s jednou variantou. <b>Do databáze</b> zakázku uloží tlačítko
+      „Uložit zakázku" nahoře; po prvním uložení se ukládá sama po každé změně.</div>`) +
     (typeof renderOnlineKarta === 'function' ? renderOnlineKarta() : '') +
     /* Složka _DB je věc administrátora (zadání 4. 8. 2026): běžný uživatel
      * pracuje čistě s online databází a mapování Disku nikdy nevidí. */

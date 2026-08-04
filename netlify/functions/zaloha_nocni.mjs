@@ -7,39 +7,23 @@
  * (úložiště `zalohy`, klíč = datum). Odtud se dá obnovit i stav ke
  * konkrétnímu dni.
  *
- * Na rozdíl od zálohy pro Disk (soubor opouští systém, otisky hesel se
- * do něj nedávají) tenhle otisk zůstává ve stejném úložišti jako ostrá
- * data — uživatelé se proto ukládají CELÍ včetně otisků hesel, aby šla
- * databáze obnovit bez resetování všech hesel. Otisk hesla není heslo
- * (scrypt se solí); ven z Blobs se nikdy nedostane.
+ * Samotné pořízení otisku dělá lib/zalohovani.mjs – sdílí ho s cestou
+ * /api/zaloha_vynuceno, kterou si administrátor zálohu vyvolá ručně
+ * a kterou se dá zjistit, kdy záloha naposledy vznikla. Do 4. 8. 2026 tu
+ * ležel celý kód otisku a žádná cesta k němu nevedla; „vynucené zálohování"
+ * proto nemělo co vynutit.
+ *
+ * Uživatelé se ukládají CELÍ včetně otisků hesel – otisk zůstává ve stejném
+ * úložišti jako ostrá data a nikdy neopouští server, takže obnova nevyžaduje
+ * reset všech hesel (otisk hesla není heslo: scrypt se solí).
  *
  * Klíčů neubývá (jeden za den ≈ 365 za rok, každý pár set kB) — mazání
  * starých by byla další příležitost k chybě za pár ušetřených megabajtů. */
-import { uloziste } from '../lib/sdilene.mjs';
+import { porizOtisk } from '../lib/zalohovani.mjs';
 
 export default async () => {
-  const den = new Date().toISOString().slice(0, 10);
-
-  const sProg = await uloziste('program');
-  const prog = await sProg.cti('db');
-  const firma = await sProg.cti('firma');   // od 4. 8. 2026 online (viz functions/firma.mjs)
-  const zak = await uloziste('zakazky');
-  const zakazky = {};
-  for (const k of await zak.seznam('z/')) zakazky[k.slice(2)] = await zak.cti(k);
-  const rejstrik = await zak.cti('_rejstrik');
-  const uziv = await uloziste('uzivatele');
-  const uzivatele = [];
-  for (const k of await uziv.seznam()) {
-    const x = await uziv.cti(k);
-    if (x) uzivatele.push(x);            // celé účty včetně otisků hesel (viz výše)
-  }
-
-  await (await uloziste('zalohy')).zapis(den, {
-    porizena: new Date().toISOString(), zdroj: 'nocni-otisk',
-    program: prog || null, firma: firma || null,
-    rejstrik: rejstrik || null, zakazky, uzivatele,
-  });
-  return new Response(JSON.stringify({ ok: true, den }), {
+  const v = await porizOtisk('nocni-otisk', '');
+  return new Response(JSON.stringify({ ok: true, ...v }), {
     headers: { 'Content-Type': 'application/json; charset=utf-8' } });
 };
 export const config = { schedule: '0 2 * * *' };

@@ -306,7 +306,7 @@ function uloUlozDoSlozky(opts) {
       });
     });
   }).catch(e => { uloZprava('Uložení do složky selhalo: ' + (e && e.message)
-      + ' Zakázka zůstává otevřená – uložte ji ručně tlačítkem „Uložit zakázku (JSON)"'
+      + ' Zakázka zůstává otevřená – uložte ji ručně tlačítkem „Uložit do souboru (JSON)"'
       + ' v záložce Přehled cenových nabídek a soubor si odložte, než se složka vzpamatuje.', 'varovani'); return false; })
     .then(v => { ULO_STAV.pracuje = false; render(); return v; });
 }
@@ -417,7 +417,12 @@ function uloAutoPrepni(zap) {
 /* Volá se na konci každého render(). Musí být levné: porovná se jen text
  * zakázky proti tomu, co je zapsané, a naplánuje se zápis po klidu. */
 function uloTik() {
-  if (!ULO_STAV.auto || !ULO_STAV.pripraveno || !ULO_STAV.soubor || ULO_STAV.pracuje) return;
+  /* Brána je stejná jako u online kanálu (onlineTik) a ze stejného důvodu:
+   * do 4. 8. 2026 se samo ukládalo jen to, co už ve složce jednou leželo,
+   * takže nová zakázka se do složky nikdy sama nedostala. Nově stačí
+   * vyplněná hlavička; „bez-cisla-…" tím ve složce nevznikne. */
+  if (!ULO_STAV.auto || !ULO_STAV.pripraveno || ULO_STAV.pracuje) return;
+  if (!ULO_STAV.soubor && !uloHlavickaVyplnena(ZAK)) return;
   let text = '';
   try { text = JSON.stringify(ZAK); } catch (e) { return; }
   if (text === ULO_STAV.posledni) return;

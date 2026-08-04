@@ -39,6 +39,8 @@ const ONLINE_STAV = {
   firma: null,       // { udaje, kdo, kdy } – firemní údaje ze serveru
   firmaPouzita: false,// online firemní údaje jsou právě nasazené v aplikaci
   rejstrik: [],      // rejstřík online zakázek
+  otisky: [],        // souhrny záloh databáze (jen administrátor; bez dat)
+  otiskyNacteno: false,
   soubor: '',        // pod jakým jménem je otevřená zakázka online
   razitko: '',
   posledni: '',      // co jsme naposledy zapsali (proti zbytečným zápisům)
@@ -151,6 +153,7 @@ function onlineOdhlas() {
     ONLINE_STAV.firma = null; ONLINE_STAV.firmaPouzita = false;
     ONLINE_STAV.rejstrik = []; ONLINE_STAV.soubor = ''; ONLINE_STAV.razitko = ''; ONLINE_STAV.posledni = '';
     ONLINE_STAV.uzivatele = []; ONLINE_STAV.uzivateleNacteno = false; ONLINE_STAV.formHeslo = '';
+    ONLINE_STAV.otisky = []; ONLINE_STAV.otiskyNacteno = false;
     if (ONLINE_STAV.timer) { clearTimeout(ONLINE_STAV.timer); ONLINE_STAV.timer = null; }
     /* Když v aplikaci vládl online ceník, po odhlášení k němu už není zdroj –
      * návrat k ceníku ze sestavení, stejná úvaha jako při odpojení složky. */
@@ -381,10 +384,80 @@ function onlineZaloha(doSlozky) {
     .then(v => { ONLINE_STAV.pracuje = false; render(); return v; });
 }
 
-/* Samočinné odlití: jednou denně, po přihlášení administrátora, jen když je
- * připojená složka a dnešní záloha v ní ještě neleží. Chyba se nehlásí
- * nahlas – ruční tlačítka zůstávají a noční otisk v Blobs běží nezávisle. */
+/* ---------- otisky databáze na serveru (vynucená i noční záloha) ---------- */
+
+/* Přehled otisků: kdy záloha naposledy vznikla a odkud. Seznam vozí JEN
+ * souhrny (den, čas, zdroj, počty) – obsah otisků z něj vytáhnout nejde,
+ * viz netlify/lib/zalohovani.mjs. */
+function onlineOtiskyNacti() {
+  if (!jeAdminOnline()) return Promise.resolve(false);
+  return onlineApi('/api/zaloha_vynuceno').then(o => {
+    ONLINE_STAV.otisky = o.otisky || [];
+    ONLINE_STAV.otiskyNacteno = true;
+    return true;
+  }).catch(e => {
+    ONLINE_STAV.otiskyNacteno = true;
+    onlineZprava('Přehled záloh se nepodařilo načíst: ' + e.message, 'varovani');
+    return false;
+  });
+}
+
+function onlineOtiskPopis() {
+  if (!ONLINE_STAV.otiskyNacteno) return 'Zálohy databáze: zjišťuje se…';
+  const o = (ONLINE_STAV.otisky || [])[0];
+  if (!o) return 'Zálohy databáze: zatím žádná – pořiďte ji tlačítkem „Zálohovat teď".';
+  const kdy = o.porizena ? new Date(o.porizena).toLocaleString('cs-CZ') : o.den;
+  const zdroj = /vynuc/.test(o.zdroj) ? 'ručně' : 'sama v noci';
+  return 'Poslední záloha databáze: ' + kdy + ' (' + zdroj + ', '
+    + onlinePocetText(o.pocetZakazek) + ', ' + o.pocetUctu + ' účtů) · '
+    + 'v přehledu ' + (ONLINE_STAV.otisky.length) + ' posledních.';
+}
+
+/* VYNUCENÁ ZÁLOHA (4. 8. 2026). Do té doby otisk uměla jen plánovaná funkce
+ * bez cesty – nešel vyvolat ani ověřit, odtud „vynucené zálohování
+ * nefunguje". Teď je to jeden POST; složka u toho nemusí být vůbec. */
+function onlineZalohaTed() {
+  if (!jeAdminOnline()) { onlineZprava('Zálohu smí pořídit jen administrátor.', 'varovani'); render(); return Promise.resolve(false); }
+  ONLINE_STAV.pracuje = true; render();
+  return onlineApi('/api/zaloha_vynuceno', { duvod: 'rucne' }).then(o => {
+    onlineZprava('Záloha databáze pořízena (' + o.den + ', ' + onlinePocetText(o.pocetZakazek)
+      + ', ' + o.pocetUctu + ' účtů). Leží na serveru; na Disk Google ji odlije tlačítko vedle.');
+    return onlineOtiskyNacti();
+  }).catch(e => { onlineZprava('Zálohu se nepodařilo pořídit: ' + e.message, 'varovani'); return false; })
+    .then(v => { ONLINE_STAV.pracuje = false; render(); return v; });
+}
+
+/* SAMOČINNÁ ZÁLOHA po přihlášení administrátora.
+ *
+ * Co bylo špatně do 4. 8. 2026: první řádek zněl „není-li připojená složka,
+ * nedělej nic". Složka se ale mezitím stala věcí administrátora a běžně
+ * připojená není – automatická záloha tedy nikdy neproběhla a případná
+ * chyba se navíc ztratila v `.catch(() => false)`. Rozhodovalo se to podle
+ * NÁSTROJE (složka), ne podle toho, co je potřeba (aby dnešní otisk byl).
+ *
+ * Nové pořadí: 1) zjisti, jestli dnešní otisk na serveru je; 2) když není,
+ * pořiď ho (server, žádná složka); 3) je-li navíc připojená složka, odlij
+ * do ní kopii pro Disk Google. Krok 3 je bonus – když selže, otisk na
+ * serveru už existuje a hlásí se to jen tiše jako varování. */
 function onlineZalohaAuto() {
+  if (!jeAdminOnline()) return Promise.resolve(false);
+  const dnes = new Date().toISOString().slice(0, 10);
+  return onlineOtiskyNacti().then(() => {
+    const mameDnesni = (ONLINE_STAV.otisky || []).some(o => o.den === dnes);
+    if (mameDnesni) return false;
+    return onlineApi('/api/zaloha_vynuceno', { duvod: 'auto' })
+      .then(o => onlineOtiskyNacti().then(() => {
+        onlineZprava('Dnešní záloha databáze se pořídila sama (' + o.den + ', '
+          + onlinePocetText(o.pocetZakazek) + ').');
+        return true;
+      }))
+      .catch(e => { onlineZprava('Dnešní zálohu databáze se nepodařilo pořídit: ' + e.message, 'varovani'); return false; });
+  }).then(v => onlineZalohaDoSlozkyAuto().then(() => { render(); return v; }));
+}
+
+/* Odlití kopie na Disk Google. Jen když je složka opravdu připojená a
+ * dnešní soubor v ní ještě neleží; jinak se mlčky přeskočí. */
+function onlineZalohaDoSlozkyAuto() {
   if (typeof ULO_STAV === 'undefined' || !ULO_STAV.pripraveno) return Promise.resolve(false);
   const jmeno = onlineZalohaJmeno();
   return uloCtiSoubor(jmeno).then(t => {
@@ -394,7 +467,6 @@ function onlineZalohaAuto() {
       .then(() => {
         onlineZprava('Dnešní záloha online databáze se sama odlila do složky „'
           + ULO_STAV.jmeno + '" (' + jmeno + ').');
-        render();
         return true;
       });
   }).catch(() => false);
@@ -501,7 +573,10 @@ function onlineTik() {
         onlineZprava('Platí online ceník – ' + programPopisVerze(ONLINE_STAV.db.platny) + '.');
         render();
       }, 0);
-      return; // nasazení si samo překreslí; autosave počká na další tik
+      /* Do 4. 8. 2026 se tu končilo `return` a autosave čekal na další tik.
+       * Nasazení ceníku ale běží až v setTimeout, takže tenhle průchod
+       * o zakázce nic neví a klidně naplánovat zápis může – návratem se
+       * jen zahazovala jedna příležitost uložit rozpracovanou práci. */
     }
   } else if (ONLINE_STAV.cenikPouzit) {
     /* složka se (znovu) připojila, nebo jsme odhlášení – online ceník už
@@ -523,10 +598,21 @@ function onlineTik() {
       konfigNahradVMiste(NAST.firma, ONLINE_STAV.firma.udaje);
       render();
     }, 0);
-    return;
+    /* Bez `return` ze stejného důvodu jako u ceníku výše. */
   }
 
-  if (!ONLINE_STAV.auto || !ONLINE_STAV.ja || !ONLINE_STAV.soubor || ONLINE_STAV.pracuje) return;
+  /* BRÁNA AUTOMATICKÉHO UKLÁDÁNÍ (přepsána 4. 8. 2026).
+   * Dřív zněla `… || !ONLINE_STAV.soubor || …`, tedy: ukládej samo jen
+   * zakázku, která už v databázi jednou byla. Nová zakázka se tam ale
+   * nedostala jinak než ručním kliknutím na „Uložit online" o dvě karty
+   * níž — a protože o tom tlačítku nikdo nevěděl, neukládalo se nic.
+   * Nově: dokud zakázka v databázi není, stačí vyplněná hlavička
+   * (číslo nabídky + název akce, viz uloHlavickaVyplnena) a zakázka se
+   * založí sama; od té chvíle se ukládá po každé změně jako dřív.
+   * Hlavička se hlídá proto, aby v databázi nevznikaly záznamy
+   * „bez-cisla-…", které se pak nedají najít. */
+  if (!ONLINE_STAV.auto || !ONLINE_STAV.ja || ONLINE_STAV.pracuje) return;
+  if (!ONLINE_STAV.soubor && !uloHlavickaVyplnena(ZAK)) return;
   let text = '';
   try { text = JSON.stringify(ZAK); } catch (e) { return; }
   if (text === ONLINE_STAV.posledni) return;
@@ -715,10 +801,14 @@ function renderOnlineKarta() {
   } else {
     const adminTlacitka = jeAdminOnline()
       ? `<button onclick="otevriNastaveni();nastPanel('uzivatele')">Uživatelé…</button>
+         <button onclick="onlineZalohaTed()" ${ONLINE_STAV.pracuje ? 'disabled' : ''}
+           title="pořídí otisk celé databáze na serveru – stejný, jaký si server bere každou noc">Zálohovat teď</button>
          ${typeof ULO_STAV !== 'undefined' && ULO_STAV.pripraveno
     ? `<button onclick="onlineZaloha(true)" ${ONLINE_STAV.pracuje ? 'disabled' : ''}>Odlít zálohu do složky (Disk)</button>` : ''}
          <button onclick="onlineZaloha(false)" ${ONLINE_STAV.pracuje ? 'disabled' : ''}>Stáhnout zálohu</button>` : '';
-    telo = `${hlaska}
+    const zalohaRadek = jeAdminOnline()
+      ? `<div class="note" id="online-zalohy">${esc(onlineOtiskPopis())}</div>` : '';
+    telo = `${hlaska}${zalohaRadek}
       <div class="btns" style="margin-top:10px">
         <button class="primary" onclick="onlineUloz()" ${ONLINE_STAV.pracuje ? 'disabled' : ''}>Uložit online</button>
         <button onclick="otevriOnline()">Zakázky online…</button>
