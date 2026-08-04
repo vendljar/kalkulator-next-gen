@@ -69,6 +69,7 @@ const CENIK_POZN = `<div class="note">Ceník je součástí aktivní varianty a 
 function renderCenik() {
   document.getElementById('page-cenik').innerHTML =
     `${jeAdmin() ? renderProgramKarta() : ''}
+     ${jeAdmin() && typeof renderOnlineCenikKarta === 'function' ? renderOnlineCenikKarta() : ''}
      <div class="card"><h2 style="cursor:default">Ceník nákladů OCK – číselník jednotkových cen
        <span class="pill warn" style="float:right">každou cenu před nabídkou překontrolovat!</span></h2>
      <div class="body">
@@ -104,6 +105,7 @@ function renderCenikProj() {
      * nenese žádné id (card() bez čtvrtého argumentu), dvojí vykreslení
      * proto nic nezdvojí; hlídá to overit_program.mjs. */
     `${jeAdmin() ? renderProgramKarta() : ''}
+     ${jeAdmin() && typeof renderOnlineCenikKarta === 'function' ? renderOnlineCenikKarta() : ''}
      <div class="card"><h2 style="cursor:default">Ceník nákladů PROJ – projekční práce
        <span class="pill warn" style="float:right">každou cenu před nabídkou překontrolovat!</span></h2>
      <div class="body">

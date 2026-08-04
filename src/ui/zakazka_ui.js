@@ -100,6 +100,7 @@ function renderZakazka() {
       kalkulace PROJ i ceníků. Starší soubory „zadání“ z předchozí verze aplikace lze také načíst –
       převedou se na zakázku s jednou variantou. Chcete-li se ručnímu ukládání vyhnout, připojte
       níže složku – zakázky se pak ukládají do ní samy.</div>`) +
+    (typeof renderOnlineKarta === 'function' ? renderOnlineKarta() : '') +
     (typeof renderUlozisteKarta === 'function' ? renderUlozisteKarta() : '') +
     card('Zakázka – hlavička PROJ (cenová nabídka projekce)',
       inp('ZAK.projHlavicka.cislo', { type: 'text', l: 'Číslo nabídky (CN)' }) +

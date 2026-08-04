@@ -821,4 +821,7 @@ function render() {
   // Stejný důvod jako u historie: automatické uložení do složky se plánuje až
   // ze stavu po dokončení všech úprav, jinak by se ukládal rozpracovaný mezistav.
   if (typeof uloTik === 'function') uloTik();
+  // Online databáze: nasazení platného ceníku (složka má přednost) a
+  // automatické uložení online – stejné načasování jako u složky.
+  if (typeof onlineTik === 'function') onlineTik();
 }
