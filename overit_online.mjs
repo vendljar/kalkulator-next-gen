@@ -166,14 +166,40 @@ await page.waitForTimeout(300);
 const nastav = () => page.locator('#nastaveni-panel').innerHTML();
 test('Nastavení → Uživatelé ukazuje účty online databáze',
   (await nastav()).includes('vendl.jaroslav@engineers-cz.cz') && (await nastav()).includes('hlavní'));
+
+/* Chybová cesta (4. 8. 2026 večer): krátké heslo dřív formulář tiše smazalo
+ * a nic neřeklo. Teď musí hláška stát přímo v panelu a pole zůstat vyplněná. */
 await page.fill('#onlineUzEmail', 'obchodnik@engineers-cz.cz');
 await page.fill('#onlineUzJmeno', 'Zkušební Obchodník');
+await page.fill('#onlineUzHeslo', 'kratke');
+await page.click('#nastaveni-panel >> text=Založit účet');
+await page.waitForTimeout(300);
+test('krátké heslo: důvod odmítnutí je vidět přímo v panelu Uživatelé',
+  (await nastav()).includes('aspoň 8 znaků'));
+test('krátké heslo: vyplněná pole se NEsmazala',
+  await page.evaluate(() => document.getElementById('onlineUzEmail').value === 'obchodnik@engineers-cz.cz'
+    && document.getElementById('onlineUzJmeno').value === 'Zkušební Obchodník'));
+
+/* Úspěch — KLIKEM na tlačítko, přesně jako uživatel. */
 await page.fill('#onlineUzHeslo', 'ObchodniHeslo1');
-await page.evaluate(() => onlineUzZaloz());
+await page.click('#nastaveni-panel >> text=Založit účet');
 await page.waitForFunction(() => { try { return ONLINE_STAV.uzivatele.length === 2; } catch (e) { return false; } });
-test('nový účet obchodníka se založil z Nastavení',
+await page.waitForTimeout(300);
+test('nový účet obchodníka se založil klikem z Nastavení',
   await page.evaluate(() => ONLINE_STAV.uzivatele.some(u => u.email === 'obchodnik@engineers-cz.cz' && u.role === 'Obchodník')));
-await page.evaluate(() => zavriNastaveni());
+test('založení potvrzuje hláška přímo v panelu a nový řádek v tabulce',
+  (await nastav()).includes('je založený') && (await nastav()).includes('obchodnik@engineers-cz.cz'));
+test('po úspěchu se formulář vyprázdnil',
+  await page.evaluate(() => document.getElementById('onlineUzEmail').value === ''
+    && document.getElementById('onlineUzHeslo').value === ''));
+test('opakované založení téhož účtu řekne důvod (účet už existuje)', await (async () => {
+  await page.fill('#onlineUzEmail', 'obchodnik@engineers-cz.cz');
+  await page.fill('#onlineUzHeslo', 'JinaHesla123');
+  await page.click('#nastaveni-panel >> text=Založit účet');
+  await page.waitForTimeout(400);
+  return (await nastav()).includes('Účet už existuje');
+})());
+await page.evaluate(() => { ONLINE_STAV.uzForm = { email: '', jmeno: '', role: 'Obchodník', heslo: '' }; zavriNastaveni(); });
 
 /* ---- 7) záloha ke stažení ---- */
 const [stazeni] = await Promise.all([
