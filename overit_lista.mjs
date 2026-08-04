@@ -71,14 +71,22 @@ ok('všechny kotvy OCK míří na existující cíl' + (bezCile.length ? ' – c
 
 /* Modrá lišta s tlačítky uzavírá hlavičku. Dřív pod ní stál vysvětlující
  * odstavec a kontrola hlídala, že tlačítka jsou nad ním; od 31. 7. 2026 tam
- * ten text nemá být vůbec, takže se místo pořadí ověřuje, že za tlačítky
- * hlavička končí. */
-const poradiOk = await p.evaluate(() => {
+ * ten text nemá být vůbec. Od 4. 8. 2026 smí za lištou stát jediná věc –
+ * řádek(y) o stavu uložení zakázky (.zak-ulozeni), protože uživatel musí
+ * hned vedle tlačítka vidět, jestli zakázka v databázi je, nebo čeká na
+ * vyplnění hlavičky. Nic jiného za lištu nepatří. */
+const poradi = await p.evaluate(() => {
   const telo = document.querySelector('#kalk-hlavicka .zak-bar .body');
   const btns = telo.querySelector('.zak-cena');
-  return !!btns && telo.lastElementChild === btns;
+  if (!btns) return { lista: false };
+  const za = [];
+  for (let e = btns.nextElementSibling; e; e = e.nextElementSibling)
+    za.push(e.className || e.tagName);
+  return { lista: true, za, jenStav: za.every(t => /zak-ulozeni/.test(t)) };
 });
-ok('lišta s tlačítky uzavírá hlavičku – nic za ní nestojí', poradiOk);
+ok('lišta s tlačítky uzavírá hlavičku – za ní stojí jen stav uložení'
+   + (poradi.za && poradi.za.length ? ' (' + poradi.za.join(' | ') + ')' : ''),
+   poradi.lista && poradi.jenStav);
 ok('odkaz v hlavičce vede na „Přehled cenových nabídek →"',
    (await p.locator('#kalk-hlavicka .zak-cena').innerText()).includes('Přehled cenových nabídek'));
 
@@ -1282,7 +1290,11 @@ const zarovnani = await p.evaluate(() => {
   const karty = [...document.querySelectorAll('#page-zakazka .card')]
     .filter(c => c.querySelector('button') && /Najít firmu v ARES/.test(c.innerText));
   return karty.map(k => {
-    const tl = k.querySelector('button');
+    /* Od 4. 8. 2026 stojí na začátku karty hlavičky ještě trojice
+     * „Uložit / Načíst / Nová zakázka", takže první tlačítko na kartě už
+     * není to od ARESu – hledá se podle popisku. */
+    const tl = [...k.querySelectorAll('button')]
+      .find(b => /Najít firmu v ARES/.test(b.textContent || ''));
     const vstupy = [...k.querySelectorAll('.row input[type=text]')];
     if (!tl || !vstupy.length) return null;
     return { tlacitko: tl.getBoundingClientRect().right,

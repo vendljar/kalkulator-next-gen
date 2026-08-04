@@ -39,6 +39,13 @@
   .zak-head .pct-wrap input { width:70px; text-align:right; }
   .zak-cena { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:10px;
               padding:8px 12px; background:#eef4ff; border:1px solid #cfe0ff; border-radius:8px; }
+  /* Trojice „uložit / načíst / nová zakázka" stojí od 4. 8. 2026 na začátku
+     lišty (zadání) a od zbytku ji odděluje svislá čárka – ať je na první
+     pohled vidět, že jde o práci se zakázkou, ne s variantou. */
+  .zak-cena-del { width:1px; align-self:stretch; background:#cfe0ff; margin:0 2px; }
+  button.mini.vyzva { background:var(--acc); color:#fff; border-color:var(--acc); font-weight:600; }
+  button.mini.vyzva:hover { filter:brightness(1.08); }
+  .zak-ulozeni { margin-top:8px; font-size:12px; }
   /* úchop pro přetahování řádků + úzké admin sloupce */
   .grip { cursor:grab; color:#9aa6b6; user-select:none; margin-right:4px; font-size:13px; }
   .grip:active { cursor:grabbing; }
@@ -581,9 +588,12 @@
     <!-- Zpět/Znovu jsou jediná tlačítka hlavičky, která se používají pořád –
          proto jsou od 4. 8. 2026 světlá a výrazná (zadání: „Z horní lišty
          odstraň 3 světlá tlačítka a zvýrazni nějak zpět a znovu"). Uložit
-         zakázku, Načíst a Tisk / PDF z hlavičky zmizely; žijí dál na záložce
-         Přehled cenových nabídek (Uložit zakázku (JSON) / Načíst zakázku)
-         a tisk je u každého dokumentu vlastním tlačítkem. -->
+         zakázku, Načíst a Tisk / PDF z hlavičky zmizely; tisk je u každého
+         dokumentu vlastním tlačítkem. Uložení zakázky do databáze obstarává
+         od 4. 8. 2026 trojice „Uložit zakázku / Načíst zakázku / Nová
+         zakázka" na začátku lišty v Kalkulaci OCK i PROJ; záloha do souboru
+         zůstala na záložce Přehled cenových nabídek jako „Uložit do souboru
+         (JSON)" / „Načíst ze souboru". -->
     <button id="btnHistZpet" class="hist jsHistZpet" disabled onclick="historieZpet()"
       title="Vrátit poslední změnu (Ctrl+Z)">↶ Zpět</button>
     <button id="btnHistZnovu" class="hist jsHistZnovu" disabled onclick="historieZnovu()"

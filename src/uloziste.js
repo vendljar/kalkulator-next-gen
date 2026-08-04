@@ -66,9 +66,16 @@ function uloKlicSouboru(text) {
 /* Zakázka bez čísla se ukládat musí (rozdělaná práce je taky práce), ale
  * nesmí přebít cizí soubor – proto do jména jde datum a id první varianty,
  * které je v rámci aplikace jedinečné. Po doplnění čísla se zakázka uloží
- * pod správným jménem a starý soubor se nabídne ke smazání. */
+ * pod správným jménem a starý soubor se nabídne ke smazání.
+ *
+ * Od 4. 8. 2026 se sahá i po čísle nabídky PROJ: zakázka vedená jen jako
+ * projekce (hlavička OCK zůstala prázdná) by jinak skončila jako
+ * „bez-cisla-…" a v rejstříku by ji nikdo nenašel. Hlavičky zůstávají dvě
+ * nezávislé sady – tohle je jen pořadí, ve kterém se hledá jméno souboru. */
 function uloJmenoSouboru(zak) {
-  let zaklad = uloCisloVyplneno(zak && zak.cislo) ? uloKlicSouboru(zak.cislo) : '';
+  const p = (zak && zak.projHlavicka) || {};
+  let zaklad = uloCisloVyplneno(zak && zak.cislo) ? uloKlicSouboru(zak.cislo)
+    : (uloCisloVyplneno(p.cislo) ? uloKlicSouboru(p.cislo) : '');
   if (!zaklad) {
     const v = ((zak && zak.varianty) || [])[0];
     const datum = uloKlicSouboru((zak && zak.datum) || '') || 'bez-data';
@@ -89,6 +96,76 @@ function uloJeZakazkovySoubor(jmeno) {
   if (!zaklad) return false;
   if (zaklad.charAt(0) === '_' || zaklad.charAt(0) === '.') return false;   // _rejstrik.json a skryté
   return /^[A-Za-z0-9._-]+$/.test(zaklad);
+}
+
+/* ---------- kdy zakázka smí do databáze ------------------------------ */
+
+/* Zadání 4. 8. 2026: „Každá nová zakázka by se měla automaticky ukládat do
+ * databáze. Pro potřeby tohoto kroku budeme vždy zakázku ukládat po vyplnění
+ * hlavičky. Systém musí uživatele informovat, že je třeba hlavičku vyplnit
+ * a zakázku uložit."
+ *
+ * Do 4. 8. rozhodovaly o samočinném ukládání dvě podmínky roztroušené v UI
+ * (ONLINE_STAV.soubor / ULO_STAV.soubor). Obě znamenaly „už jsme jednou
+ * uložili ručně", takže nová zakázka se sama neuložila nikdy – a uživatel
+ * si toho neměl jak všimnout. Rozhodnutí proto bydlí tady, v modelu:
+ * jedno místo, testovatelné bez prohlížeče, společné pro online i složku.
+ *
+ * Minimum je číslo nabídky a název akce. Objednatel ani adresa v seznamu
+ * chybět můžou (rozdělaná poptávka je taky práce), ale bez čísla by soubor
+ * neměl jméno a bez názvu akce by se v rejstříku nedal poznat. */
+const ULO_HLAVICKA_POLE = [
+  { klic: 'cislo', popis: 'Číslo nabídky (CN)' },
+  { klic: 'nazevAkce', popis: 'Název akce' },
+];
+
+/* kde: 'ock' (výchozí) | 'proj' – hlavičky jsou dvě nezávislé sady. */
+function uloHlavickaChybi(zak, kde) {
+  const h = (kde === 'proj') ? ((zak && zak.projHlavicka) || {}) : (zak || {});
+  return ULO_HLAVICKA_POLE.filter(p => !uloCisloVyplneno(h[p.klic])).map(p => p.popis);
+}
+
+/* Do databáze stačí jedna vyplněná hlavička: obchodník začíná jednou
+ * z kalkulací a druhou třeba nikdy neotevře. */
+function uloHlavickaVyplnena(zak) {
+  return uloHlavickaChybi(zak, 'ock').length === 0 || uloHlavickaChybi(zak, 'proj').length === 0;
+}
+
+/* Vstup: { zakazka, ulozeno (jméno souboru v databázi, '' = ještě nikdy),
+ *          zmeneno (čeká neuložená změna), prihlasen, dostupne }
+ * Výstup: { stav, text, muzeSam, chybi }
+ *
+ * `muzeSam` je jediné svolení k samočinnému zápisu. `blokuje` se úmyslně
+ * nevrací – KONTROLY_UROVEN = 2 znamená informovat, ne zavírat cestu
+ * (jediná zábrana v aplikaci je ukázkový ceník v dokumentech). */
+function uloUlozeniStav(vstup) {
+  const v = vstup || {};
+  const zak = v.zakazka || null;
+  const ulozeno = String(v.ulozeno || '');
+  const chybi = uloHlavickaChybi(zak, 'ock');
+  const chybiProj = uloHlavickaChybi(zak, 'proj');
+  const vyplneno = chybi.length === 0 || chybiProj.length === 0;
+  const nejmensi = chybi.length <= chybiProj.length ? chybi : chybiProj;
+
+  if (!v.dostupne)
+    return { stav: 'nedostupne', muzeSam: false, chybi: nejmensi,
+      text: 'Zakázka není v databázi – aplikace neběží proti serveru. '
+        + 'Uložte ji do souboru, ať o práci nepřijdete.' };
+  if (!v.prihlasen)
+    return { stav: 'neprihlasen', muzeSam: false, chybi: nejmensi,
+      text: 'Zakázka se do databáze neukládá – nejste přihlášeni. Přihlaste se na záložce Zakázka.' };
+  if (ulozeno && !v.zmeneno)
+    return { stav: 'ulozeno', muzeSam: true, chybi: nejmensi,
+      text: 'Uloženo v databázi jako ' + ulozeno + '.' };
+  if (ulozeno)
+    return { stav: 'ceka', muzeSam: true, chybi: nejmensi,
+      text: 'Změny se za chvíli uloží samy do databáze (' + ulozeno + ').' };
+  if (!vyplneno)
+    return { stav: 'vyplnit', muzeSam: false, chybi: nejmensi,
+      text: 'Zakázka ještě není v databázi. Vyplňte v hlavičce: ' + nejmensi.join(', ')
+        + ' – pak zakázku uložte (dál už se ukládá sama).' };
+  return { stav: 'ulozit', muzeSam: true, chybi: nejmensi,
+    text: 'Zakázka ještě není v databázi – uložte ji. Dál se bude ukládat sama po každé změně.' };
 }
 
 /* ---------- razítko posledního zápisu -------------------------------- */
@@ -249,6 +326,7 @@ if (typeof module !== 'undefined')
   module.exports = { ULO_PRIPONA, ULO_REJSTRIK_SOUBOR, ULO_SCHEMA, ULO_PROBLEMY,
                      uloNorm, uloSlova, uloCisloVyplneno, uloKlicSouboru,
                      uloJmenoSouboru, uloJeZakazkovySoubor,
+                     ULO_HLAVICKA_POLE, uloHlavickaChybi, uloHlavickaVyplnena, uloUlozeniStav,
                      uloRazitkoNove, uloRazitko, uloKolize,
                      uloRejstrikZaznam, uloRejstrikNormalizuj, uloRejstrikSloucit,
                      uloRejstrikOdeber, uloRejstrikSerad, uloHledej,

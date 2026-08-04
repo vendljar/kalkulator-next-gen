@@ -37,6 +37,7 @@ import program from './netlify/functions/program.mjs';
 import zakazky from './netlify/functions/zakazky.mjs';
 import zaloha from './netlify/functions/zaloha.mjs';
 import firma from './netlify/functions/firma.mjs';
+import zalohaVynuceno from './netlify/functions/zaloha_vynuceno.mjs';
 
 const require = createRequire(import.meta.url);
 let chromium;
@@ -53,6 +54,10 @@ const FUNKCE = {
   /* Firemní údaje jsou od 4. 8. 2026 taky online: obchodník složku _DB
    * nemapuje, takže hlavičku nabídky nemá odkud jinud vzít. */
   '/api/firma': firma,
+  /* Vynucená (a ověřitelná) záloha databáze – 4. 8. 2026. Kdyby tu funkce
+   * chyběla, volání z prohlížeče by skončilo na 404 a test by mlčel
+   * o tom, že „vynucené zálohování" pořád nikam nevede. */
+  '/api/zaloha_vynuceno': zalohaVynuceno,
 };
 
 let ok = 0, fail = 0;
@@ -212,6 +217,107 @@ await page.evaluate(() => onlineOtevri(ONLINE_STAV.soubor));
 await page.waitForTimeout(400);
 test('zakázka se otevřela online a číslo sedí',
   await page.evaluate(() => ZAK.cislo === '2026 - OPR - CN - 0555'));
+
+/* ---- 5b) zadání 4. 8. 2026: trojice na začátku lišty + samočinné uložení ----
+ *
+ * „Přesuň tlačítka ulož zakázku, načíst zakázku a nová zakázka na začátek
+ * lišty… Nezapomeň totéž provést pro projekční zakázky v Kalkulaci PROJ."
+ * a „Každá nová zakázka by se měla automaticky ukládat do databáze… vždy
+ * zakázku ukládat po vyplnění hlavičky. Systém musí uživatele informovat."
+ *
+ * Pozice se měří na POŘADÍ tlačítek v liště, ne na tom, že tam někde jsou –
+ * jinak by test prošel i tehdy, kdyby trojice zůstala na konci. */
+const listaBtn = async (kde) => page.evaluate((k) => {
+  const l = document.querySelector('#page-' + k + ' .zak-cena');
+  return l ? Array.from(l.querySelectorAll('button')).map(b => b.textContent.trim()) : [];
+}, kde);
+
+await page.evaluate(() => prepniTab('kalk'));
+const btnOck = await listaBtn('kalk');
+test('lišta Kalkulace OCK začíná trojicí Uložit / Načíst / Nová zakázka',
+  /Uložit zakázku/.test(btnOck[0] || '') && /Načíst zakázku/.test(btnOck[1] || '')
+  && /Nová zakázka/.test(btnOck[2] || ''), btnOck.slice(0, 4));
+await page.evaluate(() => prepniTab('proj'));
+const btnProj = await listaBtn('proj');
+test('lišta Kalkulace PROJ začíná stejnou trojicí (projekční zakázky)',
+  /Uložit zakázku/.test(btnProj[0] || '') && /Načíst zakázku/.test(btnProj[1] || '')
+  && /Nová zakázka/.test(btnProj[2] || ''), btnProj.slice(0, 4));
+test('v liště PROJ trojice stojí PŘED převzetím údajů z druhé hlavičky',
+  btnProj.findIndex(t => /Uložit zakázku/.test(t)) < btnProj.findIndex(t => /Převzít údaje/.test(t)),
+  btnProj.slice(0, 5));
+
+/* Nová prázdná zakázka: musí zapomenout jméno té předchozí, jinak by se
+ * hned sama zapsala do databáze jako záznam bez čísla. Volá se přímo
+ * (ne přes novaZakazkaUI), protože to potvrzuje confirm() – dialog by
+ * v prohlížeči zablokoval celý harness. */
+await page.evaluate(() => {
+  ZAK = novaZakazka(); syncVarianta(); zakOdpojUlozeni(); render();
+});
+await page.waitForTimeout(200);
+test('nová zakázka není v databázi a čeká na hlavičku',
+  await page.evaluate(() => zakUlozeniStav().stav === 'vyplnit'),
+  await page.evaluate(() => zakUlozeniStav().stav));
+test('a systém řekne, co konkrétně v hlavičce chybí',
+  await page.evaluate(() => zakUlozeniStav().chybi.join('|') === 'Číslo nabídky (CN)|Název akce'),
+  await page.evaluate(() => zakUlozeniStav().chybi));
+test('informace o nutnosti vyplnit a uložit je vidět přímo v liště',
+  /Vyplňte v hlavičce/.test(await page.locator('#page-proj .zak-ulozeni').first().innerText()),
+  await page.locator('#page-proj .zak-ulozeni').first().innerText());
+test('dokud hlavička není vyplněná, samo se nic neplánuje',
+  await page.evaluate(() => ONLINE_STAV.timer === null && ONLINE_STAV.soubor === ''));
+
+/* Vyplnění hlavičky = jediná podmínka. Od téhle chvíle si zakázku
+ * ukládá aplikace sama; nikdo na nic klikat nemusí. */
+await page.evaluate(() => {
+  ZAK.cislo = '2026 - OPR - CN - 0777'; ZAK.nazevAkce = 'Samo do databáze'; render();
+});
+test('po vyplnění hlavičky se uložení naplánovalo samo',
+  await page.evaluate(() => ONLINE_STAV.timer !== null));
+await page.waitForFunction(() => { try { return ONLINE_STAV.soubor !== ''; } catch (e) { return false; } },
+  null, { timeout: 25000 });
+test('nová zakázka se do databáze uložila sama, bez kliknutí',
+  await page.evaluate(() => ONLINE_STAV.soubor.includes('0777')),
+  await page.evaluate(() => ONLINE_STAV.soubor));
+test('lišta po uložení hlásí, že zakázka v databázi je',
+  /Uloženo v databázi/.test(await page.locator('#page-proj .zak-ulozeni').first().innerText()),
+  await page.locator('#page-proj .zak-ulozeni').first().innerText());
+
+/* „Následně už by se měla automaticky po každém kroku uložit do databáze." */
+await page.evaluate(() => { ZAK.adresa = 'Zkušební 1, Praha'; render(); });
+test('další změna se opět naplánuje k uložení',
+  await page.evaluate(() => ONLINE_STAV.timer !== null));
+await page.waitForFunction(() => { try { return JSON.stringify(ZAK) === ONLINE_STAV.posledni; } catch (e) { return false; } },
+  null, { timeout: 25000 });
+test('a po každém kroku se do databáze opravdu zapíše',
+  await page.evaluate(() => ONLINE_STAV.posledni.includes('Zkušební 1, Praha')));
+test('zakázka „0777" je v rejstříku online zakázek',
+  await page.evaluate(() => ONLINE_STAV.rejstrik.some(z => (z.cislo || '').includes('0777'))));
+
+/* ---- 5c) záloha databáze: automatická po přihlášení i vynucená ---- */
+test('po přihlášení administrátora vznikla dnešní záloha databáze sama',
+  await page.evaluate(() => ONLINE_STAV.otiskyNacteno && ONLINE_STAV.otisky.length >= 1),
+  await page.evaluate(() => JSON.stringify(ONLINE_STAV.otisky)));
+test('záloha nese, kdy vznikla a kolik zakázek zachytila',
+  await page.evaluate(() => { const o = ONLINE_STAV.otisky[0];
+    return !!o && !!o.porizena && typeof o.pocetZakazek === 'number' && o.pocetUctu >= 1; }));
+await page.evaluate(() => onlineZalohaTed());
+await page.waitForFunction(() => { try { return !ONLINE_STAV.pracuje && /Záloha databáze pořízena/.test(ONLINE_STAV.hlaska); } catch (e) { return false; } },
+  null, { timeout: 8000 });
+test('vynucenou zálohu jde pořídit tlačítkem a aplikace to potvrdí',
+  await page.evaluate(() => /Záloha databáze pořízena/.test(ONLINE_STAV.hlaska)),
+  await page.evaluate(() => ONLINE_STAV.hlaska));
+test('vynucená záloha zachytila i zakázku, která se uložila sama',
+  await page.evaluate(() => ONLINE_STAV.otisky[0].pocetZakazek >= 2),
+  await page.evaluate(() => ONLINE_STAV.otisky[0].pocetZakazek));
+test('přehled záloh se ukazuje v kartě Online databáze',
+  /Poslední záloha databáze/.test(await page.evaluate(() => onlineOtiskPopis())),
+  await page.evaluate(() => onlineOtiskPopis()));
+/* Souhrn nesmí vozit obsah databáze – z konzole by se dala přečíst celá. */
+test('přehled záloh neveze data zakázek ani hesla',
+  await page.evaluate(() => { const t = JSON.stringify(ONLINE_STAV.otisky);
+    return !t.includes('Samo do databáze') && !t.includes('heslo'); }));
+
+await page.evaluate(() => prepniTab('zakazka'));
 
 /* ---- 6) správa účtů v Nastavení ---- */
 await page.evaluate(() => { otevriNastaveni(); nastPanel('uzivatele'); });

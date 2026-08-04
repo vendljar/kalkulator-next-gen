@@ -182,8 +182,13 @@ test('činné Zpět má zvýrazňující obrys', zvyrazneni.stin !== 'none' && z
 await page.evaluate(() => prepniTab('zakazka'));
 await page.waitForTimeout(200);
 const zak = await page.locator('#page-zakazka').innerText();
-test('„Uložit zakázku (JSON)" je na záložce Přehled cenových nabídek', zak.includes('Uložit zakázku (JSON)'));
-test('„Načíst zakázku" je na záložce Přehled cenových nabídek', zak.includes('Načíst zakázku'));
+/* Od 4. 8. 2026 se cesty rozdělily: do databáze ukládá trojice v liště
+ * („Uložit zakázku"), do souboru na disk pak dvojice na téhle záložce,
+ * přejmenovaná tak, aby z názvu bylo poznat, co dělá. Obojí musí být
+ * k nalezení, aby se práce nedala ztratit ani při výpadku databáze. */
+test('„Uložit do souboru (JSON)" je na záložce Přehled cenových nabídek', zak.includes('Uložit do souboru (JSON)'));
+test('„Načíst ze souboru" je na záložce Přehled cenových nabídek', zak.includes('Načíst ze souboru'));
+test('trojice pro databázi je na záložce taky (Uložit zakázku)', zak.includes('Uložit zakázku'));
 await page.evaluate(() => prepniTab('kalk'));
 await page.waitForTimeout(150);
 
