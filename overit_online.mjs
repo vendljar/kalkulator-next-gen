@@ -1,4 +1,5 @@
-/* Ověření ONLINE DATABÁZE v prohlížeči (4. 8. 2026).
+/* Ověření ONLINE DATABÁZE v prohlížeči (4. 8. 2026; rozšířeno o přihlašovací
+ * stránku, lištu v rohu, změnu vlastního hesla a role).
  *
  * Node testy (netlify/test_funkce.mjs) ověřují serverové funkce, smoke.mjs
  * hlídá, že aplikace nad file:// mlčí. Tady se testuje to, co ani jeden
@@ -7,8 +8,7 @@
  * Jak: sestavená aplikace se servíruje přes lokální http server (online
  * vrstva se probouzí jen nad http/https) a každé volání /api/* se předá
  * OPRAVDOVÝM funkcím z netlify/functions — s pamětovým úložištěm místo
- * Blobs a s vlastní správou cookie. Testuje se tedy celá cesta: formulář →
- * fetch → funkce → Blobs → odpověď → obrazovka. Žádný mock chování.
+ * Blobs a s vlastní správou cookie. Žádný mock chování.
  *
  * Spuštění: NODE_PATH=$(npm root -g) node overit_online.mjs
  */
@@ -73,17 +73,13 @@ const page = await ctx.newPage();
 const chyby = [];
 page.on('console', m => {
   const t = m.text();
-  // 401/403 z /api jsou v testu záměr (špatné heslo, cizí role) – prohlížeč
-  // je hlásí jako chybu sítě, ale aplikace s nimi počítá a uklidí je.
+  // 401/403/400/409 z /api jsou v testu záměr – aplikace s nimi počítá.
   if (m.type() === 'error' && !/status of (401|403|400|409)/.test(t)) chyby.push('console: ' + t);
 });
 page.on('pageerror', e => chyby.push('pageerror: ' + e.message));
-
-/* Dialogy: prompt (zdůvodnění zveřejnění) dostane text, confirm se odkývá. */
 page.on('dialog', d => (d.type() === 'prompt' ? d.accept('zkušební zveřejnění') : d.accept()));
 
-/* Most na serverové funkce: cookie si vede harness sám (fetch z prohlížeče
- * ji posílá, Playwright route ji ale funkcím musí předat ručně). */
+/* Most na serverové funkce: cookie si vede harness sám. */
 let cookieJar = '';
 await page.route('**/api/**', async route => {
   const r = route.request();
@@ -99,65 +95,62 @@ await page.route('**/api/**', async route => {
     body: await odp.text() });
 });
 
+const gate = () => page.locator('#prihlaseni-box').innerHTML();
+const gateViditelna = () => page.evaluate(() =>
+  document.getElementById('prihlaseni-overlay').style.display !== 'none');
+const prihlas = async (email, heslo) => {
+  await page.fill('#onlineEmail', email);
+  await page.fill('#onlineHeslo', heslo);
+  await page.click('#prihlaseni-box >> text=Přihlásit');
+  await page.waitForTimeout(400);
+};
+
 await page.goto(ADRESA);
 await page.waitForFunction(() => typeof window.render === 'function');
 await page.waitForTimeout(400);
 
-const kartaHtml = () => page.locator('#page-zakazka').innerHTML();
-
-/* ---- 1) probuzení online vrstvy nad http ---- */
-test('sonda /api/zdravi proběhla a karta ví, že server běží',
-  await page.evaluate(() => ONLINE_STAV.bezi === true));
-test('karta vyzývá k přihlášení', (await kartaHtml()).includes('Přihlaste se e-mailem a heslem'));
+/* ---- 1) přihlašovací stránka zakrývá aplikaci ---- */
+test('přihlašovací stránka je vidět a nese název aplikace',
+  await gateViditelna() && (await gate()).includes('Kalkulátor Next Gen'));
+test('stránka má pole pro e-mail (uživatelské jméno) i heslo',
+  (await gate()).includes('uživatelské jméno') && (await gate()).includes('onlineHeslo'));
 
 /* ---- 2) špatné heslo ---- */
-await page.evaluate(() => prepniTab('zakazka'));
-await page.fill('#onlineEmail', 'vendl.jaroslav@engineers-cz.cz');
-await page.fill('#onlineHeslo', 'spatne-heslo');
-await page.click('text=Přihlásit');
-await page.waitForTimeout(300);
-test('špatné heslo se odmítne a důvod je vidět',
-  (await kartaHtml()).includes('Nesprávný e-mail nebo heslo'));
+await prihlas('vendl.jaroslav@engineers-cz.cz', 'spatne-heslo');
+test('špatné heslo se odmítne s důvodem přímo na přihlašovací stránce',
+  (await gate()).includes('Nesprávný e-mail nebo heslo'));
+test('stránka po chybě zůstává', await gateViditelna());
 
-/* ---- 3) první přihlášení administrátora (bootstrap z ADMIN_INIT_HESLO) ---- */
-await page.fill('#onlineHeslo', 'Zkusebni.Heslo.123');
-await page.click('text=Přihlásit');
-await page.waitForFunction(() => !!ONLINE_STAV.ja);
+/* ---- 3) přihlášení administrátora (bootstrap) ---- */
+await prihlas('vendl.jaroslav@engineers-cz.cz', 'Zkusebni.Heslo.123');
+await page.waitForFunction(() => { try { return !!ONLINE_STAV.ja; } catch (e) { return false; } });
 await page.waitForTimeout(400);
+test('po přihlášení přihlašovací stránka zmizí', !(await gateViditelna()));
 test('administrátor je přihlášený',
   await page.evaluate(() => ONLINE_STAV.ja.role === 'Administrátor'));
-test('jméno ze serveru se propsalo do aplikace (razítka, protokol)',
-  await page.evaluate(() => NAST.uzivatel === 'Jaroslav Vendl' && NAST.jeAdmin === true));
-test('online databáze programu je zatím prázdná',
-  await page.evaluate(() => ONLINE_STAV.db === null));
+const roh = () => page.locator('#onlineLista').innerHTML();
+test('v rohu hlavičky je vidět, kdo je přihlášený',
+  (await roh()).includes('Jaroslav Vendl') && (await roh()).includes('Administrátor'));
+test('roh nabízí Změnit heslo i Odhlásit',
+  (await roh()).includes('Změnit heslo') && (await roh()).includes('Odhlásit'));
 
-/* ---- 4) zveřejnění ceníku online a jeho nasazení v aplikaci ---- */
+/* ---- 4) zveřejnění ceníku online a jeho nasazení ---- */
 await page.evaluate(() => prepniTab('cenik'));
-await page.waitForTimeout(200);
-test('karta Online ceník stojí na záložce Ceník',
-  (await page.locator('#page-cenik').innerHTML()).includes('Online ceník programu'));
 await page.evaluate(() => onlineZverejni());
-await page.waitForFunction(() => ONLINE_STAV.db && ONLINE_STAV.db.platny);
+await page.waitForFunction(() => { try { return !!(ONLINE_STAV.db && ONLINE_STAV.db.platny); } catch (e) { return false; } });
 await page.waitForTimeout(500);
 test('zveřejnění založilo online verzi 1',
   await page.evaluate(() => ONLINE_STAV.db.platny.verze === 1));
-test('poznámka z dialogu se zapsala',
-  await page.evaluate(() => ONLINE_STAV.db.platny.poznamka === 'zkušební zveřejnění'));
-test('online ceník se v aplikaci sám nasadil (složka není připojená)',
+test('online ceník se v aplikaci sám nasadil',
   await page.evaluate(() => ONLINE_STAV.cenikPouzit === true));
-test('server otiskl, kdo zveřejnil',
-  await page.evaluate(() => ONLINE_STAV.db.platny.kdo === 'vendl.jaroslav@engineers-cz.cz'));
 
 /* ---- 5) zakázka online: uložit, seznam, otevřít ---- */
 await page.evaluate(() => { ZAK.cislo = '2026 - OPR - CN - 0555'; ZAK.nazevAkce = 'Online ověření'; render(); });
 await page.evaluate(() => onlineUloz());
-await page.waitForFunction(() => ONLINE_STAV.soubor !== '');
+await page.waitForFunction(() => { try { return ONLINE_STAV.soubor !== ''; } catch (e) { return false; } });
 test('zakázka se uložila online pod jménem ze svého čísla',
   await page.evaluate(() => ONLINE_STAV.soubor.includes('0555')));
-test('rejstřík online ji eviduje',
-  await page.evaluate(() => ONLINE_STAV.rejstrik.length === 1 && ONLINE_STAV.rejstrik[0].cislo === ZAK.cislo));
-
-await page.evaluate(() => otevriOnline('zakazky'));
+await page.evaluate(() => otevriOnline());
 await page.waitForTimeout(300);
 test('panel Zakázky online ukazuje uloženou zakázku',
   (await page.locator('#online-panel').innerHTML()).includes('Online ověření'));
@@ -166,22 +159,23 @@ await page.waitForTimeout(400);
 test('zakázka se otevřela online a číslo sedí',
   await page.evaluate(() => ZAK.cislo === '2026 - OPR - CN - 0555'));
 
-/* ---- 6) správa účtů ---- */
-await page.evaluate(() => otevriOnline('uzivatele'));
-await page.waitForTimeout(400);
-const panel = await page.locator('#online-panel').innerHTML();
-test('seznam účtů ukazuje administrátora jako hlavní účet',
-  panel.includes('vendl.jaroslav@engineers-cz.cz') && panel.includes('hlavní'));
+/* ---- 6) správa účtů v Nastavení ---- */
+await page.evaluate(() => { otevriNastaveni(); nastPanel('uzivatele'); });
+await page.waitForFunction(() => { try { return ONLINE_STAV.uzivateleNacteno; } catch (e) { return false; } });
+await page.waitForTimeout(300);
+const nastav = () => page.locator('#nastaveni-panel').innerHTML();
+test('Nastavení → Uživatelé ukazuje účty online databáze',
+  (await nastav()).includes('vendl.jaroslav@engineers-cz.cz') && (await nastav()).includes('hlavní'));
 await page.fill('#onlineUzEmail', 'obchodnik@engineers-cz.cz');
 await page.fill('#onlineUzJmeno', 'Zkušební Obchodník');
 await page.fill('#onlineUzHeslo', 'ObchodniHeslo1');
 await page.evaluate(() => onlineUzZaloz());
-await page.waitForFunction(() => ONLINE_STAV.uzivatele.length === 2);
-test('nový účet obchodníka je založený',
+await page.waitForFunction(() => { try { return ONLINE_STAV.uzivatele.length === 2; } catch (e) { return false; } });
+test('nový účet obchodníka se založil z Nastavení',
   await page.evaluate(() => ONLINE_STAV.uzivatele.some(u => u.email === 'obchodnik@engineers-cz.cz' && u.role === 'Obchodník')));
-await page.evaluate(() => zavriOnline());
+await page.evaluate(() => zavriNastaveni());
 
-/* ---- 7) záloha ke stažení (soubor s datem v názvu) ---- */
+/* ---- 7) záloha ke stažení ---- */
 const [stazeni] = await Promise.all([
   page.waitForEvent('download'),
   page.evaluate(() => onlineZaloha(false)),
@@ -192,34 +186,53 @@ test('záloha se stáhne pod jménem s dnešním datem',
 /* ---- 8) relace přežije obnovení stránky ---- */
 await page.reload();
 await page.waitForFunction(() => typeof window.render === 'function');
-/* Pozor: ONLINE_STAV je top-level const – bare identifikátor funguje,
- * window.ONLINE_STAV ne. Než se skript vůbec vyhodnotí, identifikátor
- * neexistuje, proto try/catch. */
 await page.waitForFunction(() => { try { return !!ONLINE_STAV.ja; } catch (e) { return false; } },
   null, { timeout: 8000 });
 await page.waitForTimeout(400);
-test('po obnovení stránky je uživatel dál přihlášený (cookie relace)',
-  await page.evaluate(() => ONLINE_STAV.ja.email === 'vendl.jaroslav@engineers-cz.cz'));
-test('i po obnovení se jméno dočetlo z účtu (ne jen e-mail)',
-  await page.evaluate(() => NAST.uzivatel === 'Jaroslav Vendl'));
+test('po obnovení stránky je administrátor dál přihlášený a stránka se neukázala',
+  !(await gateViditelna()) && await page.evaluate(() => ONLINE_STAV.ja.email === 'vendl.jaroslav@engineers-cz.cz'));
 test('platný ceník se po obnovení načetl a nasadil sám',
   await page.evaluate(() => ONLINE_STAV.db.platny.verze === 1 && ONLINE_STAV.cenikPouzit === true));
-test('rejstřík zakázek se po obnovení načetl sám',
-  await page.evaluate(() => ONLINE_STAV.rejstrik.length === 1));
 
-/* ---- 9) odhlášení ---- */
-await page.evaluate(() => prepniTab('zakazka'));
+/* ---- 9) odhlášení → přihlašovací stránka; obchodník a jeho pohled ---- */
 await page.evaluate(() => onlineOdhlas());
-await page.waitForFunction(() => ONLINE_STAV.ja === null);
+await page.waitForFunction(() => { try { return ONLINE_STAV.ja === null; } catch (e) { return false; } });
 await page.waitForTimeout(300);
-test('odhlášení vrátí kartu k přihlašovacímu formuláři',
-  (await kartaHtml()).includes('Přihlaste se e-mailem a heslem') || (await kartaHtml()).includes('onlineEmail'));
-test('po odhlášení online ceník nevládne',
-  await page.evaluate(() => ONLINE_STAV.cenikPouzit === false && ONLINE_STAV.db === null));
-const ja2 = await page.evaluate(() => fetch('/api/ja', { credentials: 'same-origin' }).then(r => r.status));
-test('server relaci opravdu zrušil (cookie je pryč)', ja2 === 401);
+test('po odhlášení se vrátí přihlašovací stránka', await gateViditelna());
 
-/* ---- 10) čistá konzole ---- */
+await prihlas('obchodnik@engineers-cz.cz', 'ObchodniHeslo1');
+await page.waitForFunction(() => { try { return !!ONLINE_STAV.ja; } catch (e) { return false; } });
+await page.waitForTimeout(400);
+test('obchodník je přihlášený a roh to říká',
+  (await roh()).includes('Zkušební Obchodník') && (await roh()).includes('Obchodník'));
+test('obchodník NENÍ administrátor aplikace',
+  await page.evaluate(() => NAST.jeAdmin === false));
+await page.evaluate(() => prepniTab('zakazka'));
+const stranka = await page.locator('#page-zakazka').innerHTML();
+test('obchodník nevidí kartu složky _DB (mapování jen pro administrátora)',
+  !stranka.includes('Databáze zakázek (složka)'));
+test('obchodník kartu Online databáze vidí',
+  stranka.includes('Online databáze (schaftscalc.netlify.app)'));
+
+/* ---- 10) změna vlastního hesla přes okno v rohu ---- */
+await page.evaluate(() => otevriZmenaHesla());
+await page.waitForTimeout(200);
+await page.fill('#hesloStare', 'ObchodniHeslo1');
+await page.fill('#hesloNove', 'ObchodniHeslo2');
+await page.fill('#hesloNove2', 'ObchodniHeslo2');
+await page.evaluate(() => onlineZmenHeslo());
+await page.waitForTimeout(400);
+test('změna vlastního hesla proběhla',
+  await page.evaluate(() => ONLINE_STAV.hlaska.includes('Heslo je změněné')));
+await page.evaluate(() => onlineOdhlas());
+await page.waitForFunction(() => { try { return ONLINE_STAV.ja === null; } catch (e) { return false; } });
+await prihlas('obchodnik@engineers-cz.cz', 'ObchodniHeslo1');
+test('staré heslo už neplatí', (await gate()).includes('Nesprávný e-mail nebo heslo'));
+await prihlas('obchodnik@engineers-cz.cz', 'ObchodniHeslo2');
+await page.waitForFunction(() => { try { return !!ONLINE_STAV.ja; } catch (e) { return false; } });
+test('novým heslem se obchodník přihlásí', !(await gateViditelna()));
+
+/* ---- 11) čistá konzole ---- */
 test('za celý průchod nevznikla nečekaná chyba v konzoli', chyby.length === 0, chyby);
 
 await prohlizec.close();

@@ -89,6 +89,17 @@
   header .gear { background:transparent; border-color:#3a4761; color:#cdd7e8; font-size:16px; line-height:1; padding:6px 10px; }
   header .gear:hover { background:#2b3850; }
   .modal-overlay { position:fixed; inset:0; background:rgba(16,22,34,.55); z-index:50; display:flex; align-items:flex-start; justify-content:center; padding:40px 16px; overflow:auto; }
+  /* Přihlašovací stránka (4. 8. 2026): plné, NEPRŮHLEDNÉ pozadí – dokud se
+     nikdo nepřihlásí, z aplikace není vidět nic. Stojí nad všemi overlayi. */
+  .prihlaseni-overlay { position:fixed; inset:0; background:#eef2f7; z-index:200;
+    display:flex; align-items:center; justify-content:center; padding:24px; overflow:auto; }
+  .prihlaseni-box { background:#fff; border:1px solid var(--line); border-radius:12px;
+    box-shadow:0 12px 40px rgba(16,22,34,.14); padding:28px 30px; width:100%; max-width:420px; }
+  .prihlaseni-box h1 { margin:0 0 2px; font-size:22px; }
+  .prihlaseni-box .ver { display:block; margin-bottom:16px; }
+  .prihlaseni-box .row { max-width:none; }
+  .online-lista { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:#3b4453; }
+  .online-lista b { white-space:nowrap; }
   .modal { background:#fff; border-radius:12px; max-width:760px; width:100%; box-shadow:0 20px 60px rgba(0,0,0,.35); }
   .modal h2 { font-size:16px; margin:0; padding:16px 20px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:10px; }
   .modal .body { padding:18px 20px; }
@@ -567,6 +578,8 @@
     <input type="file" id="fileIn" accept=".json" style="display:none" onchange="nactiZakazku(event)">
     <button onclick="window.print()">Tisk / PDF</button>
     <button id="btnZpetAdmin" onclick="nastSetAdmin(true)">← Ukončit náhled uživatele</button>
+    <!-- pravý horní roh: kdo je přihlášený + Změnit heslo + Odhlásit (4. 8. 2026) -->
+    <span id="onlineLista" class="online-lista"></span>
     <button id="btnNastaveni" class="gear admin-only" title="Nastavení (jen administrátor)" onclick="otevriNastaveni()">⚙</button>
   </div>
 </header>
@@ -631,6 +644,15 @@
 <!-- online databáze – zakázky na serveru a správa účtů (4. 8. 2026) -->
 <div id="online-overlay" class="modal-overlay" style="display:none" onclick="if(event.target===this)zavriOnline()">
   <div class="modal" id="online-panel"></div>
+</div>
+<!-- změna vlastního hesla (vyžaduje staré heslo) -->
+<div id="heslo-overlay" class="modal-overlay" style="display:none" onclick="if(event.target===this)zavriZmenaHesla()">
+  <div class="modal" id="heslo-panel" style="max-width:460px"></div>
+</div>
+<!-- Přihlašovací stránka: nad http(s) zakrývá aplikaci, dokud se nikdo
+     nepřihlásí. Ze souboru (dvojklik, nouzovka) se nikdy neukáže. -->
+<div id="prihlaseni-overlay" class="prihlaseni-overlay" style="display:none">
+  <div class="prihlaseni-box" id="prihlaseni-box"></div>
 </div>
 <!-- #35 – rozdíly mezi ceníkem varianty a ceníkem dnešního sestavení -->
 <div id="prepocet-overlay" class="modal-overlay" style="display:none" onclick="if(event.target===this)zavriPrepocet()">
