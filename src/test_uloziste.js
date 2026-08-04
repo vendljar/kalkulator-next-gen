@@ -37,7 +37,8 @@ const { uloJmenoSouboru, uloJeZakazkovySoubor, uloKlicSouboru,
         uloRejstrikZaznam, uloRejstrikNormalizuj, uloRejstrikSloucit,
         uloRejstrikOdeber, uloRejstrikSerad, uloHledej,
         uloKontrolaZamku, uloProblemPopis, uloKolize, uloRazitko,
-        uloRazitkoNove, ULO_REJSTRIK_SOUBOR } = U;
+        uloRazitkoNove, ULO_REJSTRIK_SOUBOR,
+        uloZalohaRozhodni, uloZalohaStariDni, ULO_ZALOHA_STARI_DNI } = U;
 
 let ok = 0, fail = 0;
 const test = (n, cond, info) => { if (cond) { ok++; console.log('OK  ' + n); } else { fail++; console.log('FAIL ' + n, info || ''); } };
@@ -206,6 +207,60 @@ test('kolize hlásí, co je na disku', uloKolize(sRazitkem, '').naDisku === '202
 test('razítko chybí u zakázky uložené ručním exportem', uloRazitko(naDisku()) === '');
 test('nové razítko je ISO čas', /^\d{4}-\d{2}-\d{2}T/.test(uloRazitkoNove()));
 test('nové razítko lze předat zvenčí', uloRazitkoNove('2026-01-01T00:00:00.000Z') === '2026-01-01T00:00:00.000Z');
+
+/* ---------- 8) záloha rozpracované práce v prohlížeči ----------------
+ *
+ * Zadání 4. 8. 2026: „odstraň nějakou historickou nabídku, která vždy při
+ * spuštění vyžaduje potvrzení o rozpracovanosti nebo zahození". Lišta
+ * s dotazem se do teď ukázala pokaždé, když v prohlížeči ležela jakákoli
+ * záloha – bez ohledu na to, jak byla stará, jestli už je táž zakázka
+ * dávno v databázi a jestli se uživatel minule vyjádřil. Rozhodnutí, kdy
+ * má smysl se ptát, patří sem do modelu, aby šlo otestovat bez prohlížeče. */
+
+const TED = '2026-08-04T12:00:00.000Z';
+const pred = (dni, hodin) => new Date(Date.parse(TED) - ((dni * 24 + (hodin || 0)) * 3600e3)).toISOString();
+const zaloha = (uprav) => Object.assign({
+  verze: 1, kdy: pred(0, 1), cislo: '2026 - OPR - CN - 5', nazevAkce: 'Šachta Ostrava',
+  zakazka: '{"cislo":"2026 - OPR - CN - 5"}',
+}, uprav || {});
+
+test('prázdné úložiště se neptá', uloZalohaRozhodni(null, { ted: TED }).nabidnout === false);
+test('záznam bez zakázky se neptá a uklidí se',
+  uloZalohaRozhodni({ kdy: TED }, { ted: TED }).smazat === true);
+
+const cerstva = uloZalohaRozhodni(zaloha(), { ted: TED });
+test('čerstvá rozpracovaná zakázka se nabídne', cerstva.nabidnout === true, JSON.stringify(cerstva));
+test('čerstvá záloha se nemaže', cerstva.smazat === false);
+
+const stara = uloZalohaRozhodni(zaloha({ kdy: pred(8) }), { ted: TED });
+test('záloha starší než týden se nenabízí', stara.nabidnout === false, JSON.stringify(stara));
+test('záloha starší než týden se uklidí sama', stara.smazat === true);
+test('týden stará záloha se ještě nabídne',
+  uloZalohaRozhodni(zaloha({ kdy: pred(6, 23) }), { ted: TED }).nabidnout === true);
+
+const bezHlavicky = uloZalohaRozhodni(zaloha({ cislo: '', nazevAkce: '' }), { ted: TED });
+test('záloha bez čísla i názvu se nenabízí (nedá se poznat, co to je)',
+  bezHlavicky.nabidnout === false, JSON.stringify(bezHlavicky));
+test('záloha bez čísla i názvu se uklidí', bezHlavicky.smazat === true);
+test('stačí název akce, číslo chybět může',
+  uloZalohaRozhodni(zaloha({ cislo: '' }), { ted: TED }).nabidnout === true);
+
+const shodna = uloZalohaRozhodni(zaloha(), { ted: TED, otevrena: '{"cislo":"2026 - OPR - CN - 5"}' });
+test('záloha shodná s otevřenou zakázkou se nenabízí', shodna.nabidnout === false, JSON.stringify(shodna));
+test('záloha shodná s otevřenou zakázkou se ale nemaže', shodna.smazat === false);
+
+const odlozena = uloZalohaRozhodni(zaloha({ kdy: '2026-08-04T09:00:00.000Z' }),
+  { ted: TED, odlozeno: '2026-08-04T09:00:00.000Z' });
+test('jednou odložená a od té doby nezměněná záloha se už neptá',
+  odlozena.nabidnout === false, JSON.stringify(odlozena));
+test('odložená záloha se nemaže – uživatel ji nezahodil', odlozena.smazat === false);
+test('novější záloha se po odložení té starší zeptá znovu',
+  uloZalohaRozhodni(zaloha({ kdy: pred(0, 1) }), { ted: TED, odlozeno: '2026-08-04T09:00:00.000Z' }).nabidnout === true);
+
+test('záloha bez času se posuzuje jako čerstvá (radši se zeptat)',
+  uloZalohaRozhodni(zaloha({ kdy: '' }), { ted: TED }).nabidnout === true);
+test('nesmyslný čas zálohu nezahodí',
+  uloZalohaRozhodni(zaloha({ kdy: 'včera odpoledne' }), { ted: TED }).smazat === false);
 
 console.log('\n' + ok + ' prošlo, ' + fail + ' selhalo');
 process.exit(fail ? 1 : 0);

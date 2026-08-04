@@ -168,6 +168,72 @@ function uloUlozeniStav(vstup) {
     text: 'Zakázka ještě není v databázi – uložte ji. Dál se bude ukládat sama po každé změně.' };
 }
 
+/* ---------- záloha rozpracované práce v prohlížeči -------------------- */
+
+/* Prohlížeč si po každé změně odkládá stav zakázky do svého úložiště (třetí
+ * pojistka vedle databáze a souboru – viz ui/historie.js). Při startu se pak
+ * ukazovala lišta „V prohlížeči je rozpracovaná kalkulace… Chcete ji obnovit?".
+ *
+ * Problém, který uživatel nahlásil 4. 8. 2026: ta lišta se hlásila POKAŽDÉ.
+ * Stačilo, aby v úložišti něco leželo – klidně týden stará zkušební zakázka,
+ * kterou si nikdo nepamatuje – a aplikace při každém spuštění chtěla
+ * rozhodnout „obnovit / zahodit / teď ne". Pojistka proti ztrátě práce se tím
+ * změnila v otravný rituál, který se překlikává bez čtení; a přesně takový
+ * rituál pak jednou přepíše skutečnou práci.
+ *
+ * Ptát se má smysl jen tehdy, když je co obnovovat a člověk se k tomu ještě
+ * nevyjádřil. Rozhodnutí je tady v modelu (ne v UI), aby se dalo otestovat
+ * bez prohlížeče a aby platilo stejně pro OCK i PROJ.
+ *
+ * Vstup:  zaznam = { kdy, cislo, nazevAkce, zakazka } z úložiště prohlížeče
+ *         ctx    = { ted, otevrena (JSON právě otevřené zakázky), odlozeno
+ *                    (razítko zálohy, kterou už uživatel odložil) }
+ * Výstup: { nabidnout, smazat, duvod }
+ *
+ * `smazat` je úklid, ne mazání práce: týká se jen záloh, které se stejně
+ * nedají nabídnout (prázdná, bez hlavičky, starší než týden). Zálohu, o které
+ * má smysl se ptát, nesmaže nikdy nic než uživatel – nebo úspěšný zápis do
+ * databáze, po kterém je táž práce na serveru. */
+const ULO_ZALOHA_STARI_DNI = 7;
+
+/* Vrací stáří ve dnech, nebo null, když se čas nedá přečíst. Nečitelný čas
+ * není důvod zálohu zahodit – radši se zeptáme, než abychom mazali. */
+function uloZalohaStariDni(kdy, ted) {
+  const t = Date.parse(kdy || '');
+  if (!kdy || Number.isNaN(t)) return null;
+  const ted2 = Date.parse(ted || '') || Date.now();
+  return (ted2 - t) / 86400000;
+}
+
+function uloZalohaRozhodni(zaznam, ctx) {
+  const c = ctx || {};
+  const z = zaznam || null;
+  if (!z || !z.zakazka)
+    return { nabidnout: false, smazat: !!z, duvod: 'prázdná záloha' };
+
+  /* Bez čísla nabídky i bez názvu akce se v liště nedá napsat, CO se má
+   * obnovit („bez názvu“) – a od zadání ze 4. 8. 2026 se každá zakázka
+   * zakládá vyplněnou hlavičkou. Takový záznam je zbytek starého provozu. */
+  if (!uloCisloVyplneno(z.cislo) && !uloCisloVyplneno(z.nazevAkce))
+    return { nabidnout: false, smazat: true, duvod: 'záloha bez čísla i názvu akce' };
+
+  const stari = uloZalohaStariDni(z.kdy, c.ted);
+  if (stari !== null && stari > ULO_ZALOHA_STARI_DNI)
+    return { nabidnout: false, smazat: true,
+             duvod: 'záloha je starší než ' + ULO_ZALOHA_STARI_DNI + ' dní' };
+
+  /* Totéž, co je právě na obrazovce – obnovovat by nebylo co. */
+  if (c.otevrena && c.otevrena === z.zakazka)
+    return { nabidnout: false, smazat: false, duvod: 'shodná s otevřenou zakázkou' };
+
+  /* „Teď ne" platí, dokud se záloha nezmění. Jakmile v ní přibude nová práce,
+   * změní se razítko a aplikace se zeptá znovu – to už je jiná nabídka. */
+  if (c.odlozeno && c.odlozeno === String(z.kdy || ''))
+    return { nabidnout: false, smazat: false, duvod: 'uživatel ji už odložil' };
+
+  return { nabidnout: true, smazat: false, duvod: 'rozpracovaná práce k obnovení' };
+}
+
 /* ---------- razítko posledního zápisu -------------------------------- */
 
 /* Každý zápis do složky si do zakázky poznamená čas. Podle něj se pozná,
@@ -327,6 +393,7 @@ if (typeof module !== 'undefined')
                      uloNorm, uloSlova, uloCisloVyplneno, uloKlicSouboru,
                      uloJmenoSouboru, uloJeZakazkovySoubor,
                      ULO_HLAVICKA_POLE, uloHlavickaChybi, uloHlavickaVyplnena, uloUlozeniStav,
+                     ULO_ZALOHA_STARI_DNI, uloZalohaStariDni, uloZalohaRozhodni,
                      uloRazitkoNove, uloRazitko, uloKolize,
                      uloRejstrikZaznam, uloRejstrikNormalizuj, uloRejstrikSloucit,
                      uloRejstrikOdeber, uloRejstrikSerad, uloHledej,
