@@ -45,6 +45,10 @@ const ONLINE_STAV = {
   hledat: '',
   uzivatele: [],
   uzivateleNacteno: false, // seznam účtů už byl (aspoň jednou) vyžádán
+  /* Formulář „založit účet" žije ve stavu, ne jen v polích: panel se při
+   * každé akci překresluje a hodnoty v DOM by se ztratily. Maže se až po
+   * ÚSPĚŠNÉM založení — po chybě zůstává vyplněný (4. 8. 2026 večer). */
+  uzForm: { email: '', jmeno: '', role: 'Obchodník', heslo: '' },
   hesloPro: '',      // e-mail účtu, u kterého je rozbalený reset hesla
   formEmail: '',     // přihlašovací formulář přežívá překreslení
   formHeslo: '',
@@ -327,21 +331,43 @@ function onlineUzivateleObnov() {
     renderNastaveni();
 }
 
-function onlineUzAkce(telo, hotovo) {
+/* opts.poUspechu(odpoved) se provede po úspěchu JEŠTĚ PŘED novým načtením
+ * seznamu — výsledek akce se promítne do obrazovky okamžitě z odpovědi
+ * serveru a nezávisí na tom, kdy se zápis propíše do výpisu úložiště. */
+function onlineUzAkce(telo, hotovo, opts) {
+  opts = opts || {};
   ONLINE_STAV.pracuje = true; onlineUzivateleObnov();
   return onlineApi('/api/uzivatele', telo)
-    .then(() => { onlineZprava(hotovo); return onlineUzivateleNacti(); })
+    .then(o => {
+      if (opts.poUspechu) opts.poUspechu(o);
+      onlineZprava(hotovo);
+      return onlineUzivateleNacti();
+    })
     .catch(e => { onlineZprava(e.message, 'varovani'); return false; })
     .then(v => { ONLINE_STAV.pracuje = false; onlineUzivateleObnov(); return v; });
 }
 
 function onlineUzZaloz() {
-  const g = id => { const el = document.getElementById(id); return el ? el.value : ''; };
-  const email = g('onlineUzEmail').trim(), jmeno = g('onlineUzJmeno').trim();
-  const role = g('onlineUzRole'), heslo = g('onlineUzHeslo');
-  if (!email || !heslo) { onlineZprava('Vyplňte e-mail i počáteční heslo (min. 8 znaků).', 'varovani'); onlineUzivateleObnov(); return; }
-  onlineUzAkce({ akce: 'zaloz', email, jmeno, role, heslo },
-    'Účet ' + email + ' (' + role + ') je založený. Heslo předejte osobně – e-mailem se neposílá.');
+  const f = ONLINE_STAV.uzForm;
+  const email = String(f.email || '').trim().toLowerCase();
+  /* Stejná pravidla jako na serveru, ale s hláškou hned a bez smazání
+   * formuláře — serverové odmítnutí vypadalo jako „nic se nestalo". */
+  if (!email || email.indexOf('@') < 1) {
+    onlineZprava('Vyplňte platný e-mail (bude sloužit jako uživatelské jméno).', 'varovani');
+    onlineUzivateleObnov(); return Promise.resolve(false);
+  }
+  if (!f.heslo || f.heslo.length < 8) {
+    onlineZprava('Počáteční heslo musí mít aspoň 8 znaků.', 'varovani');
+    onlineUzivateleObnov(); return Promise.resolve(false);
+  }
+  return onlineUzAkce({ akce: 'zaloz', email, jmeno: String(f.jmeno || '').trim(), role: f.role, heslo: f.heslo },
+    'Účet ' + email + ' (' + f.role + ') je založený. Heslo předejte osobně – e-mailem se neposílá.',
+    { poUspechu: () => {
+      /* nový účet do tabulky hned z odpovědi; formulář se maže až teď */
+      if (!ONLINE_STAV.uzivatele.some(u => u.email === email))
+        ONLINE_STAV.uzivatele.push({ email, jmeno: String(f.jmeno || '').trim(), role: f.role, aktivni: true });
+      ONLINE_STAV.uzForm = { email: '', jmeno: '', role: 'Obchodník', heslo: '' };
+    } });
 }
 
 function onlineUzHesloPanel(email) {
@@ -711,18 +737,28 @@ function onlineRadekUzivatele(u) {
 /* HTML správy účtů. Vykresluje se v panelu Nastavení (vnitřní záložka
  * Uživatelé) – tam, kde uživatel správu hledá (zadání 4. 8. 2026). */
 function onlineUzivateleHtml() {
-  return `<table class="vartbl archtbl">
+  const f = ONLINE_STAV.uzForm;
+  /* Hláška (úspěch i odmítnutí serverem) se ukazuje PŘÍMO TADY — dřív šla
+   * jen do karty na jiné záložce a založení účtu vypadalo, že nic nedělá. */
+  return `${ONLINE_STAV.hlaska ? `<div class="${zapisTridaHlasky(ONLINE_STAV.hlaskaTyp)}">${esc(ONLINE_STAV.hlaska)}</div>` : ''}
+    <table class="vartbl archtbl">
       <tr><th style="text-align:left">E-mail</th><th style="text-align:left">Jméno</th>
           <th>Role</th><th>Aktivní</th><th></th></tr>
       ${ONLINE_STAV.uzivatele.map(onlineRadekUzivatele).join('')}</table>
-    <div class="note" style="margin-top:12px"><b>Založit nový účet</b> – heslo je počáteční,
-      předejte ho osobně (e-mailem se nic neposílá):</div>
-    <div class="row"><label>E-mail</label><input type="email" id="onlineUzEmail"><span class="u"></span></div>
-    <div class="row"><label>Jméno</label><input type="text" id="onlineUzJmeno"><span class="u"></span></div>
-    <div class="row"><label>Role</label><select id="onlineUzRole">
-      <option>Obchodník</option><option>Vedoucí</option><option>Administrátor</option></select><span class="u"></span></div>
-    <div class="row"><label>Počáteční heslo</label><input type="password" id="onlineUzHeslo"><span class="u"></span></div>
-    <div class="btns" style="margin-top:8px"><button class="primary" onclick="onlineUzZaloz()">Založit účet</button></div>
+    <div class="note" style="margin-top:12px"><b>Založit nový účet</b> – heslo je počáteční
+      (min. 8 znaků), předejte ho osobně (e-mailem se nic neposílá):</div>
+    <div class="row"><label>E-mail</label><input type="email" id="onlineUzEmail" value="${esc(f.email)}"
+      oninput="ONLINE_STAV.uzForm.email=this.value"><span class="u"></span></div>
+    <div class="row"><label>Jméno</label><input type="text" id="onlineUzJmeno" value="${esc(f.jmeno)}"
+      oninput="ONLINE_STAV.uzForm.jmeno=this.value"><span class="u"></span></div>
+    <div class="row"><label>Role</label><select id="onlineUzRole" onchange="ONLINE_STAV.uzForm.role=this.value">
+      ${['Obchodník', 'Vedoucí', 'Administrátor'].map(r => `<option ${r === f.role ? 'selected' : ''}>${r}</option>`).join('')}
+    </select><span class="u"></span></div>
+    <div class="row"><label>Počáteční heslo</label><input type="password" id="onlineUzHeslo" value="${esc(f.heslo)}"
+      oninput="ONLINE_STAV.uzForm.heslo=this.value"
+      onkeydown="if(event.key==='Enter')onlineUzZaloz()"><span class="u"></span></div>
+    <div class="btns" style="margin-top:8px"><button class="primary" onclick="onlineUzZaloz()"
+      ${ONLINE_STAV.pracuje ? 'disabled' : ''}>Založit účet</button></div>
     <div class="note">Hlavnímu administrátorskému účtu nejde snížit role ani ho vypnout – hlídá to
       server, aby si správce omylem nezamkl dveře. Reset hesla dělá vždy administrátor tady;
       žádná obnova e-mailem není. Každý uživatel si navíc může změnit vlastní heslo sám

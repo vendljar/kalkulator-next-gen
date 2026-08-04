@@ -23,7 +23,12 @@ export const ROLE = ['Obchodník', 'Vedoucí', 'Administrátor'];
 export async function uloziste(nazev) {
   if (globalThis.__TEST_ULOZISTE) return globalThis.__TEST_ULOZISTE(nazev);
   const { getStore } = await import('@netlify/blobs');
-  const s = getStore(nazev);
+  /* consistency: 'strong' je NUTNÉ. Výchozí režim Blobs je „eventual" —
+   * čtení hned po zápisu smí vrátit starý stav. V praxi (4. 8. 2026 večer):
+   * administrátor založil účet, seznam načtený hned nato ho nenesl a
+   * v obrazovce to vypadalo, že se účet nezaložil. Silná konzistence
+   * platí pro všechna úložiště: účty, ceník, zakázky i zálohy. */
+  const s = getStore({ name: nazev, consistency: 'strong' });
   return {
     async cti(klic) { return await s.get(klic, { type: 'json' }); },
     async zapis(klic, hodnota) { await s.setJSON(klic, hodnota); },
