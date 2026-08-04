@@ -4,8 +4,9 @@ Netlify neprovozuje trvale běžící server. Funguje to tak, že si při každ�
 nasazení SÁM sestaví web z GitHub repozitáře (spustí `python3 build.py` nad
 vynulovanými zdrojáky — žádná ceníková hodnota v repozitáři není a není ani
 ve výsledném webu) a adresy `/api/…` obsluhují serverové funkce ze složky
-`netlify/functions`. Vše je připravené v repozitáři: `netlify.toml` +
-dvě funkce (`/api/zdravi`, `/api/vypocet`).
+`netlify/functions`. Vše je připravené v repozitáři: `netlify.toml`, funkce
+(`/api/zdravi`, `/api/vypocet` a od v4.8.1 celá online databáze) a
+`package.json` se závislostí `@netlify/blobs` (Netlify si ji nainstaluje sám).
 
 ## Propojení (jednorázově, ~5 minut)
 
@@ -20,19 +21,38 @@ dvě funkce (`/api/zdravi`, `/api/vypocet`).
 4. Kontrola: `https://schaftscalc.netlify.app/api/zdravi` musí odpovědět
    `{ ok: true, verze: … }` a kořen webu musí otevřít kalkulačku.
 
-## Co bude fungovat hned
+## Online databáze (od v4.8.1) — dvě proměnné prostředí
+
+Přihlašování a databáze potřebují dvě hodnoty, které si nastavuješ VÝHRADNĚ
+sám v Netlify (nikdy se neposílají konverzací ani nepatří do repozitáře):
+
+1. **Site configuration → Environment variables → Add a variable:**
+   - `TAJEMSTVI_RELACE` — libovolný náhodný text, **aspoň 16 znaků**.
+     Podepisují se jím přihlašovací relace; kdo ho zná, mohl by se vydávat
+     za přihlášeného — nikomu ho nesděluj a nikam nezapisuj.
+   - `ADMIN_INIT_HESLO` — počáteční heslo administrátora (aspoň 8 znaků).
+2. Proměnné se do funkcí propíšou při dalším nasazení — buď nahraj nové
+   dávky, nebo dej **Deploys → Trigger deploy**.
+3. Otevři web → záložka **Zakázka** → karta **Online databáze** → přihlas se
+   jako `vendl.jaroslav@engineers-cz.cz` s heslem z `ADMIN_INIT_HESLO`.
+   **Prvním přihlášením se účet založí** (heslo se uloží jen jako otisk).
+   Potom můžeš `ADMIN_INIT_HESLO` z Netlify smazat; heslo si kdykoli změníš
+   v kartě **Uživatelé…** („Nové heslo…" u svého účtu).
+4. První naplnění: připoj složku `_DB`, na záložce Ceník dej **„Zveřejnit
+   ceník této varianty online"** a zakázky ulož tlačítkem **„Uložit online"**.
+
+## Co funguje
 
 - Celá kalkulačka v prohlížeči, odkudkoli a z jakéhokoli zařízení.
-- Skutečný ceník: v aplikaci připoj složku `_DB` tlačítkem jako dosud —
-  File System Access funguje i nad https, data zůstávají u tebe.
-- `/api/zdravi` a `/api/vypocet` (výpočet zakázky na serveru službou K2).
-
-## Co přijde v dalším kroku (po ověření, že web běží)
-
-Přihlašování e-mail + heslo se třemi rolemi, serverová databáze zakázek
-a ceníku (Netlify Blobs) a noční zálohy na Disk Google (#77). Poznámka:
-pokud je web zatím zaheslovaný ochranou Netlify (odpovídá 401), vypni ji
-v Site configuration → Site protection, až budeš chtít pustit kolegy.
+- Online databáze: zakázky i platný ceník na serveru po přihlášení; správa
+  účtů (role Obchodník / Vedoucí / Administrátor, reset hesla administrátorem).
+- Zálohy: denní odlévání do připojené složky na Disku Google + noční otisk
+  na serveru (plánovaná funkce ve 2:00 UTC).
+- Přechodné období: dokud je připojená složka `_DB`, má přednost — všechno
+  se chová jako dosud. Bez složky vládne online databáze.
+- Poznámka: pokud je web zaheslovaný ochranou Netlify (odpovídá 401), vypni
+  ji v Site configuration → Site protection — aplikace už má vlastní
+  přihlašování.
 
 ## Každá další verze
 

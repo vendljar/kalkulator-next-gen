@@ -1,0 +1,8 @@
+{
+  "name": "kalkulator-next-gen",
+  "private": true,
+  "description": "Kalkulátor cen OCK + PROJ (ENGINEERS CZ). Jediná npm závislost slouží serverovým funkcím na Netlify (online databáze v Netlify Blobs); aplikace sama zůstává jednosouborová a bez závislostí.",
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  }
+}

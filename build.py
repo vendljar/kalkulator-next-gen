@@ -32,7 +32,7 @@ CORE = ['build_info.js',
 UI = ['ui/common.js', 'ui/kalk_ock.js', 'ui/detail_ui.js', 'ui/techspec_ui.js', 'ui/specdata_ui.js',
       'ui/kryci_ui.js', 'ui/kryci_proj_ui.js', 'ui/kalk_proj.js', 'ui/nabidka_proj_ui.js',
       'ui/cenik_stari_ui.js', 'ui/cenik_ui.js',
-      'ui/zaokrouhleni_ui.js', 'ui/marze_ui.js', 'ui/zakazka_ui.js', 'ui/ares_ui.js', 'ui/zamek_ui.js', 'ui/build_info_ui.js', 'ui/ukazkove_ui.js', 'ui/kontroly_ui.js', 'ui/poznamky_ui.js', 'ui/protokol_ui.js', 'ui/seznam_ui.js', 'ui/archiv_ui.js', 'ui/program_ui.js', 'ui/nastaveni_db_ui.js', 'ui/uloziste_ui.js', 'ui/nastaveni_ui.js', 'ui/historie.js']
+      'ui/zaokrouhleni_ui.js', 'ui/marze_ui.js', 'ui/zakazka_ui.js', 'ui/ares_ui.js', 'ui/zamek_ui.js', 'ui/build_info_ui.js', 'ui/ukazkove_ui.js', 'ui/kontroly_ui.js', 'ui/poznamky_ui.js', 'ui/protokol_ui.js', 'ui/seznam_ui.js', 'ui/archiv_ui.js', 'ui/program_ui.js', 'ui/nastaveni_db_ui.js', 'ui/uloziste_ui.js', 'ui/online_ui.js', 'ui/nastaveni_ui.js', 'ui/historie.js']
 
 # ---- verze: DEN.MĚSÍC.pořadí buildu v daném dni ----
 verfile = root / 'verze.txt'
