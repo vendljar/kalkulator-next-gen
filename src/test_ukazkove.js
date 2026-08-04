@@ -220,6 +220,37 @@ test('text s výběrem složky nabídne obojí – tlačítko i Nastavení',
   && /Nastavení/.test(ukazkoveText(prazdnyStav, 'vybrat')),
   ukazkoveText(prazdnyStav, 'vybrat'));
 
+/* ---------- 7c) běžný uživatel žádnou složku nepřipojuje ----------
+ * Zadání 4. 8. 2026: „Přihlásil jsem se jako nový uživatel (obchodník)
+ * a přesto to po mně chce připojit databázi."
+ *
+ * Obchodník bere ceník z online databáze; složku _DB mapuje výhradně
+ * administrátor. Věta „připojte složku _DB" je pro něj slepá ulička –
+ * nemá k té složce na disku přístup, a i kdyby měl, není jeho práce ji
+ * hlídat. Správná informace zní: platný ceník zveřejňuje administrátor.
+ * Rozhoduje o tom čtvrtý parametr `bezSlozky`, aby se to dalo ověřit
+ * bez prohlížeče. */
+const tBezSlozky = ukazkoveText(prazdnyStav, 'vybrat', '_DB', true);
+test('text pro běžného uživatele nemluví o složce',
+  !/složk/i.test(tBezSlozky) && !/_DB/.test(tBezSlozky), tBezSlozky);
+test('text pro běžného uživatele pošle za administrátorem',
+  /administrátor/i.test(tBezSlozky), tBezSlozky);
+test('text pro běžného uživatele nenabízí Nastavení → Úložiště',
+  !/Úložiště/.test(tBezSlozky), tBezSlozky);
+test('text pro administrátora zůstal beze změny',
+  ukazkoveText(prazdnyStav, 'vybrat', '_DB') === ukazkoveText(prazdnyStav, 'vybrat', '_DB', false));
+const kBezSlozky = ukazkoveKratce(prazdnyStav, true);
+test('krátký text pro běžného uživatele nemluví o složce',
+  !/složk/i.test(kBezSlozky) && !/_DB/.test(kBezSlozky), kBezSlozky);
+test('krátký text pro běžného uživatele mluví o administrátorovi a zveřejnění',
+  /administrátor/i.test(kBezSlozky) && /zveřejn/i.test(kBezSlozky), kBezSlozky);
+test('krátký text pro běžného uživatele pořád říká, že dokument nevznikne',
+  /nedá vytvořit/i.test(kBezSlozky), kBezSlozky);
+test('krátký text pro administrátora zůstal beze změny',
+  ukazkoveKratce(prazdnyStav) === ukazkoveKratce(prazdnyStav, false));
+test('u pouhých ukázkových cen se běžnému uživateli text nemění',
+  ukazkoveKratce(jenCeny, true) === ukazkoveKratce(jenCeny));
+
 /* ---------- 8) zkušební ceník se nesmí dostat do sestavení ----------
  * Kulatá čísla nezmizela, jen se přestěhovala do zkusebni_cenik.js, ze
  * kterého čtou testy. Jistota, že tudy nevede cesta ven, stojí a padá

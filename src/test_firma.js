@@ -123,5 +123,43 @@ const Fbez = fm.firmaDefault(); Fbez.telefon = '   ';
 test('bílé znaky se počítají jako nevyplněné', fm.firmaKontrola(Fbez).chybi.includes('Telefon'));
 test('kontrola nic nevyhazuje ani pro null', typeof fm.firmaKontrola(null) === 'object');
 
+/* --- 8) zveřejnění firemních údajů do online databáze (4. 8. 2026) ---
+ * Obchodník složku _DB nemapuje, takže skutečné údaje k němu můžou přijít
+ * jen ze serveru. Zveřejnit se ale smí výhradně to, co je opravdu skutečné –
+ * jinak by se vzorová adresa rozeslala všem najednou místo jednomu. */
+test('ukázkové údaje ze sestavení se zveřejnit nedají', (() => {
+  const v = fm.firmaLzeZverejnit(fm.firmaDefault());
+  return v.ok === false && /ukázkov/i.test(v.duvod);
+})(), JSON.stringify(fm.firmaLzeZverejnit(fm.firmaDefault())));
+const Fskut = fm.firmaDefault(); delete Fskut.ukazkove;
+test('skutečné a vyplněné údaje se zveřejnit dají', fm.firmaLzeZverejnit(Fskut).ok === true,
+  fm.firmaLzeZverejnit(Fskut).duvod);
+const Fdira = fm.firmaDefault(); delete Fdira.ukazkove; Fdira.ico = '';
+test('chybějící povinné pole zveřejnění zastaví', (() => {
+  const v = fm.firmaLzeZverejnit(Fdira);
+  return v.ok === false && v.duvod.includes('IČO');
+})(), JSON.stringify(fm.firmaLzeZverejnit(Fdira)));
+test('nic (null) se zveřejnit nedá', fm.firmaLzeZverejnit(null).ok === false);
+test('kopie ke zveřejnění nenese značku ukázkových dat',
+  fm.firmaKZverejneni(fm.firmaDefault()).ukazkove === undefined);
+test('kopie ke zveřejnění nese všechna vyplněná pole',
+  fm.firmaKZverejneni(Fskut).nazev === D.nazev && fm.firmaKZverejneni(Fskut).sidloMesto === D.sidloMesto);
+test('kopie ke zveřejnění zahodí cizí klíče', (() => {
+  const s = fm.firmaDefault(); s.necoCizeho = 'x'; delete s.ukazkove;
+  return fm.firmaKZverejneni(s).necoCizeho === undefined;
+})());
+test('logo se ke zveřejnění bere s sebou', (() => {
+  const s = fm.firmaDefault(); delete s.ukazkove; s.logo = 'data:image/png;base64,AAA'; s.logoNazev = 'l.png';
+  const k = fm.firmaKZverejneni(s);
+  return k.logo === s.logo && k.logoNazev === 'l.png';
+})());
+test('zveřejněná kopie projde kontrolou stejně jako originál',
+  fm.firmaLzeZverejnit(fm.firmaKZverejneni(Fskut)).ok === true);
+/* Past, do které jsem 4. 8. 2026 spadl: kontrola se pouštěla až na kopii,
+ * a protože kopie značku neopisuje, ukázková firma jí prošla. Test to drží. */
+test('kontrola na KOPII ukázkové firmy nic nepozná – proto se ptá originálu',
+  fm.firmaLzeZverejnit(fm.firmaKZverejneni(fm.firmaDefault())).ok === true
+  && fm.firmaLzeZverejnit(fm.firmaDefault()).ok === false);
+
 console.log(fail ? `\n${fail} CHYB` : '\nVŠECHNY TESTY FIRMA OK');
 process.exit(fail ? 1 : 0);

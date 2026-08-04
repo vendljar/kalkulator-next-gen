@@ -132,6 +132,61 @@ test('obnova nahrála zálohovanou zakázku',
   await page.evaluate(() => ZAK.nazevAkce) === 'Kouřový test výtahu',
   await page.evaluate(() => ZAK.nazevAkce));
 
+/* ---- horní lišta: jen Zpět/Znovu (zadání 4. 8. 2026) ----
+ * „Z horní lišty odstraň 3 světlá tlačítka a zvýrazni nějak zpět a znovu."
+ * Odstraněná tlačítka nesmí zmizet ze světa – jen z hlavičky: ukládání
+ * a načítání žije na záložce Přehled cenových nabídek, tisk má každý
+ * dokument u svého náhledu. Skrytý #fileIn musí v dokumentu zůstat,
+ * protože „Načíst zakázku" na něj kliká za uživatele. */
+const lista = await page.evaluate(() => {
+  const h = document.querySelector('header');
+  const t = h ? h.innerText : '';
+  const b = id => {
+    const e = document.getElementById(id); if (!e) return null;
+    const s = getComputedStyle(e);
+    return { pozadi: s.backgroundColor, stin: s.boxShadow, ram: s.borderColor, vidno: e.offsetParent !== null };
+  };
+  return { text: t, fileIn: !!document.getElementById('fileIn'),
+           zpet: b('btnHistZpet'), znovu: b('btnHistZnovu') };
+});
+test('v hlavičce už není „Uložit zakázku"', !/Uložit zakázku/.test(lista.text), lista.text);
+test('v hlavičce už není „Tisk / PDF"', !/Tisk\s*\/\s*PDF/.test(lista.text), lista.text);
+test('v hlavičce už není samostatné „Načíst"', !/Načíst/.test(lista.text), lista.text);
+test('skrytý vstup na soubor v dokumentu zůstal', lista.fileIn === true);
+test('Zpět i Znovu v hlavičce jsou', !!lista.zpet && !!lista.znovu);
+test('Zpět i Znovu jsou vidět', lista.zpet.vidno === true && lista.znovu.vidno === true);
+
+/* Zvýraznění se pozná jen u činného tlačítka: zhasnuté má splývat s lištou,
+ * činné být světlé a orámované. Historie je po obnově zálohy neprázdná, takže
+ * Zpět tady musí být činné – kdyby nebylo, měřilo by se zhasnuté tlačítko
+ * a test by mlčky prošel s nic neříkajícími hodnotami. Proto se tu napřed
+ * schválně udělá změna – na prázdné historii by měření nedávalo smysl. */
+await page.evaluate(() => { set('Z.pocetZastavek', String((+Z.pocetZastavek || 2) + 1)); });
+/* Historie se zapisuje se zpožděním (HIST_PRODLEVA), aby psaní do políčka
+ * nedělalo krok za každé písmeno – čeká se tedy na výsledek, ne na hodiny. */
+await page.waitForFunction(() => !document.getElementById('btnHistZpet').disabled,
+  null, { timeout: 5000 }).catch(() => {});
+test('Zpět je po změně v zakázce činné', !(await page.locator('#btnHistZpet').isDisabled()));
+const zvyrazneni = await page.evaluate(() => {
+  const e = document.getElementById('btnHistZpet'), s = getComputedStyle(e);
+  const h = document.querySelector('header'), sh = getComputedStyle(h);
+  return { pozadi: s.backgroundColor, stin: s.boxShadow, lista: sh.backgroundColor };
+});
+test('činné Zpět je světlé, ne v barvě lišty',
+  zvyrazneni.pozadi !== zvyrazneni.lista && /255,\s*255,\s*255/.test(zvyrazneni.pozadi),
+  JSON.stringify(zvyrazneni));
+test('činné Zpět má zvýrazňující obrys', zvyrazneni.stin !== 'none' && zvyrazneni.stin !== '',
+  zvyrazneni.stin);
+
+/* A totéž z druhé strany: co z hlavičky zmizelo, musí být k nalezení jinde. */
+await page.evaluate(() => prepniTab('zakazka'));
+await page.waitForTimeout(200);
+const zak = await page.locator('#page-zakazka').innerText();
+test('„Uložit zakázku (JSON)" je na záložce Přehled cenových nabídek', zak.includes('Uložit zakázku (JSON)'));
+test('„Načíst zakázku" je na záložce Přehled cenových nabídek', zak.includes('Načíst zakázku'));
+await page.evaluate(() => prepniTab('kalk'));
+await page.waitForTimeout(150);
+
 /* ---- nastavení včetně Slovníku (#5) ---- */
 await page.evaluate(() => { NAST.jeAdmin = true; otevriNastaveni(); });
 await page.waitForTimeout(200);

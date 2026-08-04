@@ -120,9 +120,17 @@
   #btnZpetAdmin { display:none; background:#b45309; border-color:#b45309; color:#fff; }
   body.role-user #btnZpetAdmin { display:inline-block; }
   /* ochrana rozpracované práce (#1): Zpět/Znovu, stav zálohy, lišta obnovy */
-  header .hist { background:transparent; border-color:#3a4761; color:#cdd7e8; padding:6px 10px; }
-  header .hist:hover:not(:disabled) { background:#2b3850; }
-  header .hist:disabled { opacity:.3; cursor:default; }
+  /* Zpět/Znovu jsou po úklidu hlavičky (4. 8. 2026) jediná pracovní tlačítka
+     nahoře – a zároveň jediná pojistka proti ztrátě rozdělané práce. Dokud
+     byla průhledná, splývala s pozadím a v šedivém stavu je nebylo vidět
+     vůbec. Teď svítí bíle s tmavým písmem a aktivní „Zpět" má ještě modrý
+     rámeček, aby bylo poznat, že je co vracet. */
+  header .hist { background:#fff; border-color:#fff; color:#16233a; padding:7px 14px;
+    font-weight:600; font-size:13px; box-shadow:0 1px 3px rgba(0,0,0,.35); }
+  header .hist:hover:not(:disabled) { background:#dbe7fb; border-color:#dbe7fb; }
+  header .hist:not(:disabled) { border-color:#7aa7f5; box-shadow:0 0 0 2px rgba(122,167,245,.35); }
+  header .hist:disabled { background:#2b3850; border-color:#3a4761; color:#8593ab;
+    box-shadow:none; opacity:.75; cursor:default; }
   #autoStav { color:#9fb0c8; font-size:11px; white-space:nowrap; align-self:center; }
   #obnovaLista { display:none; background:#fef3c7; border-bottom:1px solid #fcd34d; color:#78350f;
     padding:10px 22px; font-size:13px; align-items:center; gap:10px; flex-wrap:wrap; }
@@ -570,13 +578,20 @@
   <span class="ver">OCK dle šablony VZOR v1.00 / v22.7.1 · PROJ dle interního vzoru · <span id="rezimPill" class="pill warn">výpočet: 1:1 jako Excel (vč. jeho chyb)</span></span>
   <span class="sp"></span>
   <div class="btns">
-    <button id="btnHistZpet" class="hist jsHistZpet" disabled onclick="historieZpet()">↶ Zpět</button>
-    <button id="btnHistZnovu" class="hist jsHistZnovu" disabled onclick="historieZnovu()">↷ Znovu</button>
+    <!-- Zpět/Znovu jsou jediná tlačítka hlavičky, která se používají pořád –
+         proto jsou od 4. 8. 2026 světlá a výrazná (zadání: „Z horní lišty
+         odstraň 3 světlá tlačítka a zvýrazni nějak zpět a znovu"). Uložit
+         zakázku, Načíst a Tisk / PDF z hlavičky zmizely; žijí dál na záložce
+         Přehled cenových nabídek (Uložit zakázku (JSON) / Načíst zakázku)
+         a tisk je u každého dokumentu vlastním tlačítkem. -->
+    <button id="btnHistZpet" class="hist jsHistZpet" disabled onclick="historieZpet()"
+      title="Vrátit poslední změnu (Ctrl+Z)">↶ Zpět</button>
+    <button id="btnHistZnovu" class="hist jsHistZnovu" disabled onclick="historieZnovu()"
+      title="Vrátit zpět vrácenou změnu (Ctrl+Y)">↷ Znovu</button>
     <span id="autoStav"></span>
-    <button onclick="ulozZakazku()">Uložit zakázku</button>
-    <button onclick="document.getElementById('fileIn').click()">Načíst</button>
+    <!-- Vstup zůstává v dokumentu: „Načíst zakázku" na záložce Přehled
+         cenových nabídek na něj klikne za uživatele. -->
     <input type="file" id="fileIn" accept=".json" style="display:none" onchange="nactiZakazku(event)">
-    <button onclick="window.print()">Tisk / PDF</button>
     <button id="btnZpetAdmin" onclick="nastSetAdmin(true)">← Ukončit náhled uživatele</button>
     <!-- pravý horní roh: kdo je přihlášený + Změnit heslo + Odhlásit (4. 8. 2026) -->
     <span id="onlineLista" class="online-lista"></span>

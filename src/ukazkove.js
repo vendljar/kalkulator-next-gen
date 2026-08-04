@@ -113,7 +113,7 @@ function ukazkoveStav(ctx) {
 
 /* Věta do lišty. Rozlišuje případy, protože každý znamená jinou práci:
  * chybí ceník úplně, jsou vymyšlené ceny, chybí firemní údaje. */
-function ukazkoveText(stav, pripojeni, jmeno) {
+function ukazkoveText(stav, pripojeni, jmeno, bezSlozky) {
   if (!stav || !stav.jsou) return '';
   const co = stav.prazdne
     ? (stav.udaje
@@ -123,14 +123,23 @@ function ukazkoveText(stav, pripojeni, jmeno) {
         ? 'Ceny i firemní údaje jsou ukázkové, ne skutečné.'
         : (stav.ceny ? 'Ceny jsou ukázkové, ne skutečné.'
                      : 'Firemní údaje jsou ukázkové, ne skutečné.'));
-  return co + ' ' + ukazkoveKudy(pripojeni, jmeno);
+  return co + ' ' + ukazkoveKudy(pripojeni, jmeno, bezSlozky);
 }
 
 /* Druhá věta lišty: kudy ven. Liší se podle toho, co je opravdu potřeba
  * udělat – „připojte složku" je zbytečně velký úkol pro někoho, komu
  * prohlížeč jen po restartu zapomněl právo k zápisu do složky, kterou už
  * jednou vybral. */
-function ukazkoveKudy(pripojeni, jmeno) {
+function ukazkoveKudy(pripojeni, jmeno, bezSlozky) {
+  /* Běžný uživatel (obchodník, vedoucí) složku _DB nemapuje – ceník mu chodí
+   * z online databáze a zveřejňuje ho tam administrátor (zadání 4. 8. 2026:
+   * „Přihlásil jsem se jako nový uživatel (obchodník) a přesto to po mně chce
+   * připojit databázi."). Poslat ho pro složku na disku je slepá ulička:
+   * nemá k ní přístup a chyba není u něj. Řekneme mu tedy jedinou větu,
+   * se kterou se dá něco dělat – ozvat se administrátorovi. */
+  if (bezSlozky)
+    return 'Platný ceník zveřejňuje do online databáze administrátor. '
+      + 'Požádejte ho o zveřejnění – hodnoty se pak načtou samy.';
   if (pripojeni === 'znovu')
     return 'Skutečná data leží ve složce „' + (jmeno || '_DB') + '", ale prohlížeč '
       + 'k ní po restartu zapomněl přístup. Vraťte ho tlačítkem vpravo '
@@ -156,11 +165,14 @@ function ukazkovePripojeni(uloStav, podporovano) {
 }
 
 /* Kratší věta tam, kde je málo místa a dokument za chvíli odejde ven. */
-function ukazkoveKratce(stav) {
+function ukazkoveKratce(stav, bezSlozky) {
   if (!stav || !stav.jsou) return '';
   if (stav.prazdne)
-    return 'Ceník není nahraný – všude jsou nuly. Dokument se nedá vytvořit, '
-      + 'dokud se nepřipojí složka _DB se skutečným ceníkem.';
+    return bezSlozky
+      ? 'Ceník není nahraný – všude jsou nuly. Dokument se nedá vytvořit, '
+        + 'dokud administrátor nezveřejní platný ceník do online databáze.'
+      : 'Ceník není nahraný – všude jsou nuly. Dokument se nedá vytvořit, '
+        + 'dokud se nepřipojí složka _DB se skutečným ceníkem.';
   return stav.ceny
     ? 'Pozor: tento dokument je spočítaný z UKÁZKOVÝCH cen, ne ze skutečného ceníku. Neposílejte ho zákazníkovi.'
     : 'Pozor: v hlavičce jsou UKÁZKOVÉ firemní údaje, ne skutečné. Neposílejte dokument zákazníkovi.';

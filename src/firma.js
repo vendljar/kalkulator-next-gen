@@ -207,7 +207,47 @@ function firmaKontrola(f) {
   return { chybi: chybi.map(p => p.label), pocet: chybi.length, ok: chybi.length === 0 };
 }
 
+/* ---------- firemní údaje do online databáze (4. 8. 2026) ----------
+ *
+ * Obchodník složku _DB nemapuje (zadání: „Přihlásil jsem se jako nový uživatel
+ * (obchodník) a přesto to po mně chce připojit databázi."), takže do jeho
+ * aplikace se skutečné údaje odjinud než ze serveru nedostanou. Ceník už online
+ * chodí; firemní údaje v online databázi dosud nebyly – proto obchodníkovi
+ * i po zveřejnění ceníku svítila červená lišta „Firemní údaje jsou ukázkové"
+ * a v hlavičce nabídky by měl vzorovou adresu. Zveřejňuje je administrátor
+ * stejným gestem jako ceník.
+ *
+ * Kontrola je tady (čistá logika), aby ji beze změny použil prohlížeč
+ * i serverová funkce – jediná pravda o tom, co se smí zveřejnit. */
+function firmaLzeZverejnit(f) {
+  if (!f || typeof f !== 'object')
+    return { ok: false, duvod: 'Firemní údaje nejsou vyplněné.' };
+  /* Klíč `ukazkove` (ukazkove.js). Čte se přímo, aby modul zůstal bez
+   * závislosti a šel testovat samostatně v Node. */
+  if (f.ukazkove)
+    return { ok: false, duvod: 'Firemní údaje jsou pořád ukázkové ze sestavení. '
+      + 'Nejdřív je přepište skutečnými (Nastavení → Firma), teprve pak se zveřejňují.' };
+  const k = firmaKontrola(f);
+  if (!k.ok)
+    return { ok: false, duvod: 'Chybí povinné údaje: ' + k.chybi.join(', ') + '.' };
+  return { ok: true, duvod: '' };
+}
+
+/* Kopie pro zápis na server: bez značek vymyšlených dat a bez klíčů,
+ * které do firemních údajů nepatří (server ukládá jen známá pole).
+ *
+ * POZOR NA POŘADÍ: firmaLzeZverejnit() se musí ptát PŮVODNÍCH údajů, ne téhle
+ * kopie. Kopie značku `ukazkove` neopisuje, takže by na ní kontrola vždycky
+ * dopadla dobře a ukázková firma by se rozeslala všem jako skutečná. */
+function firmaKZverejneni(f) {
+  const out = {};
+  FIRMA_POLE.forEach(p => { if (f && f[p.id] !== undefined) out[p.id] = f[p.id]; });
+  if (f && f.logo) { out.logo = f.logo; out.logoNazev = f.logoNazev || ''; }
+  return out;
+}
+
 if (typeof module !== 'undefined')
   module.exports = { FIRMA_POLE, FIRMA_SEKCE, DEFAULT_FIRMA, firmaDefault, firmaAktualni,
     firmaPole, firmaHodnota, firmaAdresaRadek, firmaSidlo, firmaKorespondencni, firmaBankaRadek,
-    firmaIcoDic, firmaPaticka, firmaPlaceholders, firmaSymboly, firmaRadky, firmaKontrola };
+    firmaIcoDic, firmaPaticka, firmaPlaceholders, firmaSymboly, firmaRadky, firmaKontrola,
+    firmaLzeZverejnit, firmaKZverejneni };

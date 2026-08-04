@@ -36,6 +36,7 @@ import uzivatele from './netlify/functions/uzivatele.mjs';
 import program from './netlify/functions/program.mjs';
 import zakazky from './netlify/functions/zakazky.mjs';
 import zaloha from './netlify/functions/zaloha.mjs';
+import firma from './netlify/functions/firma.mjs';
 
 const require = createRequire(import.meta.url);
 let chromium;
@@ -49,6 +50,9 @@ const FUNKCE = {
   '/api/zdravi': zdravi, '/api/ja': ja, '/api/prihlaseni': prihlaseni,
   '/api/odhlaseni': odhlaseni, '/api/uzivatele': uzivatele,
   '/api/program': program, '/api/zakazky': zakazky, '/api/zaloha': zaloha,
+  /* Firemní údaje jsou od 4. 8. 2026 taky online: obchodník složku _DB
+   * nemapuje, takže hlavičku nabídky nemá odkud jinud vzít. */
+  '/api/firma': firma,
 };
 
 let ok = 0, fail = 0;
@@ -144,6 +148,56 @@ test('zveřejnění založilo online verzi 1',
 test('online ceník se v aplikaci sám nasadil',
   await page.evaluate(() => ONLINE_STAV.cenikPouzit === true));
 
+/* ---- 4b) firemní údaje online (4. 8. 2026) ----
+ * Ceník sám nestačí. Obchodník složku _DB nemapuje, takže dokud firemní údaje
+ * nejsou taky online, zůstane mu v hlavičce nabídky „Ukázková firma s.r.o."
+ * a červená lišta svítí navěky. Tady se ověřuje celá cesta: administrátor
+ * vzorek zveřejnit nesmí, po přepsání skutečnými údaji smí, a obchodník je
+ * pak (v oddílu 9) dostane sám. */
+await page.evaluate(() => { otevriNastaveni(); nastPanel('firma'); });
+await page.waitForTimeout(300);
+const panelFirma = () => page.locator('#nastaveni-panel').innerHTML();
+test('administrátor vidí v Nastavení → Firma panel online zveřejnění',
+  (await panelFirma()).includes('Firemní údaje v online databázi'));
+test('vzorek ze sestavení zveřejnit nejde – tlačítko je zhasnuté',
+  await page.evaluate(() => {
+    const b = [...document.querySelectorAll('#nastaveni-panel button')]
+      .find(x => x.textContent.includes('Zveřejnit firemní údaje online'));
+    return !!b && b.disabled === true;
+  }));
+test('a panel řekne proč (jsou pořád ukázkové)', /ukázkov/i.test(await panelFirma()));
+
+/* Skutečné údaje – zkušební firma, ne ta jeho: do repozitáře ani do testů
+ * nepatří nic ostrého. Zapisují se přes firmaSet(), tedy přesně tou cestou,
+ * kterou používá formulář (a která zároveň sundává značku vzorku). */
+await page.evaluate(() => {
+  firmaSet('nazev', 'Zkušební ocelárna s.r.o.');
+  firmaSet('ico', '12345678');
+  firmaSet('sidloUlice', 'Zkušební 1');
+  firmaSet('sidloPsc', '110 00');
+  firmaSet('sidloMesto', 'Praha');
+  firmaSet('telefon', '+420 111 222 333');
+});
+await page.waitForTimeout(200);
+test('ruční přepis sundal značku ukázkových dat',
+  await page.evaluate(() => NAST.firma.ukazkove === undefined));
+test('teď už je tlačítko zveřejnění činné',
+  await page.evaluate(() => {
+    const b = [...document.querySelectorAll('#nastaveni-panel button')]
+      .find(x => x.textContent.includes('Zveřejnit firemní údaje online'));
+    return !!b && b.disabled === false;
+  }));
+await page.evaluate(() => onlineZverejniFirmu());
+await page.waitForFunction(() => { try { return !!ONLINE_STAV.firma; } catch (e) { return false; } });
+await page.waitForTimeout(300);
+test('zveřejněné údaje se vrátily ze serveru se jménem firmy',
+  await page.evaluate(() => ONLINE_STAV.firma.udaje.nazev === 'Zkušební ocelárna s.r.o.'));
+test('server si zapsal, kdo a kdy zveřejnil',
+  await page.evaluate(() => ONLINE_STAV.firma.kdo === 'vendl.jaroslav@engineers-cz.cz' && !!ONLINE_STAV.firma.kdy));
+test('panel po zveřejnění ukazuje, kdy a kým',
+  (await panelFirma()).includes('Online zveřejněno'));
+await page.evaluate(() => zavriNastaveni());
+
 /* ---- 5) zakázka online: uložit, seznam, otevřít ---- */
 await page.evaluate(() => { ZAK.cislo = '2026 - OPR - CN - 0555'; ZAK.nazevAkce = 'Online ověření'; render(); });
 await page.evaluate(() => onlineUloz());
@@ -166,6 +220,21 @@ await page.waitForTimeout(300);
 const nastav = () => page.locator('#nastaveni-panel').innerHTML();
 test('Nastavení → Uživatelé ukazuje účty online databáze',
   (await nastav()).includes('vendl.jaroslav@engineers-cz.cz') && (await nastav()).includes('hlavní'));
+
+/* Zadání 4. 8. 2026: „Při tvoření hesla přidej informaci, že heslo musí mít
+ * minimálně 8 znaků." Požadavek se musí dozvědět DŘÍV, než heslo vymyslí –
+ * proto stojí u samotného pole, ne až v hlášce o odmítnutí. */
+test('u pole s počátečním heslem je vidět požadavek na délku',
+  await page.evaluate(() => {
+    const i = document.getElementById('onlineUzHeslo'); if (!i) return false;
+    const r = i.closest('.row') || i.parentElement;
+    const text = (r ? r.innerText : '') + ' ' + (i.placeholder || '') + ' ' + (i.title || '');
+    return /8\s*znak/i.test(text);
+  }));
+/* Čte se innerText, ne innerHTML: věta je „Heslo musí mít <b>alespoň 8
+ * znaků</b>." a značky uprostřed by hledání rozbily. */
+test('a panel to vysvětluje i celou větou',
+  /(alespoň|aspoň|minimálně|nejméně)\s*8\s*znak/i.test(await page.locator('#nastaveni-panel').innerText()));
 
 /* Chybová cesta (4. 8. 2026 večer): krátké heslo dřív formulář tiše smazalo
  * a nic neřeklo. Teď musí hláška stát přímo v panelu a pole zůstat vyplněná. */
@@ -226,6 +295,18 @@ await page.waitForFunction(() => { try { return ONLINE_STAV.ja === null; } catch
 await page.waitForTimeout(300);
 test('po odhlášení se vrátí přihlašovací stránka', await gateViditelna());
 
+/* Obnovení stránky = čerstvý obchodník: v paměti aplikace zůstal po
+ * administrátorovi jak nasazený ceník, tak ručně přepsaná firma, takže bez
+ * reloadu by se testovalo něco, co u obchodníka na jeho počítači nikdy
+ * nenastane. Po reloadu má aplikace zase jen vzorky ze sestavení a je vidět,
+ * co pro něj online databáze opravdu udělá. */
+await page.reload();
+await page.waitForFunction(() => typeof window.render === 'function');
+await page.waitForTimeout(400);
+test('po odhlášení a obnovení stránky se aplikace zase zamkne', await gateViditelna());
+test('čerstvá aplikace startuje s ukázkovou firmou',
+  await page.evaluate(() => NAST.firma.ukazkove === true));
+
 await prihlas('obchodnik@engineers-cz.cz', 'ObchodniHeslo1');
 await page.waitForFunction(() => { try { return !!ONLINE_STAV.ja; } catch (e) { return false; } });
 await page.waitForTimeout(400);
@@ -239,6 +320,44 @@ test('obchodník nevidí kartu složky _DB (mapování jen pro administrátora)'
   !stranka.includes('Databáze zakázek (složka)'));
 test('obchodník kartu Online databáze vidí',
   stranka.includes('Online databáze (schaftscalc.netlify.app)'));
+
+/* Přesně to, co uživatel hlásil: „Přihlásil jsem se jako nový uživatel
+ * (obchodník) a přesto to po mně chce připojit databázi." Lišta ukázkových
+ * dat ho nesmí posílat pro složku, ke které se nikdy nedostane. Měří se na
+ * vynuceném vzorku, protože po nasazení online dat lišta správně zhasne –
+ * a na zhasnuté liště by test tiše prošel, aniž by cokoli ověřil. */
+const listaObchodnika = await page.evaluate(() => {
+  const zaloha = NAST.firma;
+  NAST.firma = firmaDefault();          // jen na okamžik měření
+  const html = ukazkoveLista();
+  NAST.firma = zaloha;
+  return html;
+});
+test('lišta obchodníka nenabízí připojení složky',
+  !/Připojit složku|Připojit znovu složku/.test(listaObchodnika), listaObchodnika);
+test('lišta obchodníka vůbec nemluví o složce _DB',
+  !listaObchodnika.includes('_DB'), listaObchodnika);
+test('lišta obchodníka ho posílá za administrátorem',
+  /administrátor/i.test(listaObchodnika), listaObchodnika);
+
+/* A druhá polovina téhož zadání: když už mu složku nenabízíme, musí data
+ * dostat odjinud. Ceník i firemní údaje si aplikace stáhne z online databáze
+ * sama, bez jediného kliknutí. */
+await page.waitForFunction(() => { try { return NAST.firma.ukazkove === undefined; } catch (e) { return false; } },
+  null, { timeout: 8000 });
+test('obchodník dostal skutečné firemní údaje z online databáze',
+  await page.evaluate(() => NAST.firma.nazev === 'Zkušební ocelárna s.r.o.' && NAST.firma.ico === '12345678'),
+  await page.evaluate(() => NAST.firma.nazev));
+test('obchodníkovi se nasadil i platný ceník z online databáze',
+  await page.evaluate(() => ONLINE_STAV.cenikPouzit === true));
+test('a červená lišta ukázkových dat mu zhasla',
+  (await page.locator('#ukazkoveLista').innerHTML()).trim() === '',
+  await page.locator('#ukazkoveLista').innerHTML());
+
+/* Ruční přepis a složka mají mít přednost: online verze nesmí přepsat něco,
+ * co si administrátor nastavil sám. Kontroluje se přímo pravidlo z onlineTik. */
+test('online firma se nasazuje jen na vzorek, ne přes skutečné údaje',
+  await page.evaluate(() => ONLINE_STAV.firmaPouzita === true));
 
 /* ---- 10) změna vlastního hesla přes okno v rohu ---- */
 await page.evaluate(() => otevriZmenaHesla());
