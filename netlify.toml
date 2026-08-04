@@ -1,0 +1,14 @@
+# Nasazení Kalkulátoru na Netlify (K3, rozhodnutí 4. 8. 2026: Netlify místo rosti.cz)
+#
+# Netlify neprovozuje trvale běžící server — web se při každém nasazení
+# SESTAVÍ z repozitáře (python3 build.py nad vynulovanými zdrojáky, žádné
+# ceníkové hodnoty) a /api/* obsluhují serverové funkce ve složce
+# netlify/functions. Skutečný ceník se do aplikace načítá stejně jako dosud:
+# připojením složky _DB v prohlížeči (funguje i nad https).
+[build]
+  command = "python3 build.py"
+  publish = "dist"
+
+[functions]
+  directory = "netlify/functions"
+  included_files = ["verze.txt"]

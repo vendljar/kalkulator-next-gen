@@ -767,7 +767,8 @@ const z38zap = await p.evaluate(() => {
   return {
     spoctena: cn.pred, nabidkova: cn.cena, rozdil: cn.zaokrKc,
     nasobek: cn.cena % 10000 === 0,
-    hlavicka: /obchodní zaokrouhlení/i.test(document.getElementById('outputs').innerText),
+    /* souhrn se 3. 8. 2026 přestěhoval nad zadání (#81) — hledá se na celé stránce kalkulace */
+    hlavicka: /obchodní zaokrouhlení/i.test(document.getElementById('page-kalk').innerText),
     nabidka: cislo(nd.placeholders.CENA_BEZ_DPH),
     nabidkaRadek: nd.placeholders.ZAOKROUHLENI_KC,
     kryci: cislo(kl.hodnota),
