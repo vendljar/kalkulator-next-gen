@@ -5,20 +5,16 @@
  *        může zveřejňovat jen administrátor"). Verzování, otisky i odkládání
  *        starých verzí dělá stejný kód jako v aplikaci (src/program.js +
  *        cenik_stari.js) — žádná druhá pravda. */
-import { createRequire } from 'node:module';
 import { uloziste, vyzadujRoli, json } from '../lib/sdilene.mjs';
-const require = createRequire(import.meta.url);
-
-Object.assign(globalThis, require('../../src/format.js'));
-Object.assign(globalThis, require('../../src/engine.js'));
-Object.assign(globalThis, require('../../src/engine_proj.js'));
-Object.assign(globalThis, require('../../src/cenik.js'));
-Object.assign(globalThis, require('../../src/ukazkove.js'));
-Object.assign(globalThis, require('../../src/cenik_stari.js'));
-Object.assign(globalThis, require('../../src/konfigurace.js'));
-Object.assign(globalThis, require('../../src/program.js'));
+import { jadro, jadroChyba } from '../lib/jadro.mjs';
 
 export default async (req) => {
+  /* Jádro (src/*.js) se naskládá do globálních jmen — programNovy,
+   * programNovaVerze a spol. se pak volají přes globalThis stejně jako
+   * v prohlížeči. Kdyby se načíst nepovedlo, uživatel dostane české
+   * vysvětlení místo holé chyby 502. */
+  try { await jadro(); } catch (e) { return jadroChyba(e); }
+
   const s = await uloziste('program');
 
   if (req.method === 'GET') {

@@ -30,6 +30,85 @@ const post = (fn, url, telo, cookie) => fn(new Request(url, { method: 'POST',
   headers: cookie ? { cookie } : {}, body: JSON.stringify(telo) }));
 const get = (fn, url, cookie) => fn(new Request(url, { headers: cookie ? { cookie } : {} }));
 
+/* 0) BALENÍ FUNKCÍ — proč tahle sada existuje
+ *
+ * 4. 8. 2026 hlásila nasazená aplikace „Neuloženo online: server odpověděl 502"
+ * při každém uložení zakázky. Testy přitom byly zelené, protože Node si moduly
+ * najde na disku sám. Netlify ale funkci před nasazením ZABALÍ (esbuild) do
+ * jednoho souboru a s sebou vezme jen to, co dokáže v kódu vystopovat. Vzor
+ *
+ *     const require = createRequire(import.meta.url);
+ *     require('../../src/engine.js');
+ *
+ * vystopovat nelze: `require` je tu obyčejná proměnná, ne příkaz bundleru.
+ * Zdrojáky se do balíčku nedostaly, funkce spadla už při načtení a Netlify
+ * vrátilo holou 502 – bez jediné české věty, na které by se dalo stavět.
+ * Padly tak všechny čtyři funkce s tímhle vzorem (/api/zakazky, /api/program,
+ * /api/firma, /api/vypocet), zatímco zálohy a účty, které zdrojáky nepotřebují,
+ * běžely dál. Odtud i ta matoucí zpráva „zálohy fungují, ukládání ne".
+ *
+ * Kontroly níž hlídají, aby se to nemohlo vrátit: v serverovém kódu nesmí být
+ * ani jeden `createRequire`, jádro se natahuje jediným místem (jadro_moduly.cjs,
+ * kde je `require` skutečný příkaz CommonJS a bundler ho vystopuje) a všechny
+ * cesty v něm musí na disku existovat. */
+
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const KOREN = dirname(fileURLToPath(import.meta.url));
+const serverovéSoubory = [
+  ...readdirSync(resolve(KOREN, 'functions')).filter(f => f.endsWith('.mjs')).map(f => 'functions/' + f),
+  ...readdirSync(resolve(KOREN, 'lib')).filter(f => /\.(mjs|cjs)$/.test(f)).map(f => 'lib/' + f),
+];
+
+/* Komentáře se před kontrolou odstraní. Bez toho by kontrola hlásila i soubory,
+ * které o starém vzoru jen VYPRAVUJÍ – a právě takové tu jsou dva: rozbor chyby
+ * v lib/jadro_moduly.cjs a poznámka v functions/vypocet.mjs. Vysvětlení chyby
+ * je cenné a nesmí ho test tlačit ven; hlídá se skutečný kód. */
+const bezKomentaru = (text) => text
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')      // blokové komentáře
+  .replace(/^\s*\/\/.*$/gm, ' ');         // řádkové komentáře na začátku řádku
+
+const kodSouboru = new Map(serverovéSoubory.map(
+  f => [f, bezKomentaru(readFileSync(resolve(KOREN, f), 'utf8'))]));
+
+const sCreateRequire = serverovéSoubory.filter(f => /createRequire/.test(kodSouboru.get(f)));
+test('žádná serverová funkce nesahá na zdrojáky přes createRequire (bundler to neuveze)',
+  sCreateRequire.length === 0, sCreateRequire.join(', '));
+
+/* Pojistka na pojistku: kontrola výš by byla k ničemu, kdyby `bezKomentaru`
+ * omylem vymazalo i kód. Na známém vzorku se ověří, že maže jen komentáře. */
+test('odstraňovač komentářů nechává kód být',
+  bezKomentaru('/* a */ const x = 1; // b\n  // c\n  const y = 2;').includes('const x = 1;')
+  && bezKomentaru('/* a */ const x = 1;\n  // c\n  const y = 2;').includes('const y = 2;')
+  && !bezKomentaru('/* createRequire */ const x = 1;').includes('createRequire'));
+
+test('jádro pro server je na jednom místě (lib/jadro_moduly.cjs)',
+  existsSync(resolve(KOREN, 'lib/jadro_moduly.cjs')));
+
+/* Všechny relativní cesty, na které serverový kód sahá – ať už importem
+ * nebo requirem – musí existovat. Překlep v cestě se jinak pozná až
+ * v nasazení, a zase jako 502 bez vysvětlení. */
+let cestKontrolovano = 0;
+for (const f of serverovéSoubory) {
+  const text = kodSouboru.get(f);
+  for (const m of text.matchAll(/(?:from\s+|import\s*\(\s*|require\s*\(\s*)['"](\.[^'"]+)['"]/g)) {
+    cestKontrolovano++;
+    test('cesta ' + m[1] + ' z ' + f + ' existuje',
+      existsSync(resolve(KOREN, dirname(f), m[1])));
+  }
+}
+test('relativní cesty se opravdu kontrolovaly (našlo se jich víc než deset)', cestKontrolovano > 10, cestKontrolovano);
+
+/* Každá funkce musí vyvézt obsluhu a adresu (nebo rozvrh u noční dávky).
+ * Funkce bez `path` se nedá zavolat, funkce bez `default` se nedá spustit. */
+for (const jm of readdirSync(resolve(KOREN, 'functions')).filter(f => f.endsWith('.mjs'))) {
+  const mod = await import('./functions/' + jm);
+  test(jm + ' vyváží obsluhu i nastavení',
+    typeof mod.default === 'function' && !!(mod.config && (mod.config.path || mod.config.schedule)));
+}
+
 /* 1) bez přihlášení nikam */
 test('program bez přihlášení odmítnut', (await get(program, 'http://x/api/program')).status === 401);
 test('zakázky bez přihlášení odmítnuty', (await get(zakazky, 'http://x/api/zakazky')).status === 401);

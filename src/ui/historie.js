@@ -28,6 +28,11 @@
 
 const HIST_MAX = 40;                       // kolik kroků zpět si pamatujeme
 const HIST_KLIC = 'kng_rozpracovano_v1';   // klíč zálohy v úložišti prohlížeče
+/* Značka „tuhle zálohu už jsem odložil" – uloží se razítko (kdy) té zálohy,
+ * o které uživatel řekl „Teď ne". Dokud se záloha nezmění, lišta mlčí.
+ * Bez toho se pojistka měnila v rituál: stejná otázka při každém spuštění,
+ * na kterou se stejně vždycky klikalo „Teď ne". */
+const HIST_ODLOZENO_KLIC = 'kng_rozpracovano_odlozeno_v1';
 const HIST_PRODLEVA = 1200;                // ms klidu, než se záloha zapíše
 
 const HIST = {
@@ -176,19 +181,48 @@ function historieZalohaCti() {
 
 /* Lišta „našel jsem rozpracovanou kalkulaci". Záměrně NIC neobnovuje sama:
  * kdyby se automaticky nahrála záloha, přepsala by práci někoho, kdo si
- * aplikaci otevřel jen tak. Rozhoduje uživatel. */
+ * aplikaci otevřel jen tak. Rozhoduje uživatel.
+ *
+ * O TOM, JESTLI SE VŮBEC PTÁT, ROZHODUJE MODEL (uloZalohaRozhodni v uloziste.js),
+ * ne tahle obrazovka. Důvod je praktický: pravidlo se tím dá otestovat bez
+ * prohlížeče a platí stejně, ať se lišta zavolá odkudkoli. Mlčí se, když je
+ * záloha prázdná, bez čísla i názvu akce, starší než týden (takové se rovnou
+ * uklidí), shodná s právě otevřenou zakázkou nebo když ji uživatel odložil
+ * a od té doby se nezměnila. */
 function historieNabidniObnovu() {
   const z = historieZalohaCti();
   const el = document.getElementById('obnovaLista');
-  if (!z || !el) return;
+
+  let otevrena = '';
+  try { otevrena = JSON.stringify(ZAK); } catch (e) { /* cyklus v datech – nevadí */ }
+  const rozhodnuti = (typeof uloZalohaRozhodni === 'function')
+    ? uloZalohaRozhodni(z, { ted: new Date().toISOString(), otevrena,
+                             odlozeno: Uloziste.cti(HIST_ODLOZENO_KLIC) || '' })
+    : { nabidnout: !!z, smazat: false };
+
+  if (rozhodnuti.smazat) {
+    Uloziste.smaz(HIST_KLIC);
+    Uloziste.smaz(HIST_ODLOZENO_KLIC);
+  }
+  if (!rozhodnuti.nabidnout || !z || !el) return;
+
   const kdy = z.kdy ? new Date(z.kdy).toLocaleString('cs-CZ') : 'neznámo kdy';
   const co = [z.cislo, z.nazevAkce].filter(Boolean).join(' · ') || 'bez názvu';
   el.innerHTML = `<span>⛁ V prohlížeči je <b>rozpracovaná kalkulace</b> (${esc(co)}), naposledy uložená ${esc(kdy)}.
       Chcete ji obnovit?</span>
     <button class="primary" onclick="historieObnovZalohu()">Obnovit rozpracovanou kalkulaci</button>
     <button class="mini" onclick="historieZahodZalohu()">Zahodit zálohu</button>
-    <button class="mini" onclick="historieSkryjListu()">Teď ne</button>`;
+    <button class="mini" onclick="historieOdlozZalohu()">Teď ne</button>`;
   el.classList.add('zobraz');
+}
+
+/* „Teď ne" = zálohu si nechám, ale už se na ni neptej. Zapamatuje se razítko
+ * odložené zálohy; jakmile vznikne novější (uživatel na něčem znovu dělá),
+ * lišta se ozve zas – to už je nová informace, ne opakovaná otázka. */
+function historieOdlozZalohu() {
+  const z = historieZalohaCti();
+  if (z) Uloziste.zapis(HIST_ODLOZENO_KLIC, String(z.kdy || ''));
+  historieSkryjListu();
 }
 function historieSkryjListu() {
   const el = document.getElementById('obnovaLista');
@@ -219,6 +253,21 @@ function historieObnovZalohu() {
 function historieZahodZalohu() {
   if (!confirm('Opravdu zahodit zálohu rozpracované kalkulace uloženou v prohlížeči?')) return;
   Uloziste.smaz(HIST_KLIC);
+  Uloziste.smaz(HIST_ODLOZENO_KLIC);
+  HIST.autoStav = '';
+  historieSkryjListu();
+  historieTlacitka();
+}
+
+/* Zakázka je bezpečně v databázi (nebo v souboru) – nouzová záloha v prohlížeči
+ * tím ztratila smysl a uklidí se. Právě ona byla důvodem, proč se aplikace
+ * ptala na „rozpracovanou kalkulaci" i po zakázkách dávno hotových: zápis do
+ * úložiště nikdo nikdy nemazal. Ochrana práce se tím neztrácí – při první
+ * další změně se záloha zapíše znovu (do 1,2 s). */
+function historieZalohaHotovo() {
+  Uloziste.smaz(HIST_KLIC);
+  Uloziste.smaz(HIST_ODLOZENO_KLIC);
+  if (HIST.autoTimer) { clearTimeout(HIST.autoTimer); HIST.autoTimer = null; }
   HIST.autoStav = '';
   historieSkryjListu();
   historieTlacitka();

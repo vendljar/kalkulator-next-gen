@@ -763,6 +763,9 @@ function ulozZakazku() {
   a.click();
   // od téhle chvíle je stav na disku – varování při odchodu už není na místě
   if (typeof historieOznacUlozeno === 'function') historieOznacUlozeno();
+  // a nouzová záloha v prohlížeči tím ztratila smysl (jinak se na ni aplikace
+  // ptá při každém dalším spuštění, i když je práce dávno v souboru)
+  if (typeof historieZalohaHotovo === 'function') historieZalohaHotovo();
 }
 function nactiZakazku(ev) {
   const f = ev.target.files[0]; if (!f) return;

@@ -4,27 +4,20 @@
  * slevové stropy pro kontext výpočtu.
  *
  * Moduly aplikace spolu mluví přes globální jména (v prohlížeči je skládá
- * build) — tady se jednou provždy globalizují v pořadí build.py. Require
- * jsou vypsané doslovně, aby je bundler Netlify (esbuild) uměl přibalit. */
-import { createRequire } from 'node:module';
-const require = createRequire(import.meta.url);
-
-Object.assign(globalThis, require('../../src/preklad.js'));
-Object.assign(globalThis, require('../../src/format.js'));
-Object.assign(globalThis, require('../../src/engine.js'));
-Object.assign(globalThis, require('../../src/engine_proj.js'));
-Object.assign(globalThis, require('../../src/techspec.js'));
-Object.assign(globalThis, require('../../src/sleva.js'));
-Object.assign(globalThis, require('../../src/zaokrouhleni.js'));
-Object.assign(globalThis, require('../../src/marze.js'));
-Object.assign(globalThis, require('../../src/kontroly.js'));
-Object.assign(globalThis, require('../../src/zakazka.js'));
-Object.assign(globalThis, require('../../src/sluzba.js'));
-const JEKLY = require('../../src/jekly.json');
+ * build) — na serveru je do globálních jmen naskládá lib/jadro_moduly.cjs
+ * v pořadí podle build.py. Dřív si je tahala každá funkce sama vzorem
+ * `const require = createRequire(import.meta.url)`; to ale bundler Netlify
+ * (esbuild) neumí vystopovat, zdrojáky se do balíčku nedostaly a funkce
+ * padala hned při načtení chybou 502. Podrobný rozbor je v lib/jadro_moduly.cjs. */
+import { jadro, jadroChyba } from '../lib/jadro.mjs';
 
 export default async (req) => {
   if (req.method !== 'POST')
     return Response.json({ ok: false, chyba: 'Použijte POST s tělem { zakazka, program }.' }, { status: 405 });
+
+  let JEKLY;
+  try { ({ JEKLY } = await jadro()); } catch (e) { return jadroChyba(e); }
+
   try {
     const vstup = await req.json();
     const zak = globalThis.importZakazka(vstup.zakazka || {});

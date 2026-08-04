@@ -302,6 +302,8 @@ function uloUlozDoSlozky(opts) {
           + (prejmenovano ? ' – dřívější soubor ' + stary + ' zůstal ve složce, smazat ho můžete v seznamu zakázek.' : '.'),
           prejmenovano ? 'varovani' : '');
         if (typeof historieOznacUlozeno === 'function') historieOznacUlozeno();
+        /* Zakázka leží ve složce – nouzová záloha v prohlížeči je odbytá. */
+        if (typeof historieZalohaHotovo === 'function') historieZalohaHotovo();
         return true;
       });
     });

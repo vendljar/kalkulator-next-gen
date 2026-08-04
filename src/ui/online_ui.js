@@ -321,6 +321,10 @@ function onlineUloz(opts) {
     ONLINE_STAV.posledni = JSON.stringify(ZAK);
     onlineZprava('Uloženo online jako ' + o.soubor + ' (' + new Date().toLocaleTimeString('cs-CZ') + ').');
     if (typeof historieOznacUlozeno === 'function') historieOznacUlozeno();
+    /* Zakázka je v databázi – nouzová záloha v prohlížeči už nemá co chránit.
+     * Kdyby se nechala ležet, ptá se na ni aplikace při každém dalším spuštění
+     * i za měsíc („V prohlížeči je rozpracovaná kalkulace…"). */
+    if (typeof historieZalohaHotovo === 'function') historieZalohaHotovo();
     return onlineNactiRejstrik().then(() => true);
   }).catch(e => {
     /* Server odmítá i pokus přepsat odeslanou (uzamčenou) nabídku – jeho

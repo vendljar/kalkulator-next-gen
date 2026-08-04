@@ -7,21 +7,13 @@
  *   stejná kontrola jako ve složce (uloKontrolaZamku není v modelu, ale
  *   zámky hlídá porovnání razítek: server odmítne zápis, který by změnil
  *   variantu zamčenou v uložené verzi). */
-import { createRequire } from 'node:module';
 import { uloziste, vyzadujRoli, json } from '../lib/sdilene.mjs';
-const require = createRequire(import.meta.url);
-
-Object.assign(globalThis, require('../../src/format.js'));
-Object.assign(globalThis, require('../../src/engine.js'));
-Object.assign(globalThis, require('../../src/engine_proj.js'));
-Object.assign(globalThis, require('../../src/techspec.js'));
-Object.assign(globalThis, require('../../src/sleva.js'));
-Object.assign(globalThis, require('../../src/zaokrouhleni.js'));
-Object.assign(globalThis, require('../../src/zamek.js'));
-Object.assign(globalThis, require('../../src/zakazka.js'));
-const ULO = require('../../src/uloziste.js');
+import { jadro, jadroChyba } from '../lib/jadro.mjs';
 
 export default async (req) => {
+  let ULO;
+  try { ({ ULO } = await jadro()); } catch (e) { return jadroChyba(e); }
+
   const { chyba, relace } = await vyzadujRoli(req);
   if (chyba) return chyba;
   const s = await uloziste('zakazky');

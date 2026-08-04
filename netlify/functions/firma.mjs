@@ -18,13 +18,13 @@
  * Co server odmítne: údaje se značkou `ukazkove` a údaje bez povinných polí.
  * Rozhoduje o tom firmaLzeZverejnit() ze src/firma.js — týž kód, jaký si
  * kontrolu dělá prohlížeč, aby se obě strany nemohly rozejít. */
-import { createRequire } from 'node:module';
 import { uloziste, vyzadujRoli, json } from '../lib/sdilene.mjs';
-const require = createRequire(import.meta.url);
-
-const fm = require('../../src/firma.js');
+import { jadro, jadroChyba } from '../lib/jadro.mjs';
 
 export default async (req) => {
+  let fm;
+  try { ({ fm } = await jadro()); } catch (e) { return jadroChyba(e); }
+
   const s = await uloziste('program');
 
   if (req.method === 'GET') {
