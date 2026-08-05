@@ -5,10 +5,16 @@
  * účet sice nikam nesměl, ale aplikace by mu po obnovení stránky pořád hlásila
  * „přihlášen jako …" a on by teprve při první akci narazil na 401. Odpověď má
  * říkat pravdu hned. */
-import { vyzadujRoli, json } from '../lib/sdilene.mjs';
+/* Od 5. 8. 2026 (#145) se vrací i profil obchodního technika — titul, funkce,
+ * telefon a sken podpisu s razítkem. Aplikace jimi vyplňuje blok „Vypracoval"
+ * v cenové nabídce, takže je musí mít hned po obnovení stránky; jinak by první
+ * nabídka vygenerovaná po načtení odešla bez podpisu. */
+import { vyzadujRoli, json, podpisCti } from '../lib/sdilene.mjs';
 export default async (req) => {
-  const { chyba, relace } = await vyzadujRoli(req);
+  const { chyba, relace, ucet } = await vyzadujRoli(req);
   if (chyba) return chyba;
-  return json({ ok: true, email: relace.email, role: relace.role, jmeno: relace.jmeno || '' });
+  return json({ ok: true, email: relace.email, role: relace.role, jmeno: relace.jmeno || '',
+    titul: relace.titul || '', funkce: relace.funkce || '', telefon: relace.telefon || '',
+    podpis: await podpisCti(ucet.email) });
 };
 export const config = { path: '/api/ja' };

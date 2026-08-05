@@ -161,5 +161,69 @@ test('kontrola na KOPII ukázkové firmy nic nepozná – proto se ptá originá
   fm.firmaLzeZverejnit(fm.firmaKZverejneni(fm.firmaDefault())).ok === true
   && fm.firmaLzeZverejnit(fm.firmaDefault()).ok === false);
 
+/* --- 9) shoda s online kopií (5. 8. 2026, #142) ---
+ *
+ * Zadání: „Proč musím pořád zveřejňovat firemní údaje? Ty už jsem nahrál
+ * a zveřejnil." Server si zveřejněnou kopii drží spolehlivě – co chybělo, byla
+ * věta, která administrátorovi řekne, že online kopie je táž jako to, co má
+ * v Nastavení → Firma. Panel místo toho pokaždé nabízel plné modré tlačítko
+ * „Zveřejnit firemní údaje online", tedy přesně gesto, které už jednou udělal.
+ *
+ * Porovnává se přes firmaKZverejneni(), protože právě to server ukládá:
+ * srovnávat celý NAST.firma by hlásilo rozdíl kvůli klíčům, které se nahoru
+ * ani neposílají. */
+const Fon = fm.firmaKZverejneni(Fskut);
+test('shoda: tytéž údaje jsou shodné', (() => {
+  const v = fm.firmaShodaSOnline(Fskut, Fon);
+  return v.maOnline === true && v.shodne === true && v.rozdily.length === 0;
+})(), JSON.stringify(fm.firmaShodaSOnline(Fskut, Fon)));
+test('shoda: změna jednoho pole se pozná a pojmenuje popiskem', (() => {
+  const m = fm.firmaKZverejneni(Fskut); m.telefon = '+420 999 888 777';
+  const v = fm.firmaShodaSOnline(m, Fon);
+  return v.shodne === false && v.rozdily.length === 1 && v.rozdily[0] === 'Telefon';
+})(), JSON.stringify(fm.firmaShodaSOnline((() => { const m = fm.firmaKZverejneni(Fskut); m.telefon = 'x'; return m; })(), Fon)));
+test('shoda: když online kopie není, není co srovnávat', (() => {
+  const v = fm.firmaShodaSOnline(Fskut, null);
+  return v.maOnline === false && v.shodne === false;
+})());
+/* Klíče navíc (značka `ukazkove`, nebo cokoli, co si aplikace drží u sebe)
+ * nesmí dělat rozdíl – jinak by panel hlásil „liší se" hned po zveřejnění. */
+test('shoda: klíče, které se nahoru neposílají, rozdíl nedělají', (() => {
+  const m = fm.firmaKZverejneni(Fskut); m.necoCizeho = 'x';
+  return fm.firmaShodaSOnline(m, Fon).shodne === true;
+})());
+/* Prázdné pole se dá zapsat jako '', undefined nebo mezera – pro člověka je to
+ * pořád „nevyplněno" a rozdíl to dělat nemá. */
+test('shoda: prázdno, undefined a mezera jsou totéž', (() => {
+  const a = fm.firmaKZverejneni(Fskut); a.dic = '';
+  const b = fm.firmaKZverejneni(Fskut); b.dic = '   ';
+  const c = fm.firmaKZverejneni(Fskut); delete c.dic;
+  return fm.firmaShodaSOnline(a, b).shodne === true && fm.firmaShodaSOnline(a, c).shodne === true;
+})());
+test('shoda: zaškrtávátko se srovnává jako ano/ne, ne jako text', (() => {
+  const a = fm.firmaKZverejneni(Fskut); a.korShodna = true;
+  const b = fm.firmaKZverejneni(Fskut); b.korShodna = 1;
+  const c = fm.firmaKZverejneni(Fskut); delete c.korShodna;
+  return fm.firmaShodaSOnline(a, b).shodne === true && fm.firmaShodaSOnline(a, c).shodne === false;
+})());
+test('shoda: jiné logo je rozdíl a jmenuje se Logo', (() => {
+  const a = fm.firmaKZverejneni(Fskut); a.logo = 'data:image/png;base64,AAA';
+  const v = fm.firmaShodaSOnline(a, Fon);
+  return v.shodne === false && v.rozdily.includes('Logo');
+})());
+test('shoda: nic (null) na obou stranách nespadne',
+  typeof fm.firmaShodaSOnline(null, null) === 'object'
+  && fm.firmaShodaSOnline(null, Fon).shodne === false);
+/* Značka ukázkových dat srovnání neřeší – ta se posuzuje zvlášť
+ * (firmaLzeZverejnit) a panel se jí ptá první. Srovnání odpovídá na jinou
+ * otázku: „je nahoře totéž, co mám tady?" */
+test('shoda: značka ukázkových dat sama o sobě rozdíl nedělá',
+  fm.firmaShodaSOnline(fm.firmaDefault(), Fon).shodne === true);
+test('shoda: jiná firma se pozná', (() => {
+  const j = fm.firmaKZverejneni(Fskut); j.nazev = 'Úplně jiná ocelárna s.r.o.';
+  const v = fm.firmaShodaSOnline(j, Fon);
+  return v.shodne === false && v.rozdily.includes('Název firmy');
+})());
+
 console.log(fail ? `\n${fail} CHYB` : '\nVŠECHNY TESTY FIRMA OK');
 process.exit(fail ? 1 : 0);

@@ -1,6 +1,7 @@
 /* POST /api/prihlaseni { email, heslo } → HttpOnly cookie relace.
  * První přihlášení administrátora zakládá účet heslem z ADMIN_INIT_HESLO. */
-import { uloziste, otiskHesla, hesloSedi, relaceVytvor, json, ADMIN_EMAIL } from '../lib/sdilene.mjs';
+import { uloziste, otiskHesla, hesloSedi, relaceVytvor, json, ADMIN_EMAIL,
+         profilZUctu, podpisCti } from '../lib/sdilene.mjs';
 
 export default async (req) => {
   if (req.method !== 'POST') return json({ ok: false, chyba: 'Použijte POST.' }, 405);
@@ -25,7 +26,10 @@ export default async (req) => {
 
   const cookie = 'relace=' + relaceVytvor(ucet.email, ucet.role)
     + '; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=43200';
-  return json({ ok: true, email: ucet.email, jmeno: ucet.jmeno, role: ucet.role },
+  /* Profil se vrací rovnou při přihlášení (#145): aplikace jím vyplňuje blok
+   * „Vypracoval" v cenové nabídce. Kdyby si ho musela dotahovat zvlášť, první
+   * nabídka udělaná hned po přihlášení by odešla bez podpisu a bez telefonu. */
+  return json({ ok: true, ...profilZUctu(ucet), podpis: await podpisCti(ucet.email) },
     200, { 'Set-Cookie': cookie });
 };
 export const config = { path: '/api/prihlaseni' };

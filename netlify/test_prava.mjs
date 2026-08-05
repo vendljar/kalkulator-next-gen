@@ -215,6 +215,24 @@ const MATICE = [
     proc: 'vlastní heslo si mění každý sám, ale jen se znalostí toho starého',
     prava: PRIHLASENY_OK },
 
+  /* Profil a podpis (#145): údaje, kterými se člověk podepisuje pod cenovou
+   * nabídkou. Svoje si spravuje každý sám — kdyby to musel dělat správce,
+   * v praxi by se telefon nezměnil nikdy a z nabídek by odcházel starý
+   * kontakt. Cizí profil je JEN_ADMIN a hlídá ho samostatná sada
+   * (netlify/test_profil.mjs), protože se pozná až podle pole `email`. */
+  { fn: uzivatele, nazev: 'můj profil — titul, funkce, telefon (POST akce=profil)', metoda: 'POST',
+    url: 'http://x/api/uzivatele',
+    telo: () => ({ akce: 'profil', titul: 'Ing.', funkce: 'Obchodní technik',
+                   telefon: '+420 602 000 000' }),
+    proc: 'jméno a kontakt pod nabídkou patří tomu, kdo ji dělal — musí si je změnit sám',
+    prava: PRIHLASENY_OK },
+
+  { fn: uzivatele, nazev: 'můj podpis s razítkem (POST akce=podpis)', metoda: 'POST',
+    url: 'http://x/api/uzivatele',
+    telo: () => ({ akce: 'podpis', obrazek: '' }),
+    proc: 'sken podpisu je osobní věc — nahrát ho smí každý jen sám sobě',
+    prava: PRIHLASENY_OK },
+
   { fn: program, soubor: 'program.mjs', nazev: 'program — čtení ceníku (GET /api/program)', metoda: 'GET',
     url: 'http://x/api/program',
     proc: 'platný ceník potřebuje ke kalkulaci každý obchodník',

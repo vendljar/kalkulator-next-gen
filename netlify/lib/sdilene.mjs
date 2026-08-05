@@ -88,6 +88,71 @@ export async function prihlaseny(req) {
   return relaceOver(req.headers.get('cookie'));
 }
 
+/* ---------- profil obchodního technika (5. 8. 2026, #145) ----------
+ *
+ * Účet nese vedle přihlašovacích údajů i to, čím se podepisuje pod cenovou
+ * nabídkou: titul před jménem, funkci, telefon a sken podpisu s razítkem.
+ * Do šablony pak jde ten, kdo nabídku opravdu dělal, a ne jméno kolegy
+ * zapečené v dokumentu.
+ *
+ * `profilZUctu` je jediné místo, kde se rozhoduje, co o účtu smí ven.
+ * Kdyby si každá funkce skládala odpověď po svém, dřív nebo později by
+ * jedna z nich poslala do prohlížeče i `heslo` (scrypt otisk). Takhle
+ * se vypisují políčka jmenovitě a nic navíc neprojde. */
+export function profilZUctu(ucet) {
+  const u = ucet || {};
+  return {
+    email: u.email || '',
+    jmeno: u.jmeno || '',
+    titul: u.titul || '',
+    funkce: u.funkce || '',
+    telefon: u.telefon || '',
+    role: u.role || '',
+  };
+}
+
+/* Podpis se ukládá stranou účtu (úložiště „podpisy"), ne do záznamu účtu.
+ * Sken bývá pár set kilobajtů; kdyby seděl v účtu, tahal by se s ním při
+ * KAŽDÉM požadavku (vyzadujRoli čte účet pokaždé) a seznam kolegů pro
+ * administrátora by z pár řádků tabulky narostl na megabajty. */
+export const PODPIS_ULOZISTE = 'podpisy';
+
+/* Strop na velikost. 900 000 znaků zápisu base64 je zhruba 660 kB obrázku —
+ * na sken podpisu a razítka bohatě stačí a Blobs ani Word to netrápí.
+ * Bez stropu by stačilo nahrát fotku z mobilu a v každé nabídce by se
+ * vozilo několik megabajtů. */
+export const PODPIS_MAX = 900000;
+
+/* Přijímá se JEN datový zápis PNG nebo JPEG.
+ *
+ * Proč ne SVG: vypadá to jako obrázek, ale je to XML, které umí nést skript.
+ * Podpis zobrazujeme v aplikaci a chystáme se ho vkládat do .docx — formát,
+ * který může něco spustit, do téhle cesty nepatří. Word ho ve výsledku
+ * stejně neumí vložit jako obrázek.
+ *
+ * Proč ne odkaz (https://…): dokument musí být soběstačný. Nabídka putuje
+ * e-mailem zákazníkovi; obrázek stažený z internetu by se u něj nemusel
+ * zobrazit vůbec, a přitom by prozradil, kdy si nabídku otevřel. */
+export function podpisZkontroluj(obrazek) {
+  const s = String(obrazek == null ? '' : obrazek).trim();
+  if (!s) return { ok: true, obrazek: '' };          // prázdno = podpis odebrat
+  const m = /^data:image\/(png|jpeg);base64,([A-Za-z0-9+/=]+)$/.exec(s);
+  if (!m) return { ok: false,
+    chyba: 'Podpis musí být obrázek PNG nebo JPEG nahraný ze souboru. '
+         + 'Odkaz na obrázek ani formát SVG přijmout nejde.' };
+  if (s.length > PODPIS_MAX) return { ok: false,
+    chyba: 'Obrázek je příliš velký (' + Math.round(s.length / 1024) + ' kB). '
+         + 'Zmenšete ho zhruba pod 600 kB — na podpis s razítkem to stačí.' };
+  return { ok: true, obrazek: s };
+}
+
+export async function podpisCti(email) {
+  try {
+    const z = await (await uloziste(PODPIS_ULOZISTE)).cti(String(email || '').toLowerCase());
+    return (z && z.obrazek) || '';
+  } catch (e) { return ''; }
+}
+
 /* Ověření, kdo požadavek posílá a jestli na něj má právo.
  *
  * PROČ SE ÚČET DOČÍTÁ Z DATABÁZE A NEVĚŘÍ SE COOKIE (rozhodnutí 5. 8. 2026,
@@ -113,7 +178,10 @@ export async function vyzadujRoli(req, ...role) {
   if (ucet.aktivni === false)
     return { chyba: json({ ok: false, chyba: 'Účet je vypnutý. Obraťte se na správce.' }, 401) };
 
-  const relace = { ...r, role: ucet.role, jmeno: ucet.jmeno || '' };
+  /* Profil (titul, funkce, telefon) jde s relací, protože se čte účet stejně
+   * tak jako tak. Podpis ne — ten je stranou a dotahuje se jen tam, kde je
+   * opravdu potřeba (přihlášení a /api/ja), ne při každém uložení zakázky. */
+  const relace = { ...r, ...profilZUctu(ucet), email: r.email, role: ucet.role };
   if (role.length && !role.includes(relace.role))
     return { chyba: json({ ok: false, chyba: 'K této akci je potřeba role: ' + role.join(' / ') + '.' }, 403) };
   return { relace, ucet };

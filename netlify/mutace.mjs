@@ -91,8 +91,8 @@ const MUTACE = [
     proc: 'relace na zrušený účet by dál platila' },
 
   { nazev: 'role se bere z cookie, ne z účtu', soubor: 'lib/sdilene.mjs',
-    hledej: '  const relace = { ...r, role: ucet.role, jmeno: ucet.jmeno || \'\' };',
-    nahrad: '  const relace = { ...r, jmeno: ucet.jmeno || \'\' };',
+    hledej: '  const relace = { ...r, ...profilZUctu(ucet), email: r.email, role: ucet.role };',
+    nahrad: '  const relace = { ...profilZUctu(ucet), ...r, email: r.email };',
     proc: 'sražená role platí až za dvanáct hodin — přesně naopak, než je potřeba' },
 
   /* ---------- přihlášení (functions/prihlaseni.mjs) ---------- */
@@ -148,8 +148,8 @@ const MUTACE = [
     proc: 'kdokoli by si vytáhl seznam zaměstnanců i s rolemi' },
 
   { nazev: 'seznam účtů vydá i otisky hesel', soubor: 'functions/uzivatele.mjs',
-    hledej: '    if (x) out.push({ email: x.email, jmeno: x.jmeno, role: x.role, aktivni: x.aktivni !== false });',
-    nahrad: '    if (x) out.push(x);',
+    hledej: '    if (x) out.push({ email: x.email, jmeno: x.jmeno, titul: x.titul || \'\',',
+    nahrad: '    if (x) out.push(x); if (false) out.push({ email: x.email, jmeno: x.jmeno, titul: x.titul || \'\',',
     proc: 'otisky hesel by se daly lámat mimo server' },
 
   { nazev: 'vlastní heslo jde změnit bez znalosti starého', soubor: 'functions/uzivatele.mjs',
@@ -242,8 +242,8 @@ const MUTACE = [
     proc: 'cizí strojový čas na náš účet a pohled do vnitřku výpočtu' },
 
   { nazev: '/api/ja nekontroluje stav účtu', soubor: 'functions/ja.mjs',
-    hledej: '  const { chyba, relace } = await vyzadujRoli(req);\n  if (chyba) return chyba;',
-    nahrad: '  const { relace } = { relace: await (await import(\'../lib/sdilene.mjs\')).prihlaseny(req) };\n  if (!relace) return json({ ok: false, chyba: \'Nepřihlášen.\' }, 401);',
+    hledej: '  const { chyba, relace, ucet } = await vyzadujRoli(req);\n  if (chyba) return chyba;',
+    nahrad: '  const relace = await (await import(\'../lib/sdilene.mjs\')).prihlaseny(req);\n  if (!relace) return json({ ok: false, chyba: \'Nepřihlášen.\' }, 401);\n  const ucet = { email: relace.email };',
     proc: 'vypnutý účet by po obnovení stránky pořád vypadal jako přihlášený' },
 
   { nazev: '/api/zdravi prozradí prostředí serveru', soubor: 'functions/zdravi.mjs',

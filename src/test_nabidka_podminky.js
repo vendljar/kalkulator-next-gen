@@ -110,5 +110,87 @@ delete v.data.kryci.hodnoty.splatnostDni;
 test('po ↺ se OCK vrátí k předvyplněné hodnotě',
   kr.kryciHodnota(polSplat, v.data.kryci, cOck) === '14');
 
+/* ---------- 5) sazba DPH je volba 12/21 %, ne přepisovatelný text ----------
+ *
+ * Hlášení 5. 8. 2026: „Sazba DPH nemůže být přepisovatelná, ale musí být
+ * volitelná 12/21 % a navázaná na hlavičku kalkulace."
+ *
+ * Do 5. 8. byl řádek „Sazba DPH" v podmínkách obyčejné textové pole
+ * s předvyplněnou hodnotou z ceníku. Obchodník do něj mohl napsat cokoli —
+ * „21%", „21 % ", i „19 %" — a krycí list i cenová nabídka pak nesly jinou
+ * sazbu, než jakou se počítalo „Celkem s DPH" v hlavičce. Rozdíl přitom nešlo
+ * poznat jinak než porovnáním dvou míst v dokumentu.
+ *
+ * Řešení: pole dostane vlastní typ (`dph`) a odkaz na hlavičku (`dphBind`).
+ * Hodnota se tím nebere z ručních přepisů, ale vždy ze sazby v hlavičce
+ * kalkulace — u OCK z C.dph, u projekce z vlastní sazby PROJ (PC.dph).
+ * Ruční přepis se ani neukládá; kdyby v datech ze starší verze zůstal,
+ * nesmí sazbu přebít. Přesně to zdejší testy hlídají. */
+const poleDph = poleOck.find(p => p.id === 'sazbaDph');
+const poleDphP = poleProj.find(p => p.id === 'sazbaDph');
+
+test('sazba DPH OCK je typu „dph" (výběr), ne volný text',
+  poleDph && poleDph.typ === 'dph', JSON.stringify(poleDph && poleDph.typ));
+test('sazba DPH OCK ukazuje na sazbu v hlavičce kalkulace OCK',
+  poleDph && poleDph.dphBind === 'C.dph', String(poleDph && poleDph.dphBind));
+test('sazba DPH PROJ je typu „dph" (výběr), ne volný text',
+  poleDphP && poleDphP.typ === 'dph', JSON.stringify(poleDphP && poleDphP.typ));
+test('sazba DPH PROJ ukazuje na vlastní sazbu projekce (ne na OCK)',
+  poleDphP && poleDphP.dphBind === 'PC.dph', String(poleDphP && poleDphP.dphBind));
+
+/* Nabízené sazby jsou jedna konstanta, ať se výběr v hlavičce a v podmínkách
+ * nerozejde, až se sazby DPH zase jednou změní. */
+test('kryci.js vyváží seznam nabízených sazeb',
+  Array.isArray(kr.KRYCI_DPH_SAZBY) && kr.KRYCI_DPH_SAZBY.join(',') === '12,21',
+  JSON.stringify(kr.KRYCI_DPH_SAZBY));
+
+/* Zdroj pravdy je hlavička, ne uložený text. */
+v.data.cenik.dph = 0.21;
+v.data.proj.cenik.dph = 0.21;
+let cD = kr.kryciCtx(zak, v, JEKLY), cDP = krp.kryciProjCtx(zak, v);
+test('sazba OCK jde z hlavičky (21 %)', kr.kryciHodnota(poleDph, v.data.kryci, cD) === '21 %',
+  kr.kryciHodnota(poleDph, v.data.kryci, cD));
+test('sazba PROJ jde z hlavičky PROJ (21 %)',
+  krp.kryciProjHodnota(poleDphP, v.data.kryciProj, cDP) === '21 %',
+  krp.kryciProjHodnota(poleDphP, v.data.kryciProj, cDP));
+
+v.data.cenik.dph = 0.12;
+v.data.proj.cenik.dph = 0.12;
+cD = kr.kryciCtx(zak, v, JEKLY); cDP = krp.kryciProjCtx(zak, v);
+test('přepnutí hlavičky OCK na 12 % se projeví v podmínkách',
+  kr.kryciHodnota(poleDph, v.data.kryci, cD) === '12 %', kr.kryciHodnota(poleDph, v.data.kryci, cD));
+test('přepnutí hlavičky PROJ na 12 % se projeví v podmínkách PROJ',
+  krp.kryciProjHodnota(poleDphP, v.data.kryciProj, cDP) === '12 %',
+  krp.kryciProjHodnota(poleDphP, v.data.kryciProj, cDP));
+
+/* Zbytek po starší verzi: ruční „19 %" v datech nesmí přebít hlavičku. */
+v.data.kryci.hodnoty.sazbaDph = '19 %';
+v.data.kryciProj.hodnoty.sazbaDph = '19 %';
+test('starý ruční přepis sazby OCK hlavičku nepřebije',
+  kr.kryciHodnota(poleDph, v.data.kryci, cD) === '12 %', kr.kryciHodnota(poleDph, v.data.kryci, cD));
+test('starý ruční přepis sazby PROJ hlavičku nepřebije',
+  krp.kryciProjHodnota(poleDphP, v.data.kryciProj, cDP) === '12 %',
+  krp.kryciProjHodnota(poleDphP, v.data.kryciProj, cDP));
+
+/* Migrace uklidí i data, ať se přepis nevozí zakázkou dál. */
+kr.kryciMigraceSazbaDph(v.data.kryci.hodnoty);
+test('migrace ruční sazbu z dat odstraní', v.data.kryci.hodnoty.sazbaDph === undefined,
+  String(v.data.kryci.hodnoty.sazbaDph));
+
+/* A do Wordu jde táž hodnota jako na obrazovku – krycí list se nesmí lišit. */
+const dataBo = kr.kryciData(zak, v, JEKLY, 'bo');
+const radekDph = dataBo.sekce.reduce((n, s) => n || s.radky.find(r => r[0] === 'Sazba DPH'), null);
+test('krycí list ve Wordu nese sazbu z hlavičky', radekDph && radekDph[1] === '12 %',
+  JSON.stringify(radekDph));
+
+/* Pole zůstává v sekci, kterou souhrn nabídky vykresluje, a nemá `bind` —
+ * jinak by ho filtr v kryciPodminkyBlok() z nabídky vyhodil a obchodník by
+ * sazbu u nabídky vůbec neviděl. */
+const sekceDph = kr.KRYCI_SEKCE.find(s => s.pole.some(p => p.id === 'sazbaDph'));
+test('sazba DPH je v sekci, která se zobrazuje i v nabídce',
+  sekceDph && kr.KRYCI_NABIDKA_SEKCE.includes(sekceDph.sekce), sekceDph && sekceDph.sekce);
+test('sazba DPH nemá `bind` (blok nabídky pole s bind nevykresluje)',
+  poleDph && poleDph.bind === undefined);
+
 console.log('\n' + ok + ' OK, ' + fail + ' FAIL');
 process.exit(fail ? 1 : 0);

@@ -200,5 +200,90 @@ test('roundtrip export→import→export dá stejný obsah',
     JSON.stringify(NAST2.slevy.stropy));
 }
 
+/* ---- 14. Starší konfigurace nesmí umazat klíč, který tehdy neexistoval ------
+ *
+ * Proč to vzniklo (5. 8. 2026, hlášení „nevidím záložku schvalování slev"):
+ * konfigNahradVMiste() nahrazuje obsah objektu CELÝ – nejdřív smaže všechny
+ * klíče cíle a pak nasype klíče zdroje. Pro pole hodnot je to správně (jinak
+ * by šlo z nastavení jen přidávat, ne ubírat), ale u struktur typu
+ * `tabViditelnost` to znamená, že konfigurace uložená před vznikem záložky
+ * „Schvalování slev" tuhle záložku po importu SMAŽE. Nikoli nastaví na false –
+ * úplně odstraní, a tabViditelny() pak vrací false. Uživateli záložka zmizí
+ * a v konzoli není ani řádek. Totéž potká každý budoucí nový přepínač.
+ *
+ * Léčba: po importu se CHYBĚJÍCÍ klíče doplní z výchozí struktury aplikace.
+ * Doplňuje se jen to, co v souboru vůbec není – vypnuté zůstane vypnuté,
+ * jinak by administrátor nemohl nic schovat. A doplňuje se jen u struktur,
+ * kde má „chybí = ještě neexistovalo" smysl (viz KONFIG_DOPLNIT_KLICE);
+ * firemní údaje ne, tam by se výchozími hodnotami vrátila ukázková firma. */
+{
+  const vzor = {
+    tabViditelnost: { kalk: true, detail: true, spec: true, zakazka: true, schvalovani: true },
+    kpiViditelne: { naklad: false, hrubyZisk: false, sleva: false, marze: false, novy: true },
+    zobrazeni: { 'sloupce.naklad': ['Administrátor'], 'novy.prvek': ['Vedoucí'] },
+    firma: { nazev: 'Ukázková firma s.r.o.', ico: '00000000', web: 'priklad.cz' },
+  };
+  const stara = {
+    verze: 1, aplikace: 'Kalkulátor OCK',
+    nastaveni: {
+      /* konfigurace z v5.8.7 – schvalovani ještě neexistovalo */
+      tabViditelnost: { kalk: true, detail: false, spec: true, zakazka: true },
+      kpiViditelne: { naklad: true, hrubyZisk: false, sleva: false, marze: false },
+      zobrazeni: { 'sloupce.naklad': ['Administrátor'] },
+      firma: { nazev: 'ENGINEERS CZ s.r.o.', ico: '24127663' },
+    },
+  };
+  const N = novyNast();
+  N.zobrazeni = { 'sloupce.naklad': ['Administrátor'], 'novy.prvek': ['Vedoucí'] };
+  N.firma = { nazev: 'Ukázková firma s.r.o.', ico: '00000000', web: 'priklad.cz' };
+  const vysl = konfiguraceImport(JSON.parse(JSON.stringify(stara)),
+    { NAST: N, NASTVychozi: vzor }, { nastaveni: true });
+
+  test('import staré konfigurace nesmaže záložku, která tehdy neexistovala',
+    N.tabViditelnost.schvalovani === true, JSON.stringify(N.tabViditelnost));
+  test('vypnutá záložka zůstane vypnutá (doplňuje se jen chybějící)',
+    N.tabViditelnost.detail === false, JSON.stringify(N.tabViditelnost));
+  test('zapnutá hodnota ze souboru se doplňováním nepřepíše',
+    N.kpiViditelne.naklad === true, JSON.stringify(N.kpiViditelne));
+  test('chybějící klíč KPI se doplní z výchozí struktury',
+    N.kpiViditelne.novy === true, JSON.stringify(N.kpiViditelne));
+  test('chybějící prvek matice zobrazení se doplní',
+    JSON.stringify(N.zobrazeni['novy.prvek']) === '["Vedoucí"]', JSON.stringify(N.zobrazeni));
+  test('firemní údaje se NEdoplňují (nevrátila by se ukázková firma)',
+    N.firma.web === undefined && N.firma.nazev === 'ENGINEERS CZ s.r.o.', JSON.stringify(N.firma));
+  test('import o doplnění zpraví ve varováních',
+    vysl.varovani.some(v => /schvalovani/.test(v)), JSON.stringify(vysl.varovani));
+
+  /* bez výchozí struktury se nesmí nic pokazit – Node testy jiných modulů
+   * ji nepředávají a aplikace musí zvládnout i takový import */
+  const N2 = novyNast();
+  konfiguraceImport(JSON.parse(JSON.stringify(stara)), { NAST: N2 }, { nastaveni: true });
+  test('import bez znalosti výchozí struktury projde bez výjimky',
+    N2.tabViditelnost.kalk === true, JSON.stringify(N2.tabViditelnost));
+}
+
+/* ---- 15. konfigDoplnChybejici – samostatně ----------------------------------
+ * Pomocná funkce se používá i jinde než v importu (matice zobrazení ze
+ * serveru chodí stejně stará jako konfigurace), proto má vlastní testy. */
+{
+  const { konfigDoplnChybejici } = K;
+  const cil = { a: 1, vnoreno: { x: 1 } };
+  const dop = konfigDoplnChybejici(cil, { a: 9, b: 2, vnoreno: { x: 9, y: 5 } });
+  test('doplní jen chybějící klíče', cil.a === 1 && cil.b === 2, JSON.stringify(cil));
+  test('doplní i ve vnořeném objektu', cil.vnoreno.x === 1 && cil.vnoreno.y === 5, JSON.stringify(cil));
+  test('vrátí seznam doplněných klíčů s tečkovou cestou',
+    dop.sort().join(',') === 'b,vnoreno.y', dop.join(','));
+  test('hodnota false se nepovažuje za chybějící',
+    (() => { const c = { v: false }; konfigDoplnChybejici(c, { v: true }); return c.v === false; })());
+  test('null místo objektu nic nerozbije',
+    konfigDoplnChybejici(null, { a: 1 }).length === 0 && konfigDoplnChybejici({}, null).length === 0);
+  test('pole se nedoplňují po prvcích (nahrazují se celá)',
+    (() => { const c = { s: ['a'] }; const d = konfigDoplnChybejici(c, { s: ['a', 'b'] });
+      return c.s.length === 1 && d.length === 0; })());
+  test('doplněná hodnota je kopie, ne sdílená reference',
+    (() => { const vz = { o: { k: 1 } }; const c = {};
+      konfigDoplnChybejici(c, vz); c.o.k = 2; return vz.o.k === 1; })());
+}
+
 console.log(fail ? `\n${fail} CHYB (${ok} OK)` : `\nVŠECHNY TESTY KONFIGURACE OK (${ok})`);
 process.exit(fail ? 1 : 0);

@@ -205,6 +205,52 @@ test('server si zapsal, kdo a kdy zveřejnil',
   await page.evaluate(() => ONLINE_STAV.firma.kdo === 'vendl.jaroslav@engineers-cz.cz' && !!ONLINE_STAV.firma.kdy));
 test('panel po zveřejnění ukazuje, kdy a kým',
   (await panelFirma()).includes('Online zveřejněno'));
+
+/* ---- 4c) panel nesmí znovu chtít to, co je už zveřejněné (5. 8. 2026, #142) ----
+ *
+ * Zadání: „Proč musím pořád zveřejňovat firemní údaje? Ty už jsem nahrál
+ * a zveřejnil." Cesta zveřejnit → načíst zpátky fungovala; co chybělo, byla
+ * odpověď na otázku „je nahoře totéž, co mám tady?". Panel místo toho pokaždé
+ * nabízel plné modré tlačítko, tedy gesto, které administrátor už udělal.
+ *
+ * Pozn.: „· právě platí v aplikaci" na tohle odpovědět neumí – rozsvítí se jen
+ * tomu, komu se online kopie do aplikace opravdu nasadila, a administrátorovi
+ * s připojenou složkou _DB se nenasazuje nikdy. Proto se hlídá věta o shodě. */
+await page.evaluate(() => { nastPanel('firma'); });
+await page.waitForTimeout(200);
+test('panel řekne, že online databáze má přesně tyhle údaje',
+  /Online databáze má přesně tyhle údaje/.test(await panelFirma()));
+test('a že zveřejňovat znovu není potřeba',
+  /Zveřejňovat je znovu není potřeba/.test(await panelFirma()));
+test('modré tlačítko „Zveřejnit firemní údaje online" už panel nenabízí',
+  await page.evaluate(() => ![...document.querySelectorAll('#nastaveni-panel button')]
+    .some(x => x.textContent.trim() === 'Zveřejnit firemní údaje online')));
+/* Zmizet ale nesmí docela – přepsat online kopii nejde jinudy. */
+test('zveřejnit znovu jde pořád, jen už to není hlavní nabídka panelu',
+  await page.evaluate(() => {
+    const b = [...document.querySelectorAll('#nastaveni-panel button')]
+      .find(x => /Zveřejnit znovu/.test(x.textContent));
+    return !!b && b.disabled === false && !b.classList.contains('primary');
+  }));
+test('popis stavu mluví o shodě s Nastavením → Firma',
+  await page.evaluate(() => /shodné s tím, co máte/.test(onlineFirmaPopis())));
+
+/* Změna jediného pole musí panel zase probudit – jinak by administrátor
+ * opravil telefon a nikdo z obchodníků by se to nedozvěděl. */
+await page.evaluate(() => { firmaSet('telefon', '+420 111 222 999'); nastPanel('firma'); });
+await page.waitForTimeout(200);
+test('po změně údaje panel pojmenuje, co se liší',
+  /Oproti online kopii se liší: Telefon/.test(await panelFirma()));
+test('a znovu nabídne plné tlačítko ke zveřejnění',
+  await page.evaluate(() => {
+    const b = [...document.querySelectorAll('#nastaveni-panel button')]
+      .find(x => x.textContent.trim() === 'Zveřejnit firemní údaje online');
+    return !!b && b.disabled === false && b.classList.contains('primary');
+  }));
+await page.evaluate(() => { firmaSet('telefon', '+420 111 222 333'); nastPanel('firma'); });
+await page.waitForTimeout(200);
+test('vrácení údaje zpátky panel zase uklidní',
+  /Zveřejňovat je znovu není potřeba/.test(await panelFirma()));
 await page.evaluate(() => zavriNastaveni());
 
 /* ---- 5) zakázka online: uložit, seznam, otevřít ---- */
