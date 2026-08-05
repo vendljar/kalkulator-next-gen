@@ -205,7 +205,11 @@ function presunRadek(sekceKey, fromKey, toKey) {
 
 /* viditelnost sloupců podle role/nastavení + koncové admin sloupce (viditelnost, výchozí) */
 function kalkSloupce() {
-  const admin = jeAdmin();
+  /* Dřív `jeAdmin()`. Sloupce s nákladem a přirážkou (a s nimi koncové
+   * sloupce Viditelnost / Výchozí) teď stojí na právu `sloupce.naklad`, aby
+   * je šlo přidělit vedoucímu bez zbytku administrátorských funkcí. Výchozí
+   * matice právo nikomu nedává, takže se dnešní chování nemění. */
+  const admin = smiZobrazit('sloupce.naklad');
   const showCost = admin && NAST.zobrazitNaklady;
   const adminExtra = admin ? 2 : 0;
   return { admin, showCost, adminExtra, NC: 2 + (admin ? 1 : 0) + (showCost ? 2 : 0) + 1 + adminExtra };

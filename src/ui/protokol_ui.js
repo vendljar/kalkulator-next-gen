@@ -50,7 +50,7 @@ function protokolKdo() {
 
 /* Kdo smí vidět čísla. Viz hlavička: přísněji než marzeSmiCisla(). */
 function protokolSmiCisla() {
-  return typeof jeAdmin === 'function' ? jeAdmin() : false;
+  return typeof smiZobrazit === 'function' ? smiZobrazit('protokol.cisla') : false;
 }
 
 /* ---------- zápis v běhu aplikace ---------- */

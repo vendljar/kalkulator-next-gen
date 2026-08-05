@@ -37,6 +37,7 @@ import program from './netlify/functions/program.mjs';
 import zakazky from './netlify/functions/zakazky.mjs';
 import zaloha from './netlify/functions/zaloha.mjs';
 import firma from './netlify/functions/firma.mjs';
+import zobrazeni from './netlify/functions/zobrazeni.mjs';
 import zalohaVynuceno from './netlify/functions/zaloha_vynuceno.mjs';
 
 const require = createRequire(import.meta.url);
@@ -54,6 +55,9 @@ const FUNKCE = {
   /* Firemní údaje jsou od 4. 8. 2026 taky online: obchodník složku _DB
    * nemapuje, takže hlavičku nabídky nemá odkud jinud vzít. */
   '/api/firma': firma,
+  /* Matice zobrazení (#136) — aplikace ji načítá hned po přihlášení, takže
+   * bez ní by v každém průchodu svítilo 404 v konzoli. */
+  '/api/zobrazeni': zobrazeni,
   /* Vynucená (a ověřitelná) záloha databáze – 4. 8. 2026. Kdyby tu funkce
    * chyběla, volání z prohlížeče by skončilo na 404 a test by mlčel
    * o tom, že „vynucené zálohování" pořád nikam nevede. */
@@ -242,9 +246,14 @@ const btnProj = await listaBtn('proj');
 test('lišta Kalkulace PROJ začíná stejnou trojicí (projekční zakázky)',
   /Uložit zakázku/.test(btnProj[0] || '') && /Načíst zakázku/.test(btnProj[1] || '')
   && /Nová zakázka/.test(btnProj[2] || ''), btnProj.slice(0, 4));
-test('v liště PROJ trojice stojí PŘED převzetím údajů z druhé hlavičky',
-  btnProj.findIndex(t => /Uložit zakázku/.test(t)) < btnProj.findIndex(t => /Převzít údaje/.test(t)),
-  btnProj.slice(0, 5));
+/* 5. 8. 2026: tlačítko „Převzít údaje z hlavičky OCK/PROJ" bylo z lišty obou
+ * kalkulací zrušeno (zadání). Dřív se tu hlídalo jen jeho pořadí; teď se hlídá,
+ * že v liště kalkulací není vůbec — jinak by se při dalším úklidu mohlo tiše
+ * vrátit. Přenos hlavičky zůstává v Přehledu cenových nabídek (viz níže). */
+test('v liště Kalkulace OCK už není převzetí údajů z druhé hlavičky',
+  !btnOck.some(t => /Převzít údaje|Přenést tyto údaje/.test(t)), btnOck.slice(0, 6));
+test('v liště Kalkulace PROJ už není převzetí údajů z druhé hlavičky',
+  !btnProj.some(t => /Převzít údaje|Přenést tyto údaje/.test(t)), btnProj.slice(0, 6));
 
 /* Nová prázdná zakázka: musí zapomenout jméno té předchozí, jinak by se
  * hned sama zapsala do databáze jako záznam bez čísla. Volá se přímo

@@ -37,7 +37,7 @@ function ukazkoveStavAkt() {
  * ho pořád posílala „Připojit složku _DB" – hlášeno uživatelem tentýž den.
  * Rozhoduje jediná funkce, aby se to příště nerozešlo. */
 function ukazkoveSlozkaSmi() {
-  return (typeof jeAdmin !== 'function') || jeAdmin();
+  return (typeof smiZobrazit !== 'function') || smiZobrazit('uloziste.slozka');
 }
 
 function ukazkoveLista() {

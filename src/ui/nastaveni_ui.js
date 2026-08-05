@@ -16,6 +16,34 @@ function nastRefresh() {
   if (typeof nastdbZmeneno === 'function') nastdbZmeneno();
   render(); if (nastOtevreno()) renderNastaveni();
 }
+/* Vnitřní záložky Nastavení (#136). Do 5. 8. 2026 se skládaly ručně přímo
+ * v renderNastaveni() a dvě z nich (Firma, Konfigurace, Slovník) měly kolem
+ * sebe `jeAdmin() ? … : ''`. Od zavedení matice zobrazení se každá záložka
+ * ptá na svůj klíč, takže se dá vedoucímu přidělit třeba Slovník bez toho,
+ * aby dostal zbytek administrátorských funkcí. Seznam je tu jako data,
+ * protože ho potřebují dvě místa (proužek záložek i výběr těla panelu)
+ * a rozejít se nesmí — jinak by šlo otevřít panel, ke kterému není tlačítko.
+ *
+ * Záložky bez klíče (Obecné) vidí každý, kdo se do Nastavení dostal. */
+const NAST_PANELY = [
+  { id: 'obecne', nazev: 'Obecné', telo: () => nastObecne() },
+  { id: 'firma', nazev: 'Firma', klic: 'nastaveni.firma', telo: () => nastFirma() },
+  { id: 'uzivatele', nazev: 'Uživatelé', klic: 'nastaveni.uzivatele', telo: () => nastUzivatele() },
+  { id: 'slevy', nazev: 'Slevy', klic: 'nastaveni.slevy', telo: () => nastSlevy() },
+  { id: 'sablony', nazev: 'Šablony', klic: 'nastaveni.sablony', telo: () => nastSablony() },
+  { id: 'zobrazeni', nazev: 'Zobrazení', klic: 'nastaveni.zobrazeni', telo: () => nastZobrazeni() },
+  { id: 'konfigurace', nazev: 'Konfigurace', klic: 'nastaveni.konfigurace', telo: () => nastKonfigurace() },
+  { id: 'slovnik', nazev: 'Slovník', klic: 'nastaveni.slovnik', telo: () => nastSlovnik() },
+];
+function nastPanelSmi(x) { return !x.klic || typeof smiZobrazit !== 'function' || smiZobrazit(x.klic); }
+function nastPanelyViditelne() { return NAST_PANELY.filter(nastPanelSmi); }
+/* Vybraný panel se dohledává přes „smí ho vidět" — kdyby v NAST.panel zůstal
+ * z dřívějška panel, na který uživatel po změně matice nárok nemá (nebo se
+ * funkce zavolala z konzole), spadne to zpátky na Obecné, ne na prázdno. */
+function nastPanelAktivni() {
+  const p = NAST.panel || 'obecne';
+  return nastPanelyViditelne().find(x => x.id === p) || NAST_PANELY[0];
+}
 function nastPanel(p) { NAST.panel = p; renderNastaveni(); }
 
 /* Přepínač rolí je z doby před přihlašováním – byl to náhled pro toho,
@@ -91,6 +119,7 @@ const NAST_TAB_LABELS = {
   detail: 'Detail výpočtu', spec: 'Technická specifikace OCK', specdata: 'Technická specifikace OCK Data',
   kryci: 'Krycí list zakázky OCK',
   proj: 'Kalkulace PROJ', kryciproj: 'Krycí list zakázky PROJ', cenik: 'Ceník nákladů OCK', cenikproj: 'Ceník nákladů PROJ', zakazka: 'Přehled cenových nabídek',
+  schvalovani: 'Schvalování slev',
 };
 
 /* ---------- sazba přirážky za ATYP (#22) ----------
@@ -148,8 +177,10 @@ function nastObecne() {
       <label><input type="radio" name="nastRole" ${NAST.jeAdmin ? 'checked' : ''} onchange="nastSetAdmin(true)"> Administrátor</label>
       <label><input type="radio" name="nastRole" ${!NAST.jeAdmin ? 'checked' : ''} onchange="nastSetAdmin(false)"> Běžný uživatel (náhled)</label>
     </div>
-    <div class="note">Role zatím nejsou napojené na přihlášení – jde o náhled. „Běžný uživatel" skryje ceníky, detail výpočtu,
-      data specifikace a sloupce Náklad/Přirážka. Skutečné účty se budou tvořit v záložce <b>Uživatelé</b>.</div>
+    <div class="note">Role chodí z přihlášení (záložka <b>Uživatelé</b>); tenhle přepínač je jen náhled pro administrátora.
+      Co přesně „běžný uživatel" uvidí, se od 5. 8. 2026 nastavuje po jednotlivých prvcích v záložce
+      <b>Zobrazení</b> — dokud tam nic nezměníte, platí dosavadní stav: skryté ceníky, detail výpočtu,
+      data specifikace a sloupce Náklad/Přirážka. Náhled konkrétní role (obchodník / vedoucí) je také tam.</div>
 
     <div class="sec-title">Viditelnost záložek</div>
     ${tabRows}
@@ -648,22 +679,144 @@ function nastSlovnik() {
         ? `<div class="note" style="margin-top:10px"><b>Slovník a tabulka jsou v souladu.</b></div>` : '');
 }
 
+/* ---------- vnitřní záložka: Zobrazení (#136) ----------
+ *
+ * „Vytvořit v nastavení položku nastavení zobrazení, ve které bude podle rolí
+ *  možné přiřazovat jednotlivá nastavení sloupců a funkcí v rozhraní napříč
+ *  aplikací."
+ *
+ * Panel je tabulka: řádek = jeden prvek rozhraní, sloupec = role. Seznam
+ * prvků i pravidla jsou v src/zobrazeni.js (a mají vlastní testy), tady se
+ * jen kreslí a přepíná. Ke každému prvku se ukazuje i to, KDE v aplikaci je
+ * a PROČ byl dosud skrytý — bez toho by se u dvaceti klíčů po půl roce
+ * nedalo rozhodnout, co je bezpečné pustit ven.
+ *
+ * Pořadí kroků, které panel předpokládá: administrátor zaškrtá → „Zveřejnit
+ * online" (jinak platí jen jemu a po odhlášení se to ztratí). Proto je stav
+ * zveřejnění vidět hned nahoře a ne až dole pod tabulkou. */
+
+function zobrMatice() {
+  if (!NAST.zobrazeni) NAST.zobrazeni = (typeof zobrazeniVychozi === 'function') ? zobrazeniVychozi() : {};
+  return NAST.zobrazeni;
+}
+function zobrSet(klic, role, v) {
+  if (!jeAdmin()) return;
+  const m = zobrMatice();
+  if (!m[klic]) m[klic] = {};
+  m[klic][role] = !!v;
+  nastRefresh();
+}
+/* Hromadné přepnutí. `navrh` = doporučení sepsané u každého prvku (podklad
+ * k rozhodnutí, ne výchozí stav), `vychozi` = dnešek před zavedením matice. */
+function zobrPredloha(ktera) {
+  if (!jeAdmin()) return;
+  if (!confirm(ktera === 'navrh'
+    ? 'Přepsat celou tabulku doporučením?\n\nDoporučení je návrh, co dát obchodníkovi a co vedoucímu. '
+      + 'Vaše dosavadní zaškrtnutí se ztratí. Zveřejnit se to musí zvlášť.'
+    : 'Vrátit celou tabulku na stav před zavedením tohoto nastavení?\n\n'
+      + 'Tedy: administrátor vidí všechno, obchodník i vedoucí nic navíc.')) return;
+  const m = zobrMatice();
+  ZOBRAZENI_PRVKY.forEach(p => {
+    if (!m[p.klic]) m[p.klic] = {};
+    ZOBRAZENI_ROLE_PRIDELITELNE.forEach(r => {
+      m[p.klic][r] = p.pevne ? false : !!(ktera === 'navrh' ? p.navrh : p.vychozi)[r];
+    });
+  });
+  nastRefresh();
+}
+/* Náhled cizí role: administrátor si přepne, co uvidí obchodník nebo vedoucí,
+ * aniž by se musel odhlašovat a přihlašovat cizím účtem. Pohled se zapíná
+ * přes `nastSetAdmin(false)` — tím se z NAST.jeAdmin stane false a rozhraní
+ * začne chodit maticí; `nahledRole` řekne, ČÍ pohled to je. */
+function zobrNahled(role) {
+  NAST.nahledRole = role || '';
+  if (role) nastSetAdmin(false); else nastSetAdmin(true);
+}
+
+function nastZobrazeni() {
+  if (!jeAdmin())
+    return `<div class="note">Rozdělení, co která role vidí, nastavuje <b>jen administrátor</b>.
+      Tady vidíte, co bylo přiděleno vám.</div>`;
+  const m = zobrMatice();
+  const zmen = (typeof zobrazeniZmeny === 'function') ? zobrazeniZmeny(m) : [];
+  const online = typeof onlineZobrazeniPopis === 'function' ? onlineZobrazeniPopis() : '';
+
+  const bunka = (p, r) => {
+    if (p.pevne)
+      return `<td style="text-align:center" title="Drží server – přidělit nejde">—</td>`;
+    return `<td style="text-align:center"><input type="checkbox" ${m[p.klic] && m[p.klic][r] ? 'checked' : ''}
+      onchange="zobrSet('${escJs(p.klic)}', '${escJs(r)}', this.checked)"></td>`;
+  };
+
+  const skupiny = ZOBRAZENI_SKUPINY.map(s => {
+    const prvky = ZOBRAZENI_PRVKY.filter(p => p.skupina === s.klic);
+    if (!prvky.length) return '';
+    const radky = prvky.map(p => `<tr>
+      <td>
+        <b>${esc(p.nazev)}</b>${p.pevne ? ' <span class="note" style="display:inline">(drží server)</span>' : ''}
+        <div class="note" style="margin:2px 0 0">${esc(p.kde)}</div>
+        <div class="note" style="margin:2px 0 0">${esc(p.popis)}</div>
+        <div class="note" style="margin:2px 0 0;font-style:italic">${esc(p.proc)}</div>
+      </td>
+      ${ZOBRAZENI_ROLE_PRIDELITELNE.map(r => bunka(p, r)).join('')}
+      <td class="note" style="font-size:11.5px">${ZOBRAZENI_ROLE_PRIDELITELNE
+        .filter(r => p.navrh[r]).map(r => esc(r)).join(', ') || '—'}</td>
+    </tr>`).join('');
+    return `<div class="sec-title">${esc(s.nazev)}</div>
+      <table class="sd-tbl"><thead><tr>
+        <th style="width:52%">Prvek rozhraní</th>
+        ${ZOBRAZENI_ROLE_PRIDELITELNE.map(r => `<th style="text-align:center">${esc(r)}</th>`).join('')}
+        <th>Doporučení</th>
+      </tr></thead><tbody>${radky}</tbody></table>`;
+  }).join('');
+
+  return `<div class="note" style="margin-top:0">Tabulka říká, co uvidí <b>obchodník</b> a co <b>vedoucí</b>.
+      Administrátor vidí vždycky všechno — kdyby si mohl něco odebrat, neměl by se jak dostat zpátky sem.
+      Prvky označené <b>(drží server)</b> se nepřidělují: zveřejnit ceník, spravovat účty nebo pořídit
+      otisk databáze hlídá i server, takže by tlačítko sice svítilo, ale skončilo by chybou.</div>
+
+    <div class="sec-title">Stav v online databázi</div>
+    <div class="note" style="margin-top:0">${esc(online)}</div>
+    <div class="note">${zmen.length
+      ? esc('Proti výchozímu rozdělení máte v tabulce ' + zmen.length + ' odchylek.')
+      : 'V tabulce zatím není žádná odchylka od výchozího rozdělení.'}</div>
+    <div class="btns" style="margin-top:8px">
+      ${typeof onlineZverejniZobrazeni === 'function'
+        ? `<button class="primary" onclick="onlineZverejniZobrazeni()">Zveřejnit nastavení zobrazení online</button>` : ''}
+      <button class="mini" onclick="zobrPredloha('navrh')">Použít doporučení</button>
+      <button class="mini" onclick="zobrPredloha('vychozi')">Vrátit na dnešní stav</button>
+    </div>
+    <div class="note">Dokud nastavení nezveřejníte, platí jen vám a po odhlášení se ztratí —
+      matice bydlí na serveru, protože obchodník ani vedoucí složku <code>_DB</code> nemapují.</div>
+
+    <div class="sec-title">Náhled cizí role</div>
+    <div class="kl-radio">
+      <label><input type="radio" name="nastNahled" ${NAST.jeAdmin ? 'checked' : ''}
+        onchange="zobrNahled('')"> Administrátor (skutečný pohled)</label>
+      ${ZOBRAZENI_ROLE_PRIDELITELNE.map(r => `<label><input type="radio" name="nastNahled"
+        ${!NAST.jeAdmin && NAST.nahledRole === r ? 'checked' : ''}
+        onchange="zobrNahled('${escJs(r)}')"> ${esc(r)} (náhled)</label>`).join('')}
+    </div>
+    <div class="note">Náhled přepíná jen to, co je vidět na obrazovce. Co se smí skutečně
+      provést, hlídá server podle role účtu — náhledem se práva nezískávají.</div>
+
+    ${skupiny}`;
+}
+
 function renderNastaveni() {
   const el = document.getElementById('nastaveni-panel'); if (!el) return;
-  const p = NAST.panel || 'obecne';
-  const tab = (id, label) => `<button class="${p === id ? 'act' : ''}" onclick="nastPanel('${id}')">${label}</button>`;
-  let body = '';
-  if (p === 'firma') body = nastFirma();
-  else if (p === 'uzivatele') body = nastUzivatele();
-  else if (p === 'slevy') body = nastSlevy();
-  else if (p === 'sablony') body = nastSablony();
-  else if (p === 'konfigurace') body = nastKonfigurace();
-  else if (p === 'slovnik') body = nastSlovnik();
-  else body = nastObecne();
+  const akt = nastPanelAktivni();
+  const tab = x => `<button class="${akt.id === x.id ? 'act' : ''}" onclick="nastPanel('${escJs(x.id)}')">${esc(x.nazev)}</button>`;
+  const zalozky = nastPanelyViditelne().map(tab).join('');
+  const body = akt.telo();
+  /* Podtitulek už nesmí říkat „jen administrátor" natvrdo: od zavedení matice
+   * (#136) se sem může dostat i vedoucí, kterému administrátor Nastavení
+   * přidělil — a ten by se z nadpisu dozvěděl, že tu vlastně nemá co dělat. */
+  const komu = jeAdmin() ? '— jen administrátor' : '— vidíte části, které vám přidělil administrátor';
 
   el.innerHTML = `
-    <h2>⚙ Nastavení <span class="note" style="font-weight:400">— jen administrátor</span></h2>
-    <div class="nast-tabs noprint">${tab('obecne', 'Obecné')}${jeAdmin() ? tab('firma', 'Firma') : ''}${tab('uzivatele', 'Uživatelé')}${tab('slevy', 'Slevy')}${tab('sablony', 'Šablony')}${jeAdmin() ? tab('konfigurace', 'Konfigurace') : ''}${jeAdmin() ? tab('slovnik', 'Slovník') : ''}</div>
+    <h2>⚙ Nastavení <span class="note" style="font-weight:400">${esc(komu)}</span></h2>
+    <div class="nast-tabs noprint">${zalozky}</div>
     <div class="body">${body}
       <div class="btns" style="margin-top:18px"><button class="primary" onclick="zavriNastaveni()">Zavřít</button></div>
     </div>`;

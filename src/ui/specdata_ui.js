@@ -69,7 +69,7 @@ function sdExport() {
 function renderSpecData() {
   const el = document.getElementById('page-specdata');
   if (!el) return;
-  if (!jeAdmin()) { el.innerHTML = '<div class="note">Tato záložka je přístupná jen administrátorovi.</div>'; return; }
+  if (!smiZobrazit('tab.specdata')) { el.innerHTML = '<div class="note">Tato záložka je přístupná jen rolím, které na ni mají právo.</div>'; return; }
 
   const pouziti = tsCiselnikPouziti();
 

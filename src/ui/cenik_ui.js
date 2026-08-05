@@ -68,8 +68,8 @@ const CENIK_POZN = `<div class="note">Ceník je součástí aktivní varianty a 
 
 function renderCenik() {
   document.getElementById('page-cenik').innerHTML =
-    `${jeAdmin() ? renderProgramKarta() : ''}
-     ${jeAdmin() && typeof renderOnlineCenikKarta === 'function' ? renderOnlineCenikKarta() : ''}
+    `${smiZobrazit('cenik.zverejnit') ? renderProgramKarta() : ''}
+     ${smiZobrazit('cenik.zverejnit') && typeof renderOnlineCenikKarta === 'function' ? renderOnlineCenikKarta() : ''}
      <div class="card"><h2 style="cursor:default">Ceník nákladů OCK – číselník jednotkových cen
        <span class="pill warn" style="float:right">každou cenu před nabídkou překontrolovat!</span></h2>
      <div class="body">
@@ -84,10 +84,10 @@ function renderCenik() {
          <tr><th>Položka</th><th>Cena</th><th>Jednotka</th><th>Poznámka</th></tr>
          ${cenikRows(CENIK_DEF)}
        </table>
-       <div class="btns admin-only" style="margin-top:12px">
+       ${smiZobrazit('cenik.import') ? `<div class="btns" style="margin-top:12px">
          <button class="primary" onclick="cenikExport()">⭳ Export do Excelu (OCK+PROJ)</button>
          <button onclick="cenikImport()">⭱ Import z Excelu</button>
-       </div>
+       </div>` : ''}
        <div class="btns" style="margin-top:8px">
          <button onclick="resetCenik()">Obnovit výchozí ceník OCK</button>
        </div>
@@ -104,8 +104,8 @@ function renderCenikProj() {
      * nad týmž stavem, stejný vzor jako karty slevy a zaokrouhlení. Karta
      * nenese žádné id (card() bez čtvrtého argumentu), dvojí vykreslení
      * proto nic nezdvojí; hlídá to overit_program.mjs. */
-    `${jeAdmin() ? renderProgramKarta() : ''}
-     ${jeAdmin() && typeof renderOnlineCenikKarta === 'function' ? renderOnlineCenikKarta() : ''}
+    `${smiZobrazit('cenik.zverejnit') ? renderProgramKarta() : ''}
+     ${smiZobrazit('cenik.zverejnit') && typeof renderOnlineCenikKarta === 'function' ? renderOnlineCenikKarta() : ''}
      <div class="card"><h2 style="cursor:default">Ceník nákladů PROJ – projekční práce
        <span class="pill warn" style="float:right">každou cenu před nabídkou překontrolovat!</span></h2>
      <div class="body">
@@ -118,10 +118,10 @@ function renderCenikProj() {
          <tr><th>Položka</th><th>Cena</th><th>Jednotka</th><th>Poznámka</th></tr>
          ${cenikRows(CENIK_DEF_PROJ)}
        </table>
-       <div class="btns admin-only" style="margin-top:12px">
+       ${smiZobrazit('cenik.import') ? `<div class="btns" style="margin-top:12px">
          <button class="primary" onclick="cenikExport()">⭳ Export do Excelu (OCK+PROJ)</button>
          <button onclick="cenikImport()">⭱ Import z Excelu</button>
-       </div>
+       </div>` : ''}
        <div class="btns" style="margin-top:8px">
          <button onclick="resetCenikProj()">Obnovit výchozí ceník PROJ</button>
        </div>

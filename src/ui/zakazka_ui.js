@@ -26,7 +26,7 @@ function varSmaz(id) {
   // #34: odeslanou nabídku běžný uživatel nemaže – je to doklad o tom, co
   // zákazník dostal. Správce ano (má i odemknutí), ale s výslovným varováním.
   if (typeof variantaUzamcena === 'function' && variantaUzamcena(v)) {
-    if (!jeAdmin()) {
+    if (!smiZobrazit('varianta.smazatUzamcenou')) {
       alert(`Varianta „${v.nazev}" (${variantaCislo(ZAK, v)}) je uzamčená jako odeslaná nabídka `
         + 'a nelze ji smazat.\n\nZáznam o tom, co odešlo zákazníkovi, musí v zakázce zůstat.');
       return;
@@ -117,7 +117,7 @@ function renderZakazka() {
     (typeof renderOnlineKarta === 'function' ? renderOnlineKarta() : '') +
     /* Složka _DB je věc administrátora (zadání 4. 8. 2026): běžný uživatel
      * pracuje čistě s online databází a mapování Disku nikdy nevidí. */
-    (jeAdmin() && typeof renderUlozisteKarta === 'function' ? renderUlozisteKarta() : '') +
+    (smiZobrazit('uloziste.slozka') && typeof renderUlozisteKarta === 'function' ? renderUlozisteKarta() : '') +
     card('Zakázka – hlavička PROJ (cenová nabídka projekce)',
       inp('ZAK.projHlavicka.cislo', { type: 'text', l: 'Číslo nabídky (CN)' }) +
       inp('ZAK.projHlavicka.nazevAkce', { type: 'text', l: 'Název akce' }) +
@@ -142,8 +142,9 @@ function renderZakazka() {
       </div>
       <div class="note">Projekční část má vlastní číslo nabídky, náplň i objednatele, proto je tato
       hlavička <b>oddělená</b> od hlavičky OCK a nic se mezi nimi nepropisuje samo. Když se obě části
-      řeší společně, přeneste údaje tlačítkem a pak je doupravte. Tato pole se používají v cenové
-      nabídce PROJ (OVP-CN) a v krycím listu zakázky PROJ.</div>`) +
+      řeší společně, přeneste údaje jedním z tlačítek výše a pak je doupravte — je to jediné místo
+      v aplikaci, kde se hlavičky přenášejí (z lišty obou kalkulací tato tlačítka 5. 8. 2026 zmizela).
+      Tato pole se používají v cenové nabídce PROJ (OVP-CN) a v krycím listu zakázky PROJ.</div>`) +
     seznamKarta() +
     /* #37 – interní zápisník zakázky. Stojí nad kartami nabídek schválně:
      * „proč jsme šli s cenou dolů" je potřeba mít na očích právě ve chvíli,
@@ -196,7 +197,7 @@ function porovnaniData() {
 
 /* metriky, které smí vidět uživatel podle role (náklad a marže jen admin) */
 function porovnaniMetriky(p) {
-  return p.metriky.filter(m => !m.admin || jeAdmin());
+  return p.metriky.filter(m => !m.admin || smiZobrazit('porovnani.naklad'));
 }
 
 const pctFmt = (n, d = 1) =>
@@ -260,7 +261,7 @@ function porovnaniKarta() {
      „${esc(p.ridiciNazev)}" (červeně dráž, zeleně levněji). <b>Celkem</b> = cena OCK po schválené
      slevě + kalkulace PROJ, stejně jako v cenové nabídce; <b>příplatky</b> se do celku nezapočítávají,
      nabízejí se zvlášť. Sazba DPH se přebírá z ceníku dané varianty a použije se i na část PROJ.
-     ${jeAdmin() ? 'Řádky s nákladem a marží vidí jen administrátor.' : ''}</div>`);
+     ${smiZobrazit('porovnani.naklad') ? 'Řádky s nákladem a marží vidí jen role, které na ně mají právo.' : ''}</div>`);
 }
 
 /* ============================================================
@@ -278,7 +279,7 @@ function porovnaniPolozkyData() {
 /* atributy, které smí vidět uživatel podle role (náklad jen admin) */
 function porovnaniAtributy() {
   return POROVNANI_ATRIBUTY.filter(a => a.typ !== 'text' && a.klic !== 'sMarzi' &&
-                                        (!a.admin || jeAdmin()));
+                                        (!a.admin || smiZobrazit('porovnani.naklad')));
 }
 
 const POR_STAV_POPIS = { pridano: 'přidáno', odebrano: 'odebráno', zmeneno: 'změněno', shodne: 'beze změny' };
@@ -369,7 +370,7 @@ function porovnaniPolozkyKarta() {
      <b>≠ změněno</b> = liší se množství, jednotková cena nebo název. Položky beze změny se neuvádějí,
      jejich počet je v souhrnu. <b>Volitelné položky</b> se řídí zaškrtnutím v kalkulaci, u <b>příplatků</b>
      znamená nulové množství, že se nenabízejí. Ceny položek jsou <b>s marží, bez DPH</b>; příplatky se
-     do celkové ceny nezapočítávají.${jeAdmin() ? ' Sloupec Náklad položky vidí jen administrátor.' : ''}</div>`);
+     do celkové ceny nezapočítávají.${smiZobrazit('porovnani.naklad') ? ' Sloupec Náklad položky vidí jen role, které na něj mají právo.' : ''}</div>`);
 }
 
 /* Tiskový pohled detailu položek – popisky v jazyce dokumentů */
@@ -510,6 +511,7 @@ function nabidkaKarta() {
     podmínky, termíny a další příplatky doladíte ve Wordu; PDF: Soubor → Uložit jako → PDF.</div>
     <div class="note" style="font-weight:600;margin-top:8px">Co se vyplní do nabídky (živý náhled):</div>
     ${nahled}
+    ${typeof kryciPodminkyBlok === 'function' ? kryciPodminkyBlok() : ''}
     ${nabidkaFotoKarta()}
     ${typeof kontrolyPanel === 'function' ? kontrolyPanel() : ''}
     ${typeof ukazkoveZabranaPanel === 'function' ? ukazkoveZabranaPanel() : ''}

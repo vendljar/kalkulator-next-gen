@@ -37,10 +37,20 @@ syncVarianta();
 /* ---------- nastavení aplikace (ozubené kolo, jen admin) ---------- */
 const NAST = {
   jeAdmin: true,               // dnes je vše admin; přepínač role je v Nastavení
-  tabViditelnost: { kalk: true, detail: true, spec: true, specdata: true, kryci: true, proj: true, kryciproj: true, cenik: true, cenikproj: true, zakazka: true },
+  tabViditelnost: { kalk: true, detail: true, spec: true, specdata: true, kryci: true, proj: true, kryciproj: true, cenik: true, cenikproj: true, zakazka: true, schvalovani: true },
   zobrazitNaklady: true,       // sloupce Náklad/Přirážka v tabulce kalkulace (jen admin)
   kpiViditelne: { naklad: false, hrubyZisk: false, sleva: false, marze: false }, // KPI v hlavičce viditelné i běžnému uživateli
   panel: 'obecne',             // aktivní vnitřní záložka Nastavení: obecne | uzivatele | slevy
+  /* Matice „co která role vidí" (#136). Seznam prvků i pravidla jsou v
+   * src/zobrazeni.js; tady leží jen zvolené hodnoty. Výchozí matice se rovná
+   * dnešnímu chování, takže dokud ji administrátor neotevře, nikdo nepozná,
+   * že přibyla. Platí pro celou firmu, proto se zveřejňuje na server
+   * (/api/zobrazeni) stejnou cestou jako firemní údaje. */
+  zobrazeni: typeof zobrazeniVychozi === 'function' ? zobrazeniVychozi() : {},
+  /* Kterou rolí se administrátor právě dívá, když si vypnul pohled
+   * administrátora. Prázdno = Obchodník. Běžného uživatele se to netýká –
+   * jeho role chodí ze serveru a předstírat cizí nejde. */
+  nahledRole: '',
   jazyk: 'cz',                 // jazyk dokumentů: cz | en | de | fr (N1 – jazykové mutace)
 
   // --- Firemní údaje pro dokumenty (SET-3; jen admin) – viz firma.js ---
@@ -91,6 +101,38 @@ function smiPohledAdmina() {
   const ja = (typeof ONLINE_STAV !== 'undefined' && ONLINE_STAV) ? ONLINE_STAV.ja : null;
   return typeof pravaSmiAdmin === 'function' ? pravaSmiAdmin(ja) : true;
 }
+/* ---------- kdo se dívá a co smí vidět (#136) ----------
+ * Do 5. 8. 2026 mělo rozhraní jediné dělítko: `jeAdmin()`. Buď administrátor
+ * a vidí vše, nebo běžný uživatel a nevidí ceníky, náklady ani Nastavení.
+ * Role „Vedoucí" přitom existovala — jen v rozhraní neznamenala nic.
+ *
+ * Teď se každý skrytý prvek ptá `smiZobrazit('klic')` a odpověď skládá
+ * `zobrazeniSmi()` ze src/zobrazeni.js z matice v NAST.zobrazeni. Výchozí
+ * matice odpovídá dosavadnímu chování do posledního prvku, takže se změnou
+ * samotnou nikomu nic nepřibylo ani neubylo.
+ *
+ * Skutečnou hranici drží dál server: zveřejnit ceník, spravovat účty nebo
+ * pořídit otisk databáze smí podle netlify/functions/* jen administrátor
+ * a upravený prohlížeč s tím nic nesvede. Tohle je vrstva pohodlí — co má
+ * kdo na obrazovce, ne co smí provést. */
+function zobrazeniRole() {
+  const ja = (typeof ONLINE_STAV !== 'undefined' && ONLINE_STAV) ? ONLINE_STAV.ja : null;
+  /* Náhled cizí role smí zapnout jen ten, kdo má nárok na pohled
+   * administrátora (přihlášený admin nebo offline záložní soubor).
+   * Obchodníkovi se role bere ze serveru — vlastní přepínač by byl k ničemu,
+   * protože přidat si práva by stejně nešlo, a jen by ho mátl. */
+  if (typeof smiPohledAdmina === 'function' && smiPohledAdmina())
+    return NAST.jeAdmin ? 'Administrátor' : (NAST.nahledRole || 'Obchodník');
+  return (ja && ja.role) ? ja.role : 'Obchodník';
+}
+function smiZobrazit(klic) {
+  if (typeof zobrazeniSmi !== 'function') return true;   // pojistka při sestavení
+  return zobrazeniSmi(zobrazeniRole(), klic, NAST.zobrazeni);
+}
+/* Některá místa skrývají celý blok až tehdy, když je skrytý každý jeho kus —
+ * třeba řádek tlačítek ceníku nemá smysl kreslit prázdný. */
+function smiZobrazitVse(klice) { return klice.every(k => smiZobrazit(k)); }
+
 /* aktivní jazyk dokumentů a zkratka pro překlad (viz preklad.js) */
 function jazyk() { return NAST.jazyk || 'cz'; }
 function jazykSet(k) { NAST.jazyk = JAZYK_IDX[k] === undefined && k !== 'cz' ? 'cz' : k;
@@ -103,9 +145,14 @@ function kpiVidSet(k, v) { if (!NAST.kpiViditelne) NAST.kpiViditelne = {}; NAST.
  * Generátor (nabídka, budoucí SoD) je bere odtud místo výběru souboru pokaždé. */
 const SABLONY = {};
 /* je záložka viditelná? (skryté ceníky/detaily pro běžného uživatele) */
+const TAB_ZOBRAZENI_KLIC = { cenik: 'tab.cenik', cenikproj: 'tab.cenikproj', detail: 'tab.detail', specdata: 'tab.specdata' };
 function tabViditelny(t) {
   if (!NAST.tabViditelnost[t]) return false;
-  if (!NAST.jeAdmin && (t === 'cenik' || t === 'cenikproj' || t === 'detail' || t === 'specdata')) return false;
+  /* Dřív tu stálo `!NAST.jeAdmin && (cenik|cenikproj|detail|specdata)`.
+   * Matice #136 se ve výchozím stavu chová stejně, jen jde po jednotlivých
+   * záložkách — vedoucí tak může dostat Detail výpočtu, aniž by dostal ceník. */
+  const k = TAB_ZOBRAZENI_KLIC[t];
+  if (k && !smiZobrazit(k)) return false;
   return true;
 }
 
@@ -246,7 +293,10 @@ function zakazkaHlavicka(ock) {
     <input type="date" value="${esc(ZAK.datum)}" onchange="set('ZAK.datum', this.value)"></div>`;
 
   // globální přirážka (admin) + DPH ve světlých polích 2. sloupce
-  const prirazkaRow = `<div class="row admin-only"><label>Globální přirážka</label>
+  /* Globální přirážka je nákladové číslo — kdo ji vidí, dopočítá si z ceny
+   * náklad. Proto se řídí právem `pole.prirazka` a řádek se nekreslí vůbec;
+   * dřívější třída `admin-only` uměla jen „admin / neadmin", ne přidělení roli. */
+  const prirazkaRow = !smiZobrazit('pole.prirazka') ? '' : `<div class="row"><label>Globální přirážka</label>
     <span class="pct-wrap"><input type="number" step="1" value="${Math.round(C.marze * 10000) / 100}" onchange="set('C.marze', (+this.value) / 100)"> %</span></div>`;
   const dphRow = `<div class="row"><label>Sazba DPH</label>
     <select onchange="set('C.dph', +this.value)">
@@ -264,7 +314,7 @@ function zakazkaHlavicka(ock) {
   /* Globální přirážka PROJ (zadání 31. 7. 2026) – stejné místo i chování jako
    * v hlavičce OCK. Do 31. 7. se nastavovala jen v záložce Ceník nákladů PROJ,
    * takže při počítání nabídky nebyla vidět a nikdo si jí nevšiml. */
-  const prirazkaRowProj = `<div class="row admin-only"><label>Globální přirážka</label>
+  const prirazkaRowProj = !smiZobrazit('pole.prirazka') ? '' : `<div class="row"><label>Globální přirážka</label>
     <span class="pct-wrap"><input type="number" step="1" value="${Math.round(PC.marze * 10000) / 100}" onchange="set('PC.marze', (+this.value) / 100)"> %</span></div>`;
 
   /* #17 – varianta převzatá z historické kalkulace nese větu o původu.
@@ -275,14 +325,11 @@ function zakazkaHlavicka(ock) {
   const archivBtn = `<button class="mini" onclick="otevriArchiv()"
     title="nahlédnout do uložených zakázek a převzít historickou kalkulaci jako alternativu">↩ Historická kalkulace…</button>`;
 
-  // ruční přenos celé hlavičky mezi OCK a PROJ (nic se nepropisuje samo)
-  const shodne = zakazkaHlavickyShodne(ZAK);
-  const kopieBtn = smer => {
-    const doProj = smer === 'doProj';
-    const popis = doProj ? '⇦ Převzít údaje z hlavičky OCK' : '⇨ Převzít údaje z hlavičky PROJ';
-    const tip = shodne ? 'obě hlavičky mají shodné údaje' : 'přepíše pole této hlavičky údaji z druhé kalkulace – pak je můžete upravit';
-    return `<button class="mini noprint" title="${tip}" onclick="zakHlavickaKopiruj('${smer}')">${popis}</button>`;
-  };
+  /* Tlačítko „Převzít údaje z hlavičky OCK/PROJ" v liště obou kalkulací bylo
+   * 5. 8. 2026 na pokyn zrušeno. Lišta kalkulace má nést jen to, co se dělá
+   * pořád (uložit / načíst / nová zakázka, varianty), ne jednorázový úkon při
+   * zakládání zakázky. Přenos hlavičky zůstal tam, kde se hlavičky vyplňují —
+   * v Přehledu cenových nabídek u karty „Zakázka – hlavička PROJ“. */
 
   if (!ock) {   // Kalkulace PROJ – vlastní, na OCK nezávislá hlavička
     // Režim výpočtu se zde záměrně nezobrazuje: řídí ho engine OCK (vypocet),
@@ -301,7 +348,6 @@ function zakazkaHlavicka(ock) {
       <div class="zak-cena noprint">
         ${zakTrojice()}
         <span class="zak-cena-del"></span>
-        ${kopieBtn('doProj')}
         <button class="mini" onclick="varNova()">+ Nová varianta (kopie otevřené)</button>
         ${archivBtn}
         <button class="mini" onclick="prepniTab('zakazka')">Přehled cenových nabídek →</button>
@@ -324,7 +370,6 @@ function zakazkaHlavicka(ock) {
     <div class="zak-cena noprint">
       ${zakTrojice()}
       <span class="zak-cena-del"></span>
-      ${kopieBtn('doOck')}
       <button class="mini" onclick="varNova()">+ Nová varianta (kopie otevřené)</button>
       ${archivBtn}
       <button class="mini" onclick="prepniTab('zakazka')">Přehled cenových nabídek →</button>
@@ -385,15 +430,24 @@ function renderNabidkaOck() {
 }
 
 /* ---------- Sleva (ZAK-10): zadání, stropy dle role, schvalování ---------- */
-/* Přepočte a uloží stav slevy do SL; manuální schválení drží, dokud se nezmění %. */
+/* Přepočte a uloží stav slevy do SL; ruční rozhodnutí drží, dokud se nezmění %.
+ *
+ * Samotný stavový automat („do stropu projde sám, nad strop čeká, pod marží
+ * nelze") se 5. 8. 2026 přestěhoval do `schvalovani.js` – tady visel uvnitř
+ * vykreslovací funkce, takže se nedal prověřit bez prohlížeče a schvalování
+ * v nové záložce by muselo pravidla opsat podruhé. Dvě kopie stejného pravidla
+ * se dřív nebo později rozejdou; proto jen jedna, v CORE, s vlastní testovou
+ * sadou (`test_schvalovani.js`).
+ *
+ * Uzamčená varianta se nepřepočítává: co odešlo zákazníkovi, je doklad. Stav
+ * slevy se v ní jen zobrazí tak, jak byl v okamžiku tisku. */
 function slevaRefreshStav() {
   let r = null; try { r = vypocet(Z, C, JEKLY, OCK.fixes); } catch (e) {}
   if (!r) return null;
   const v = slevaVyhodnot(r.souhrn.zakladCena, r.souhrn.zakladNaklad, SL, NAST.slevy);
-  if (!(+SL.procenta > 0)) { SL.stav = ''; SL.schvalil = ''; SL.schvalenoProc = undefined; }
-  else if (v.podMarzi) { SL.stav = 'zamítnuto'; SL.schvalil = ''; SL.schvalenoProc = undefined; }
-  else if (SL.stav === 'schváleno' && SL.schvalenoProc === +SL.procenta) { /* drž manuální schválení */ }
-  else { SL.stav = v.stav; if (v.stav !== 'čeká na schválení') SL.schvalil = ''; }
+  const zamceno = (typeof variantaUzamcena === 'function')
+    && variantaUzamcena(aktivniVarianta(ZAK));
+  if (!zamceno) schvalovaniPrepocti(SL, v);
   return v;
 }
 function slevaSetProc(val) { SL.procenta = Math.max(0, +val || 0); render(); }
@@ -404,12 +458,10 @@ function slevaSetSchema(val) { SL.schema = val; render(); }
  * překreslení vrátila starý text (audit 1. 8. 2026, N5). onchange pálí až
  * při opuštění pole, takže překreslení kurzor nekrade. */
 function slevaSetPozn(val) { SL.poznamka = val; render(); }
-function slevaSetSchvalitel(val) { SL.schvalitel = val; }
-function slevaSchval() {
-  SL.stav = 'schváleno'; SL.schvalenoProc = +SL.procenta;
-  SL.schvalil = SL.schvalitel || 'nadřízený'; SL.schvalilKdy = new Date().toISOString();
-  render();
-}
+/* `slevaSetSchvalitel` a `slevaSchval` tu skončily 5. 8. 2026: schvalování
+ * má vlastní záložku (`ui/schvalovani_ui.js`). Pole `SL.schvalitel` ve
+ * starých zakázkách zůstává – migrace rolí v `zakazka.js` ho dál převádí,
+ * aby se archivní data nerozbila. */
 function slevaZrus() { Object.assign(SL, slevaDefault()); render(); }
 
 /* Maximum globální slevy v % pro UI (výchozích 30 %; nastavuje se
@@ -476,19 +528,23 @@ function slevaKarta(kontext) {
   const schemaOpts = ['<option value="">— schéma slevy —</option>']
     .concat(schemata.map(s => `<option ${s.nazev === SL.schema ? 'selected' : ''}>${esc(s.nazev)}</option>`)).join('');
   const roleOpts = NAST.role.map(rr => `<option ${rr === SL.role ? 'selected' : ''}>${esc(rr)}</option>`).join('');
-  // nadřízení = role s vyšším stropem než zadavatel
-  const strop = v.strop, nadrizeni = NAST.role.filter(rr => (NAST.slevy.stropy[rr] || 0) > strop + 1e-9);
-  const schvalitel = SL.schvalitel || (nadrizeni[0] || 'Administrátor');
-  const schvalOpts = (nadrizeni.length ? nadrizeni : NAST.role).map(rr => `<option ${rr === schvalitel ? 'selected' : ''}>${esc(rr)}</option>`).join('');
+  const strop = v.strop;
 
+  /* Stavů je pět, ale „zamítnuto" znamená dvě různé věci: buď slevu srazila
+   * pod minimální marži (rozhodnout o ní nemůže nikdo), nebo ji někdo konkrétní
+   * zamítl (a po snížení procenta půjde znovu). Rozliší je kategorie ze
+   * `schvalovani.js` – v kartě se to musí poznat, protože rada uživateli je
+   * v každém případě jiná. */
+  const kat = schvalovaniKategorie(SL);
   const stavMap = {
-    '': ['mut', 'bez slevy'],
-    'schváleno automaticky': ['', '✓ schváleno automaticky (v mezích role)'],
-    'schváleno': ['', '✓ schváleno – ' + esc(SL.schvalil || 'nadřízený')],
-    'čeká na schválení': ['warn', '⏳ čeká na schválení nadřízeného'],
-    'zamítnuto': ['neg', '✕ pod minimální marží – nelze schválit'],
+    bez: ['mut', 'bez slevy'],
+    auto: ['', '✓ schváleno automaticky (v mezích role)'],
+    schvaleno: ['', '✓ schváleno – ' + esc(SL.schvalil || 'nadřízený')],
+    ceka: ['warn', '⏳ čeká na rozhodnutí – záložka Schvalování slev'],
+    zamitnuto: ['neg', '✕ zamítnuto – ' + esc(SL.zamitl || 'nadřízeným')],
+    podMarzi: ['neg', '✕ pod minimální marží – nelze schválit'],
   };
-  const [pillCls, pillTxt] = stavMap[SL.stav] || ['mut', SL.stav];
+  const [pillCls, pillTxt] = stavMap[kat] || ['mut', String(SL.stav || '')];
   const pct = x => (Math.round(x * 10000) / 100).toLocaleString('cs-CZ') + ' %';
 
   const dopad = +SL.procenta > 0 ? `<table class="sd-tbl" style="max-width:520px;margin-top:6px">
@@ -500,12 +556,26 @@ function slevaKarta(kontext) {
       <tr><td>Strop role „${esc(SL.role)}"</td><td style="text-align:right">${pct(strop)}</td></tr>
     </table>` : '<div class="note">Zadej slevu v % z ceny bez DPH. Do stropu role projde automaticky, nad strop půjde ke schválení.</div>';
 
-  const schvalBlok = SL.stav === 'čeká na schválení'
-    ? `<div class="row" style="max-width:520px;margin-top:6px"><label>Schvaluje (nadřízený)</label>
-         <select onchange="slevaSetSchvalitel(this.value)">${schvalOpts}</select></div>
-       <div class="btns"><button class="primary" onclick="slevaSchval()">Schválit slevu</button></div>`
-    : (SL.stav === 'schváleno' && SL.schvalilKdy
-        ? `<div class="note">Schválil: <b>${esc(SL.schvalil)}</b> · ${new Date(SL.schvalilKdy).toLocaleString('cs-CZ')}</div>` : '');
+  /* Rozhodnutí o slevě se odsud 5. 8. 2026 přestěhovalo do vlastní záložky.
+   * Do té doby tu stálo tlačítko „Schválit slevu" i rozbalovací seznam
+   * „Schvaluje (nadřízený)" – kdokoli měl kartu na obrazovce, odklepl si
+   * vlastní žádost sám a do zakázky se zapsala jen ROLE, ne člověk. Tady
+   * proto zůstává jen stav a odkaz, kde se rozhoduje; rozhodovat smí ten,
+   * komu administrátor přidělil právo „Schvalování slevy nad strop role". */
+  const schvalBlok = kat === 'ceka'
+    ? `<div class="note" style="margin-top:6px">Sleva přesahuje strop role „${esc(SL.role)}"
+         (${pct(strop)}), takže čeká na rozhodnutí. Rozhoduje se v záložce
+         <b>Schvalování slev</b>${schvalovaniKdoMuze(+SL.procenta || 0, NAST.slevy, NAST.role).length
+           ? ' – o téhle slevě může rozhodnout: '
+             + esc(schvalovaniKdoMuze(+SL.procenta || 0, NAST.slevy, NAST.role).join(', ')) : ''}.
+         ${tabViditelny('schvalovani')
+           ? '<button class="mini" style="margin-left:6px" onclick="prepniTab(\'schvalovani\')">Přejít na schvalování</button>' : ''}</div>`
+    : (kat === 'schvaleno' && SL.schvalilKdy
+        ? `<div class="note">Schválil: <b>${esc(SL.schvalil)}</b> · ${new Date(SL.schvalilKdy).toLocaleString('cs-CZ')}</div>`
+        : (kat === 'zamitnuto'
+            ? `<div class="note">Zamítl: <b>${esc(SL.zamitl || 'nadřízený')}</b>${SL.zamitlKdy
+                ? ' · ' + new Date(SL.zamitlKdy).toLocaleString('cs-CZ') : ''}${SL.zamitnutoDuvod
+                ? ' – ' + esc(SL.zamitnutoDuvod) : ''}. Sníženou slevu lze poslat ke schválení znovu.</div>` : ''));
 
   const inner = `<div class="zak-head" style="grid-template-columns:1fr 1fr 1fr">
       <div class="row"><label>Schéma slevy</label><select onchange="slevaSetSchema(this.value)">${schemaOpts}</select></div>
@@ -684,7 +754,7 @@ function dokPatickaHtml(prekl) {
 
 /* ---------- záložky ---------- */
 let TAB = 'kalk';
-const TABY = ['kalk', 'detail', 'spec', 'specdata', 'kryci', 'proj', 'kryciproj', 'cenik', 'cenikproj', 'zakazka'];
+const TABY = ['kalk', 'detail', 'spec', 'specdata', 'kryci', 'proj', 'kryciproj', 'cenik', 'cenikproj', 'zakazka', 'schvalovani'];
 function prepniTab(t) {
   if (!tabViditelny(t)) t = 'kalk';
   TAB = t;
@@ -808,7 +878,14 @@ function nactiZakazku(ev) {
 function render() {
   document.body.classList.toggle('role-user', !NAST.jeAdmin);
   document.body.classList.toggle('muze-admin', smiPohledAdmina());
-  document.body.classList.toggle('skryt-naklady', !(NAST.jeAdmin && NAST.zobrazitNaklady));
+  /* Ozubené kolo je jediný prvek, který se dál schovává třídou (je v šabloně,
+   * ne v generovaném HTML). Dřív se řídilo třídou `role-user`; teď právem
+   * `nastaveni.otevrit`, aby šlo Nastavení otevřít i vedoucímu. */
+  document.body.classList.toggle('smi-nastaveni', smiZobrazit('nastaveni.otevrit'));
+  /* „Zobrazit náklady" je přepínač uživatele, `sloupce.naklad` je právo od
+   * administrátora. Sloupce se ukážou jen když platí obojí — bez práva zůstává
+   * přepínač bez účinku, aby si obchodník nemohl nákladovou cenu odemknout sám. */
+  document.body.classList.toggle('skryt-naklady', !(smiZobrazit('sloupce.naklad') && NAST.zobrazitNaklady));
   // #34: obalení zapisujících funkcí je jednorázové, ale musí proběhnout až
   // po sestavení celé aplikace – proto tady, ne na úrovni souboru.
   if (typeof zamekChranFunkce === 'function') zamekChranFunkce();
@@ -831,6 +908,7 @@ function render() {
   renderCenik();
   renderCenikProj();
   renderZakazka();
+  if (typeof renderSchvalovani === 'function') renderSchvalovani();
   aplikujViditelnostTabu();
   // #41: protokol o kalkulaci. Musí být PŘED historií – zapsaný řádek je změna
   // zakázky jako každá jiná a historie ho má vidět ve stejném překreslení,

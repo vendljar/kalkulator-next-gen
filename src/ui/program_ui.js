@@ -194,6 +194,9 @@ function progKontext(poznamka) {
 
 function progZverejni() {
   if (!jeAdmin()) { progZprava('Zveřejnit ceník smí jen správce.', 'varovani'); render(); return Promise.resolve(false); }
+  /* Pozn.: tady zůstává `jeAdmin()`, ne `smiZobrazit()`. Zveřejnění ceníku
+   * hlídá i server (netlify/functions/program.mjs) a matice zobrazení ho má
+   * proto vedený jako `pevny` — schovat tlačítko lze, přidělit právo ne. */
   if (typeof ULO_STAV === 'undefined' || !ULO_STAV.koren || !ULO_STAV.pripraveno) {
     progZprava('Nejdřív je potřeba připojit složku – databáze programu leží v ní, vedle zakázek.', 'varovani');
     render(); return Promise.resolve(false);
@@ -324,7 +327,7 @@ function progStavPopis() {
 
 function renderProgramKarta() {
   const jeSlozka = typeof ULO_STAV !== 'undefined' && !!ULO_STAV.koren && ULO_STAV.pripraveno;
-  const tlacitka = !jeAdmin() ? ''
+  const tlacitka = !smiZobrazit('cenik.zverejnit') ? ''
     : `<button class="primary" onclick="progZverejni()" ${PROG_STAV.pracuje || !jeSlozka ? 'disabled' : ''}>Zveřejnit ceník této varianty jako platný</button>
        ${progJede() ? `<button onclick="otevriProgram()">Verze ceníku…</button>` : ''}
        ${jeSlozka ? `<button onclick="progNactiZeSlozky()">Načíst ze složky znovu</button>` : ''}
@@ -393,7 +396,7 @@ function progRadekHtml(z, platna) {
           <td style="text-align:right">${r.zmena == null ? '' : esc((r.zmena > 0 ? '+' : '') + Math.round(r.zmena * 1000) / 10 + ' %')}</td></tr>`).join('')}
         </tbody></table>`
         : `<div class="note">Proti předchozí verzi se nezměnila žádná sledovaná cena – šlo o změnu katalogu, slev nebo o první verzi.</div>`}
-      ${jeAdmin() ? `<div class="btns" style="margin-top:8px">
+      ${smiZobrazit('cenik.zverejnit') ? `<div class="btns" style="margin-top:8px">
         <button class="mini" onclick="progPrevezmiVerzi(${+z.verze})">Převzít tento ceník do aktivní varianty</button></div>` : ''}
     </div></td></tr>`;
 

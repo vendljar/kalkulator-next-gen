@@ -20,24 +20,37 @@ Verzování (konvence): Kalkulačka vDEN.MĚSÍC.verze konkrétního dne
 Nikdy needitujte dist/* přímo – po změně src/ spusťte: python3 build.py
 Po změně enginů spusťte testy: cd src && node test.js && node test_proj.js
 """
-import datetime, pathlib, re, shutil, sys
+import datetime, os, pathlib, re, shutil, sys
 
 root = pathlib.Path(__file__).parent
 CORE = ['build_info.js',
         'preklad.js', 'format.js', 'engine.js', 'engine_proj.js', 'techspec.js', 'zakazka.js', 'uloziste.js', 'zamek.js', 'seznam.js', 'archiv.js',
         'docxgen.js', 'xlsx.js',
-        'dokumenty.js', 'sleva.js', 'zaokrouhleni.js', 'marze.js', 'kontroly.js', 'ares.js', 'poznamky.js', 'protokol.js', 'firma.js', 'nabidka.js', 'nabidka_proj.js', 'kryci.js', 'kryci_proj.js',
+        'dokumenty.js', 'sleva.js', 'schvalovani.js', 'zaokrouhleni.js', 'marze.js', 'kontroly.js', 'ares.js', 'poznamky.js', 'protokol.js', 'firma.js', 'nabidka.js', 'nabidka_proj.js', 'kryci.js', 'kryci_proj.js',
         'cenik.js', 'cenik_stari.js', 'katalog.js', 'prepisy.js', 'slovnik.js',
-        'konfigurace.js', 'nastaveni_db.js', 'program.js', 'ukazkove.js', 'prava.js']
+        'konfigurace.js', 'nastaveni_db.js', 'program.js', 'ukazkove.js', 'prava.js', 'zobrazeni.js']
 UI = ['ui/common.js', 'ui/zakulozeni_ui.js', 'ui/kalk_ock.js', 'ui/detail_ui.js', 'ui/techspec_ui.js', 'ui/specdata_ui.js',
       'ui/kryci_ui.js', 'ui/kryci_proj_ui.js', 'ui/kalk_proj.js', 'ui/nabidka_proj_ui.js',
       'ui/cenik_stari_ui.js', 'ui/cenik_ui.js',
-      'ui/zaokrouhleni_ui.js', 'ui/marze_ui.js', 'ui/zakazka_ui.js', 'ui/ares_ui.js', 'ui/zamek_ui.js', 'ui/build_info_ui.js', 'ui/ukazkove_ui.js', 'ui/kontroly_ui.js', 'ui/poznamky_ui.js', 'ui/protokol_ui.js', 'ui/seznam_ui.js', 'ui/archiv_ui.js', 'ui/program_ui.js', 'ui/nastaveni_db_ui.js', 'ui/uloziste_ui.js', 'ui/online_ui.js', 'ui/nastaveni_ui.js', 'ui/historie.js']
+      'ui/zaokrouhleni_ui.js', 'ui/marze_ui.js', 'ui/zakazka_ui.js', 'ui/schvalovani_ui.js', 'ui/ares_ui.js', 'ui/zamek_ui.js', 'ui/build_info_ui.js', 'ui/ukazkove_ui.js', 'ui/kontroly_ui.js', 'ui/poznamky_ui.js', 'ui/protokol_ui.js', 'ui/seznam_ui.js', 'ui/archiv_ui.js', 'ui/program_ui.js', 'ui/nastaveni_db_ui.js', 'ui/uloziste_ui.js', 'ui/online_ui.js', 'ui/nastaveni_ui.js', 'ui/historie.js']
 
 # ---- verze: DEN.MĚSÍC.pořadí buildu v daném dni ----
+#
+# POZOR na dvě různá prostředí (poučení z 5. 8. 2026):
+# netlify.toml má `command = "python3 build.py"`, takže tenhle skript běží
+# ZNOVU na serveru při každém nasazení. Dokud se verze zvyšovala vždycky,
+# nasadila se z commitu v5.8.2 aplikace hlásící v5.8.3 — a podle čísla na
+# obrazovce nešlo poznat, co je vlastně nasazené. Na serveru se proto verze
+# jen PŘEBÍRÁ z verze.txt; zvyšuje ji výhradně lokální build, jehož výsledek
+# se commituje. Ruční `--ver` platí všude (poslední záchrana).
 verfile = root / 'verze.txt'
+na_serveru = bool(os.environ.get('NETLIFY') or os.environ.get('KNG_NEZVYSOVAT_VERZI'))
 if '--ver' in sys.argv:
     ver = sys.argv[sys.argv.index('--ver') + 1]
+    verfile.write_text(ver + '\n')
+elif na_serveru and verfile.exists() and verfile.read_text().strip():
+    ver = verfile.read_text().strip()          # verze z gitu, soubor se nepřepisuje
+    print(f'build.py: serverové sestavení, verze se přebírá z verze.txt (v{ver})')
 else:
     d = datetime.date.today()
     dnes = f'{d.day}.{d.month}'
@@ -47,7 +60,7 @@ else:
     else:
         n = 1
     ver = f'{dnes}.{n}'
-verfile.write_text(ver + '\n')
+    verfile.write_text(ver + '\n')
 
 def strip_exports(js: str) -> str:
     """Odstraní node-only module.exports (v prohlížeči nemá co dělat)."""

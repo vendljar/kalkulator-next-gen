@@ -22,7 +22,7 @@
  * ============================================================ */
 
 function marzeSmiCisla() {
-  if (typeof jeAdmin === 'function' && jeAdmin()) return true;
+  if (typeof smiZobrazit === 'function' && smiZobrazit('marze.lista')) return true;
   return !!(typeof NAST !== 'undefined' && NAST.kpiViditelne && NAST.kpiViditelne.marze);
 }
 

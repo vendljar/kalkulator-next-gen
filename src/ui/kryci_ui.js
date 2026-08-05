@@ -53,6 +53,49 @@ function klRow(id, label, opts = {}) {
   return `<div class="kl-row"><div class="lbl">${label}</div><div>${field}</div><div class="src">${meta}${reset}</div></div>`;
 }
 
+/* ---- Smluvní a platební podmínky v souhrnu cenové nabídky OCK (5. 8. 2026) ----
+ * Zadání: „Přidej do souhrnu cenových nabídek OCK i PROJ pod Celkem s DPH
+ * smluvní a platební podmínky. A provaž je s odpovídajícími krycími listy.
+ * Tzn. cokoliv se v nich změní vzájemně se propíše."
+ *
+ * Provázání se NEPROGRAMUJE. Blok vykresluje tytéž řádky z KRYCI_SEKCE
+ * (sekce vyjmenované v KRYCI_NABIDKA_SEKCE) a stejným klRow() zapisuje do
+ * stejného úložiště varianta.data.kryci.hodnoty jako záložka Krycí list.
+ * Nevznikne tedy druhá kopie hodnot, která by se mohla rozejít — je to jeden
+ * záznam ve dvou pohledech. Kdyby se to dělalo kopírováním, obchodník by po
+ * změně splatnosti v nabídce musel doufat, že se to někam propsalo; takhle
+ * fyzicky není kam se rozejít.
+ *
+ * Pole s `bind` (objednatel, číslo nabídky…) se sem záměrně nedávají — ta se
+ * vyplňují v kartě „Zakázka – hlavička" o kus výš na téže stránce a dvakrát
+ * na jedné obrazovce by mátla. Štítky BO/Tech se tu také nezobrazují: v
+ * nabídce nejde o to, do které verze krycího listu pole patří. */
+function kryciPodminkyBlok() {
+  let c = null;
+  try { c = kryciCtx(ZAK, aktivniVarianta(ZAK), JEKLY); } catch (e) { c = null; }
+  const sekceHtml = KRYCI_SEKCE.filter(s => KRYCI_NABIDKA_SEKCE.indexOf(s.sekce) >= 0).map(s => {
+    const rows = s.pole.filter(p => !p.bind).map(p => {
+      let pref = null;
+      if (p.prefill && c) { try { pref = p.prefill(c); } catch (e) { pref = null; } }
+      return klRow(p.id, p.label, { prefill: pref, type: p.typ, o: p.o, src: p.src, ph: p.ph });
+    }).join('');
+    return `<h3>${s.sekce}</h3>${rows}`;
+  }).join('');
+  /* Sbalovací karta (card) — podmínek je přes patnáct řádků a souhrn nabídky
+   * má zůstat přehledný. Otevřená je ale ve výchozím stavu: zadání bylo, že
+   * podmínky mají být pod cenou vidět, ne schované za dalším kliknutím.
+   *
+   * Záměrně BEZ id: nabidkaKarta() se vykresluje dvakrát — v Kalkulaci OCK
+   * (karta „Cenová nabídka (CN)") i v Přehledu cenových nabídek — a dvě stejná
+   * id v jednom dokumentu by byla chyba. Blok se proto pozná podle třídy
+   * kl-podminky-ock (tu používá i harness overit_podminky.mjs). */
+  return card('Smluvní a platební podmínky (OCK)',
+    `<div class="note" style="margin-bottom:8px">Totéž, co je v záložce <b>Krycí list zakázky OCK</b> — jeden a týž záznam,
+    ne kopie. Co změníte tady, uvidíte tam a naopak; do nabídky i do krycího listu jde vždy poslední hodnota.
+    Prázdné pole znamená automatiku (↺ vrátí předvyplněnou hodnotu). Podmínky PROJ se řídí zvlášť u nabídky PROJ.</div>
+    <div class="kl-podminky kl-podminky-ock">${sekceHtml}</div>`);
+}
+
 function renderKryci() {
   const el = document.getElementById('page-kryci'); if (!el) return;
   const c = kryciCtx(ZAK, aktivniVarianta(ZAK), JEKLY);   // kontext prefillů (jeden zdroj pravdy: KRYCI_SEKCE)

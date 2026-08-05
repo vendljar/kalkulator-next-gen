@@ -57,6 +57,7 @@ function nabidkaProjKarta() {
     ${nahled}
     <div class="note" style="font-weight:600;margin-top:8px">Rekapitulace cen:</div>
     ${rekap}
+    ${typeof kryciProjPodminkyBlok === 'function' ? kryciProjPodminkyBlok() : ''}
     <div class="note" style="font-weight:600;margin-top:10px">Popis záměru (úvodní odstavec nabídky):</div>
     <textarea rows="4" style="width:100%" placeholder="Např.: Bytový dům, přístavba výtahu do zrcadla schodiště…"
       oninput="nabidkaProjPopis(this.value)">${esc(ZAK.popisZameru || '')}</textarea>

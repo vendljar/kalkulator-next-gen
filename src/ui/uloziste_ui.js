@@ -400,7 +400,7 @@ function uloOtevriZeSlozky(soubor) {
  * nevrátí. */
 function uloSmazZeSlozky(soubor) {
   if (!ULO_STAV.koren) return;
-  if (!jeAdmin()) { uloZprava('Mazat zakázky ze složky smí jen správce.', 'varovani'); renderUloziste(); return; }
+  if (!smiZobrazit('uloziste.mazani')) { uloZprava('Mazat zakázky ze složky smí jen správce.', 'varovani'); renderUloziste(); return; }
   if (!confirm('Smazat soubor ' + soubor + ' ze složky?\n\nSmaže se skutečný soubor na disku a z aplikace ho nelze vrátit.')) return;
   ULO_STAV.koren.removeEntry(soubor)
     .then(() => {
@@ -515,7 +515,7 @@ function ulozisteRadekHtml(z) {
     <td>${odeslane}</td>
     <td>${esc((z.upraveno || '').slice(0, 16).replace('T', ' '))}</td>
     <td><button class="mini" onclick="uloOtevriZeSlozky('${escJs(z.soubor)}')">Otevřít</button>${
-      jeAdmin() ? `<button class="mini" onclick="uloSmazZeSlozky('${escJs(z.soubor)}')">Smazat</button>` : ''}</td>
+      smiZobrazit('uloziste.mazani') ? `<button class="mini" onclick="uloSmazZeSlozky('${escJs(z.soubor)}')">Smazat</button>` : ''}</td>
   </tr>`;
 }
 
@@ -548,7 +548,7 @@ function renderUloziste() {
                value="${esc(ULO_STAV.hledat)}" oninput="ulozisteHledatSet(this.value)">
         <span class="note" id="ulozistePocet"></span>
         <span class="sp"></span>
-        ${jeAdmin() ? `<button class="mini" onclick="uloPrestavRejstrik()" ${ULO_STAV.pracuje ? 'disabled' : ''}>Přestavět rejstřík</button>` : ''}
+        ${smiZobrazit('uloziste.mazani') ? `<button class="mini" onclick="uloPrestavRejstrik()" ${ULO_STAV.pracuje ? 'disabled' : ''}>Přestavět rejstřík</button>` : ''}
       </div>
       ${ULO_STAV.hlaska ? `<div class="${ULO_STAV.hlaskaTyp === 'varovani' ? 'seznam-varovani' : 'seznam-prazdno'}">${esc(ULO_STAV.hlaska)}</div>` : ''}
       <div id="ulozisteTelo"></div>

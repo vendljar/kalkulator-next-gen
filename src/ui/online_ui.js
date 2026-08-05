@@ -38,6 +38,10 @@ const ONLINE_STAV = {
   cenikPouzit: false,// online ceník je právě nasazený v aplikaci
   firma: null,       // { udaje, kdo, kdy } – firemní údaje ze serveru
   firmaPouzita: false,// online firemní údaje jsou právě nasazené v aplikaci
+  /* Matice zobrazení ze serveru (#136): { matice, kdo, kdy }. Na rozdíl od
+   * ceníku a firemních údajů tu není dvojka „ze serveru / ze složky" — matice
+   * má jediný domov (server), takže se po načtení rovnou nasadí do NAST. */
+  zobrazeni: null,
   rejstrik: [],      // rejstřík online zakázek
   otisky: [],        // souhrny záloh databáze (jen administrátor; bez dat)
   otiskyNacteno: false,
@@ -146,7 +150,10 @@ function onlinePoPrihlaseni(ja) {
     NAST.jeAdmin = ja.role === 'Administrátor';
   }
   onlineZprava('Přihlášen: ' + (ja.jmeno || ja.email) + ' (' + ja.role + ').');
-  return Promise.all([onlineNactiProgram(), onlineNactiFirmu(), onlineNactiRejstrik()])
+  /* Matice zobrazení se načítá spolu s ostatním — a hlavně PŘED prvním
+   * překreslením, aby rozhraní hned napoprvé odpovídalo roli. Kdyby dorazila
+   * později, obchodník by na okamžik zahlédl ceníky a pak by mu zmizely. */
+  return Promise.all([onlineNactiProgram(), onlineNactiFirmu(), onlineNactiZobrazeni(), onlineNactiRejstrik()])
     .then(() => { if (jeAdminOnline()) onlineZalohaAuto(); });
 }
 
@@ -156,6 +163,10 @@ function onlineOdhlas() {
     const vladlaFirma = ONLINE_STAV.firmaPouzita;
     ONLINE_STAV.ja = null; ONLINE_STAV.db = null; ONLINE_STAV.cenikPouzit = false;
     ONLINE_STAV.firma = null; ONLINE_STAV.firmaPouzita = false;
+    /* Matice zpět na výchozí: odhlášený nemá čím doložit, komu co přidělil
+     * administrátor, a výchozí stav je ten opatrnější (navíc nevidí nikdo). */
+    ONLINE_STAV.zobrazeni = null; onlineZobrazeniNasad(null);
+    if (typeof NAST !== 'undefined') NAST.nahledRole = '';
     ONLINE_STAV.rejstrik = []; ONLINE_STAV.soubor = ''; ONLINE_STAV.razitko = ''; ONLINE_STAV.posledni = '';
     ONLINE_STAV.kdyUlozeno = null;
     ONLINE_STAV.uzivatele = []; ONLINE_STAV.uzivateleNacteno = false; ONLINE_STAV.formHeslo = '';
@@ -300,6 +311,79 @@ function onlineFirmaPanel() {
     <div class="note">Obchodník ani vedoucí složku <code>_DB</code> nemapují – hlavičku nabídky
       mají odkud vzít jedině odsud. Dokud je připojená složka, má v aplikaci přednost ona;
       bez ní platí tahle online verze.</div>`;
+}
+
+/* ---------- matice zobrazení ze serveru (5. 8. 2026, #136) ----------
+ *
+ * Rozhodnutí „co uvidí obchodník a co vedoucí" je pravidlo pro celou firmu.
+ * Kdyby leželo v `_DB/_nastaveni.json`, dostal by se k němu jen administrátor
+ * — tedy právě ten, komu je jedno, protože vidí všechno. Proto server, stejně
+ * jako u firemních údajů.
+ *
+ * Nasazení je oproti ceníku i firmě jednoduché: matice se po načtení rovnou
+ * zapíše do NAST.zobrazeni. Nemá totiž konkurenci ze složky, kterou by mohla
+ * nechtěně přepsat, a když na serveru ještě nic není, platí výchozí matice —
+ * ta se do posledního prvku rovná dosavadnímu chování (jediné dělítko
+ * `jeAdmin()`), takže se nepřihlášenému ani novému programu nic nemění. */
+
+function onlineZobrazeniNasad(matice) {
+  if (typeof NAST === 'undefined') return;
+  const m = (typeof zobrazeniOciste === 'function')
+    ? zobrazeniOciste(matice)
+    : (typeof zobrazeniVychozi === 'function' ? zobrazeniVychozi() : {});
+  /* Nahrazení NA MÍSTĚ: na NAST.zobrazeni se drží odkazy jinde v aplikaci
+   * (panel Nastavení → Zobrazení pracuje přímo s objektem). */
+  if (typeof konfigNahradVMiste === 'function' && NAST.zobrazeni) konfigNahradVMiste(NAST.zobrazeni, m);
+  else NAST.zobrazeni = m;
+}
+
+function onlineNactiZobrazeni() {
+  return onlineApi('/api/zobrazeni').then(o => {
+    ONLINE_STAV.zobrazeni = (o.zobrazeni && o.zobrazeni.matice) ? o.zobrazeni : null;
+    onlineZobrazeniNasad(ONLINE_STAV.zobrazeni ? ONLINE_STAV.zobrazeni.matice : null);
+    return true;
+  }).catch(e => {
+    onlineZprava('Nastavení zobrazení se ze serveru nepodařilo načíst: ' + e.message
+      + ' Platí výchozí rozdělení (vše navíc vidí jen administrátor).', 'varovani');
+    onlineZobrazeniNasad(null);
+    return false;
+  });
+}
+
+/* Krátký popis stavu do Nastavení → Zobrazení. */
+function onlineZobrazeniPopis() {
+  if (!ONLINE_STAV.ja) return 'Nepřihlášen – nastavení zobrazení se načte po přihlášení.';
+  if (!ONLINE_STAV.zobrazeni)
+    return 'V online databázi zatím žádné rozdělení není. Platí výchozí: obchodník '
+      + 'i vedoucí vidí totéž co dosud, všechno ostatní zůstává administrátorovi.';
+  return 'Online zveřejněno ' + String(ONLINE_STAV.zobrazeni.kdy || '').slice(0, 16).replace('T', ' ')
+    + ' (' + (ONLINE_STAV.zobrazeni.kdo || '?') + ')';
+}
+
+/* Zveřejnění – posílá se matice tak, jak je v Nastavení. Očistu si server
+ * dělá vlastní (týmž kódem), aby ani upravený prohlížeč nepřidělil prvek,
+ * který server stejně nepustí. */
+function onlineZverejniZobrazeni() {
+  if (!jeAdminOnline()) {
+    onlineZprava('Nastavení zobrazení smí zveřejnit jen administrátor.', 'varovani'); render();
+    return Promise.resolve(false);
+  }
+  const zmeny = (typeof zobrazeniZmeny === 'function') ? zobrazeniZmeny(NAST.zobrazeni) : [];
+  if (!confirm('Zveřejnit nastavení zobrazení online pro celý program?\n\n'
+    + (zmeny.length
+      ? zmeny.length + ' odchylek od výchozího rozdělení.'
+      : 'Beze změny proti výchozímu rozdělení.')
+    + '\n\nOd této chvíle platí všem přihlášeným – projeví se jim po dalším '
+    + 'přihlášení nebo po načtení stránky.')) return Promise.resolve(false);
+
+  ONLINE_STAV.pracuje = true; render();
+  return onlineApi('/api/zobrazeni', { matice: NAST.zobrazeni })
+    .then(() => onlineNactiZobrazeni().then(() => {
+      onlineZprava('Nastavení zobrazení je zveřejněné online.');
+      return true;
+    }))
+    .catch(e => { onlineZprava('Zveřejnit nastavení zobrazení se nepodařilo: ' + e.message, 'chyba'); return false; })
+    .then(v => { ONLINE_STAV.pracuje = false; render(); if (typeof nastRefresh === 'function') nastRefresh(); return v; });
 }
 
 /* ---------- zakázky online ---------- */

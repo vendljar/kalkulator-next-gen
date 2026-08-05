@@ -46,6 +46,33 @@ function klpRow(id, label, opts = {}) {
   return `<div class="kl-row"><div class="lbl">${label}</div><div>${field}</div><div class="src">${meta}${reset}</div></div>`;
 }
 
+/* ---- Smluvní a platební podmínky v souhrnu cenové nabídky PROJ (5. 8. 2026) ----
+ * Zrcadlo kryciPodminkyBlok() z kryci_ui.js, jen nad druhým úložištěm
+ * (varianta.data.kryciProj.hodnoty) a druhou konstantou. Právě proto se OCK
+ * a PROJ nemají jak propsat jeden do druhého: nejsou to dvě kopie jedněch dat,
+ * ale dvě oddělené sady od začátku — stejně jako jsou oddělené obě hlavičky. */
+function kryciProjPodminkyBlok() {
+  let c = null;
+  try { c = kryciProjCtx(ZAK, aktivniVarianta(ZAK)); } catch (e) { c = null; }
+  const sekceHtml = KRYCI_PROJ_SEKCE.filter(s => KRYCI_PROJ_NABIDKA_SEKCE.indexOf(s.sekce) >= 0).map(s => {
+    const rows = s.pole.filter(p => !p.bind).map(p => {
+      let pref = null;
+      if (p.prefill && c) { try { pref = p.prefill(c); } catch (e) { pref = null; } }
+      const zdroj = typeof p.src === 'function' ? (c ? p.src(c) : '') : p.src;
+      return klpRow(p.id, p.label, { prefill: pref, type: p.typ, o: p.o, src: zdroj, ph: p.ph });
+    }).join('');
+    return `<h3>${s.sekce}</h3>${rows}`;
+  }).join('');
+  /* Sbalovací karta, ve výchozím stavu otevřená — viz kryciPodminkyBlok().
+   * Rovněž bez id (nabidkaProjKarta() se vykresluje v Kalkulaci PROJ i v
+   * Přehledu cenových nabídek); poznávací značkou je třída kl-podminky-proj. */
+  return card('Smluvní a platební podmínky (PROJ)',
+    `<div class="note" style="margin-bottom:8px">Totéž, co je v záložce <b>Krycí list zakázky PROJ</b> — jeden a týž záznam,
+    ne kopie. Co změníte tady, uvidíte tam a naopak. Prázdné pole znamená automatiku (↺ vrátí předvyplněnou hodnotu).
+    Podmínky OCK se řídí zvlášť u nabídky OCK — projekce a ocelová konstrukce mají vlastní splatnost i pokuty.</div>
+    <div class="kl-podminky kl-podminky-proj">${sekceHtml}</div>`);
+}
+
 function renderKryciProj() {
   const el = document.getElementById('page-kryciproj'); if (!el) return;
   const c = kryciProjCtx(ZAK, aktivniVarianta(ZAK));   // kontext prefillů (jeden zdroj pravdy: KRYCI_PROJ_SEKCE)

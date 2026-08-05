@@ -37,8 +37,13 @@ const ZAMEK_CHRANENE = [
   // Kalkulace PROJ a text nabídky PROJ
   'pjSet', 'pjPolozkaAdd', 'pjPolozkaDel', 'nabidkaProjPopis',
   // Sleva (mění cenu, která už odešla zákazníkovi)
-  'slevaSetProc', 'slevaSetRole', 'slevaSetSchema', 'slevaSetPozn',
-  'slevaSetSchvalitel', 'slevaSchval', 'slevaZrus',
+  // `slevaSetSchvalitel` a `slevaSchval` zanikly 5. 8. 2026 se stěhováním
+  // schvalování do vlastní záložky. Rozhodování (schvRozhodni) se sem NEPŘIDÁVÁ:
+  // zamekStop() se ptá na PRÁVĚ OTEVŘENOU variantu, kdežto v seznamu se
+  // rozhoduje o libovolné – zámek si proto hlídá schvRozhodni samo na cílové
+  // variantě, jinak by uzamčená otevřená varianta blokovala schválení všech
+  // ostatních.
+  'slevaSetProc', 'slevaSetRole', 'slevaSetSchema', 'slevaSetPozn', 'slevaZrus',
   // Globální sleva PROJ – set() uvnitř zámek hlídá taky; obal je tu proto,
   // aby obsluha zůstala chráněná, i kdyby set() někdy o svou pojistku přišel
   'pjSlevaGlobal',
@@ -121,7 +126,7 @@ function nabidkaStavTextBezpecne(txt) {
 function zamekOdemkniUI(id) {
   const v = ZAK.varianty.find(x => x.id === id);
   if (!v || !variantaUzamcena(v)) return;
-  if (!jeAdmin()) {
+  if (!smiZobrazit('zamek.odemknout')) {
     alert('Odemknout odeslanou nabídku může jen správce.\n\n'
       + 'Běžný postup je založit klon varianty a pokračovat v něm – '
       + 'původní nabídka tak zůstane přesně v podobě, v jaké odešla zákazníkovi.');
@@ -173,7 +178,7 @@ function zamekLista() {
       Pokračujte klonem; původní nabídka zůstane v podobě, v jaké odešla.</span>
     <span class="sp"></span>
     <button class="primary" onclick="zamekKlonUI('${escJs(v.id)}')">Klonovat a pokračovat</button>
-    ${jeAdmin() ? `<button class="mini admin-only" onclick="zamekOdemkniUI('${escJs(v.id)}')">Odemknout…</button>` : ''}
+    ${smiZobrazit('zamek.odemknout') ? `<button class="mini" onclick="zamekOdemkniUI('${escJs(v.id)}')">Odemknout…</button>` : ''}
   </div>`;
 }
 

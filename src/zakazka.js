@@ -72,7 +72,8 @@ function novaZakazka() {
     // Hlavička nabídky PROJ je VĚDOMĚ oddělená od hlavičky OCK: projekční část
     // má vlastní číslo nabídky, jinou náplň i jiného objednatele. Nic se mezi
     // nimi nepropisuje automaticky – přenos je jen na výslovné vyžádání
-    // (zakazkaKopirujHlavicku / tlačítko „Převzít údaje…" v obou hlavičkách).
+    // (zakazkaKopirujHlavicku / tlačítka u karty „Zakázka – hlavička PROJ" v
+    // Přehledu cenových nabídek; z lišty kalkulací zmizela 5. 8. 2026).
     projHlavicka: {
       cislo: ZAK_CISLO_PREDLOHA,
       nazevAkce: '', adresa: '', objednatel: '', kontakt: '',

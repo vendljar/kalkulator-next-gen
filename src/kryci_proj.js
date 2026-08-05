@@ -242,5 +242,11 @@ if (typeof dokumentRegistruj === 'function') {
   });
 }
 
+/* Sekce krycího listu PROJ zobrazené i v souhrnu cenové nabídky PROJ.
+ * Totéž jako u OCK (viz kryci.js), jen nad druhým úložištěm
+ * (varianta.data.kryciProj.hodnoty) — proto se OCK a PROJ nikdy nepropíšou
+ * jeden do druhého, aniž by to bylo nutné hlídat kódem. */
+const KRYCI_PROJ_NABIDKA_SEKCE = ['Typ smlouvy', 'Platební podmínky'];
+
 if (typeof module !== 'undefined')
-  module.exports = { KRYCI_PROJ_SEKCE, KRYCI_PROJ_CINNOSTI, kryciProjCtx, kryciProjHodnota, kryciProjData };
+  module.exports = { KRYCI_PROJ_SEKCE, KRYCI_PROJ_NABIDKA_SEKCE, KRYCI_PROJ_CINNOSTI, kryciProjCtx, kryciProjHodnota, kryciProjData };

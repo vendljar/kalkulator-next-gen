@@ -64,7 +64,7 @@ function kontrolyStavAkt() {
 /* Právo na částky – jedno pravidlo pro celou aplikaci, půjčené od marže. */
 function kontrolySmiCisla() {
   if (typeof marzeSmiCisla === 'function') return marzeSmiCisla();
-  if (typeof jeAdmin === 'function' && jeAdmin()) return true;
+  if (typeof smiZobrazit === 'function' && smiZobrazit('kontroly.cisla')) return true;
   return !!(typeof NAST !== 'undefined' && NAST.kpiViditelne && NAST.kpiViditelne.marze);
 }
 

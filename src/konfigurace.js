@@ -31,8 +31,14 @@ const KONFIG_SEKCE = [
 ];
 
 /* klíče NAST, které do konfigurace patří; jeAdmin a panel jsou stav relace, ne nastavení */
+/* `zobrazeni` = matice „co která role vidí" (#136). Do exportu konfigurace
+ * patří — administrátor si ji tím odnese i s ostatním nastavením a je z čeho
+ * ji obnovit. Do `_nastaveni.json` ale NE (viz NASTDB_NEUKLADAT): jejím
+ * domovem je server (/api/zobrazeni), protože obchodník ani vedoucí složku
+ * `_DB` nemapují a k pravidlu by se jinak nedostali. Stejná úvaha jako
+ * u `slevy`, jejichž domovem je verzovaný `_program.json`. */
 const KONFIG_NAST_KLICE = ['tabViditelnost', 'zobrazitNaklady', 'kpiViditelne', 'jazyk',
-  'firma', 'role', 'uzivatele', 'slevy'];
+  'firma', 'role', 'uzivatele', 'slevy', 'zobrazeni'];
 
 function konfigKopie(v) { return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
 

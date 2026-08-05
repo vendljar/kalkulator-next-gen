@@ -52,8 +52,14 @@ const NASTDB_CIZI = ['katalog', 'slevy', 'sablony'];
  *   slevy    – patří do _program.json (verzovaná cenová politika),
  *   jeAdmin  – role relace; uložená by po restartu mohla zamknout
  *              obsluhu mimo Nastavení, odkud se zpátky zapíná,
- *   panel    – která vnitřní záložka Nastavení byla otevřená. */
-const NASTDB_NEUKLADAT = ['slevy', 'jeAdmin', 'panel'];
+ *   panel    – která vnitřní záložka Nastavení byla otevřená,
+ *   zobrazeni – matice „co která role vidí" (#136) bydlí na serveru
+ *              (/api/zobrazeni). Kdyby ležela i tady, měl by ji odkud
+ *              vzít jen administrátor se složkou _DB — tedy právě ten,
+ *              koho se netýká; obchodníkovi by nikdy nedorazila. Navíc by
+ *              se dvě kopie pravidla rozešly podle toho, kdo kdy připojil
+ *              složku. Jeden zdroj pravdy je tu důležitější než záloha. */
+const NASTDB_NEUKLADAT = ['slevy', 'jeAdmin', 'panel', 'zobrazeni'];
 
 /* Výchozí seznam pro případ, že by konfigurace.js nebyl po ruce
  * (samostatný test modulu). V aplikaci se bere z KONFIG_NAST_KLICE, ať

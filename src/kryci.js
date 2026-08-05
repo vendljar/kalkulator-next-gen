@@ -231,5 +231,14 @@ if (typeof dokumentRegistruj === 'function') {
   });
 }
 
+/* Které sekce krycího listu se zobrazují i v souhrnu cenové nabídky (pod
+ * „Celkem s DPH"). Zadání 5. 8. 2026: obchodník má smluvní a platební podmínky
+ * vidět a upravovat rovnou u nabídky, ne až v krycím listu. Není to kopie —
+ * souhrn nabídky vykresluje TYTÉŽ řádky odsud a zapisuje do TÉHOŽ úložiště
+ * (varianta.data.kryci.hodnoty), takže se změna projeví na obou místech.
+ * Názvy musí přesně odpovídat `sekce` v KRYCI_SEKCE výše; test_nabidka_podminky.js
+ * to hlídá, aby přejmenování sekce nabídku tiše nevyprázdnilo. */
+const KRYCI_NABIDKA_SEKCE = ['Typ smlouvy a produktu', 'Platební podmínky'];
+
 if (typeof module !== 'undefined')
-  module.exports = { KRYCI_SEKCE, kryciCtx, kryciHodnota, kryciData, kryciMigraceZadrzne };
+  module.exports = { KRYCI_SEKCE, KRYCI_NABIDKA_SEKCE, kryciCtx, kryciHodnota, kryciData, kryciMigraceZadrzne };
