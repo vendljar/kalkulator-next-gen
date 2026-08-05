@@ -52,6 +52,7 @@ Object.assign(globalThis, require('../../src/cenik_stari.js'));
 Object.assign(globalThis, require('../../src/konfigurace.js'));
 Object.assign(globalThis, require('../../src/program.js'));
 Object.assign(globalThis, require('../../src/ukazkove.js'));
+Object.assign(globalThis, require('../../src/zobrazeni.js'));
 Object.assign(globalThis, require('../../src/sluzba.js'));   // jen server (služba K2)
 
 /* Pojmenované držáky pro moduly, které se v kódu funkcí volají přes tečku
@@ -59,5 +60,9 @@ Object.assign(globalThis, require('../../src/sluzba.js'));   // jen server (slu�
 module.exports = {
   ULO: require('../../src/uloziste.js'),
   fm: require('../../src/firma.js'),
+  /* Matice zobrazení (#136). Server ji čte i zapisuje v /api/zobrazeni a
+   * očistu dělá TÝMŽ kódem jako prohlížeč — jinak by mohl uložit klíč, který
+   * v aplikaci nic neznamená, nebo přidělit prvek držený serverem. */
+  ZOB: require('../../src/zobrazeni.js'),
   JEKLY: require('../../src/jekly.json'),
 };

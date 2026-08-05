@@ -194,7 +194,6 @@ function hodnotaBezpecna(v) {
 const PROVERENO = {
   'common.js': {
     'label': 'popisek pole ve formulářové šabloně txt(path, label) – volá se s literály',
-    'popis': 'dva pevné texty tlačítka „Převzít údaje" (kopieBtn)',
   },
   'detail_ui.js': {
     'nazev': 'název kroku výpočtu z pevného seznamu DETAIL_KROKY',
@@ -230,7 +229,6 @@ const PROVERENO = {
   },
   'nastaveni_ui.js': {
     "d.jenVApp.slice(0, 40).map(x => esc(x.klic)).join(' · ')": 'každý klíč prochází esc() uvnitř map()',
-    "jeAdmin() ? tab('firma', 'Firma') : ''": 'tab() skládá tlačítko z literálů',
     'label': 'popisek řádku šablony psaný vývojářem',
     "m ? 'hotovo: ' + esc(m.nazev) + ' – kliknutím přegeneruji' : 'vyrobit ' + l.toUpperCase() + ' mutaci z české šablony'":
       'jméno souboru mutace prochází esc(), zbytek jsou literály',
@@ -252,6 +250,10 @@ const PROVERENO = {
   },
   'protokol_ui.js': {
     'kdo': "výš: const kdo = z.kdo ? esc(z.kdo) : 'neuvedeno'",
+  },
+  'schvalovani_ui.js': {
+    'duvod': 'hotový úsek HTML poskládaný o pár řádků výš – hodnota v něm '
+      + 'prochází esc(SCHV_DUVODY[z.id]) a id přes escJs()',
   },
   'techspec_ui.js': {
     'j.kod': 'kód jazyka z konstanty JAZYKY',

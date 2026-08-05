@@ -97,10 +97,13 @@ test('role administrátora se neukládá', d1.nastaveni.jeAdmin === undefined);
 test('otevřená záložka Nastavení se neukládá (stav relace)', d1.nastaveni.panel === undefined);
 test('šablony se neukládají (binární obsah stejně nepřenese)', d1.sablony === undefined);
 
-test('seznam ukládaných klíčů = klíče konfigurace bez slev',
-  nastdbKlice().join(',') === KONFIG_NAST_KLICE.filter(k => k !== 'slevy').join(','));
+test('matice zobrazení tu není – patří na server (/api/zobrazeni)', d1.nastaveni.zobrazeni === undefined);
+
+test('seznam ukládaných klíčů = klíče konfigurace bez slev a matice zobrazení',
+  nastdbKlice().join(',') === KONFIG_NAST_KLICE.filter(k => k !== 'slevy' && k !== 'zobrazeni').join(','));
 test('vynechané klíče jsou pojmenované', NASTDB_NEUKLADAT.indexOf('slevy') >= 0
-  && NASTDB_NEUKLADAT.indexOf('jeAdmin') >= 0 && NASTDB_NEUKLADAT.indexOf('panel') >= 0);
+  && NASTDB_NEUKLADAT.indexOf('jeAdmin') >= 0 && NASTDB_NEUKLADAT.indexOf('panel') >= 0
+  && NASTDB_NEUKLADAT.indexOf('zobrazeni') >= 0);
 test('cizí oddíly jsou pojmenované', NASTDB_CIZI.indexOf('katalog') >= 0 && NASTDB_CIZI.indexOf('slevy') >= 0);
 test('oddíly souboru jsou tři', NASTDB_SEKCE.length === 3);
 

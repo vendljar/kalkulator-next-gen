@@ -48,6 +48,7 @@ import zaloha from './functions/zaloha.mjs';
 import zalohaNocni from './functions/zaloha_nocni.mjs';
 import zalohaVynuceno from './functions/zaloha_vynuceno.mjs';
 import zdravi from './functions/zdravi.mjs';
+import zobrazeni from './functions/zobrazeni.mjs';
 import { config as configNocni } from './functions/zaloha_nocni.mjs';
 import { ADMIN_EMAIL, ROLE } from './lib/sdilene.mjs';
 
@@ -234,6 +235,22 @@ const MATICE = [
     url: 'http://x/api/firma',
     telo: (r) => ({ udaje: { ...FIRMA, nazev: FIRMA.nazev + ' / ' + r } }),
     proc: 'firemní údaje jdou do hlavičky každé nabídky — mění je jen administrátor',
+    prava: JEN_ADMIN },
+
+  /* Matice zobrazení (#136). Záměrně stejná dvojice práv jako u firmy: číst ji
+   * musí i obchodník — právě jemu podle ní rozhraní schová sloupce a záložky,
+   * a kdyby ji nedostal, viděl by výchozí (nejpřísnější) stav a administrátor
+   * by mu nic nepřidělil. Zapisovat ji smí jen administrátor: je to rozhodnutí
+   * za celou firmu, ne osobní předvolba. */
+  { fn: zobrazeni, soubor: 'zobrazeni.mjs', nazev: 'zobrazení — čtení matice (GET /api/zobrazeni)', metoda: 'GET',
+    url: 'http://x/api/zobrazeni',
+    proc: 'podle matice si rozhraní skládá sám prohlížeč — potřebuje ji každý přihlášený',
+    prava: PRIHLASENY_OK },
+
+  { fn: zobrazeni, nazev: 'zobrazení — zveřejnění matice (POST /api/zobrazeni)', metoda: 'POST',
+    url: 'http://x/api/zobrazeni',
+    telo: () => ({ matice: { 'tab.detail': { 'Obchodník': false, 'Vedoucí': true } } }),
+    proc: 'kdo co v aplikaci vidí, rozhoduje administrátor za celou firmu',
     prava: JEN_ADMIN },
 
   { fn: zakazky, soubor: 'zakazky.mjs', nazev: 'zakázky — rejstřík (GET /api/zakazky)', metoda: 'GET',
