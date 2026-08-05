@@ -32,7 +32,13 @@ export default async (req) => {
   if (req.method !== 'POST') return json({ ok: false, chyba: 'Použijte GET nebo POST.' }, 405);
 
   let t; try { t = await req.json(); } catch (e) { return json({ ok: false, chyba: 'Vstup není platný JSON.' }, 400); }
-  const zak = globalThis.importZakazka(t.zakazka || {});
+  /* importZakazka na nesmyslném vstupu vyhodí výjimku. Bez tohohle obalu by
+   * z ní vznikl pád funkce (Netlify vrátí holou 502) — a to je špatná odpověď
+   * hned dvakrát: uživatel se nedozví, co poslal špatně, a v odpovědi se může
+   * objevit kus vnitřku serveru. Odmítnutí patří sem, srozumitelně. */
+  let zak;
+  try { zak = globalThis.importZakazka(t.zakazka || {}); }
+  catch (e) { return json({ ok: false, chyba: 'Zakázku se nepodařilo přečíst: ' + e.message }, 400); }
   const jmeno = ULO.uloJmenoSouboru(zak);
   if (!jmeno) return json({ ok: false, chyba: 'Zakázka nemá vyplněné číslo nabídky.' }, 400);
 

@@ -37,6 +37,7 @@ const ULO_STAV = {
   soubor: '',         // pod jakým jménem je otevřená zakázka ve složce
   razitko: '',        // s jakým razítkem jsme ji odsud načetli
   posledni: '',       // JSON, který jsme naposledy zapsali (proti zbytečným zápisům)
+  kdyUlozeno: null,   // čas posledního úspěšného zápisu (lišta z něj ukazuje „v HH:MM")
   auto: true,
   hledat: '',
   hlaska: '',
@@ -235,6 +236,7 @@ function uloOdpojSlozku() {
   if (!confirm('Odpojit složku?\n\nNa disku se nic nesmaže ani nezmění, aplikace do ní jen přestane ukládat.')) return;
   ULO_STAV.koren = null; ULO_STAV.jmeno = ''; ULO_STAV.pripraveno = false;
   ULO_STAV.rejstrik = []; ULO_STAV.soubor = ''; ULO_STAV.razitko = ''; ULO_STAV.posledni = '';
+  ULO_STAV.kdyUlozeno = null;
   uloDbZapis(null).catch(() => null);
   // ceník se vrátí na ten ze sestavení – bez složky k němu aplikace nemá zdroj
   if (typeof progOdpoj === 'function') progOdpoj();
@@ -294,6 +296,7 @@ function uloUlozDoSlozky(opts) {
     return uloZapisSoubor(jmeno, text2).then(() => {
       const stary = ULO_STAV.soubor;
       ULO_STAV.soubor = jmeno; ULO_STAV.razitko = razitko; ULO_STAV.posledni = JSON.stringify(ZAK);
+      ULO_STAV.kdyUlozeno = new Date();
       ULO_STAV.rejstrik = uloRejstrikSerad(
         uloRejstrikSloucit(ULO_STAV.rejstrik, uloRejstrikZaznam(ZAK, { soubor: jmeno, razitko })));
       return uloZapisRejstrik().then(() => {
@@ -366,6 +369,7 @@ function uloOtevriZeSlozky(soubor) {
     ULO_STAV.soubor = soubor;
     ULO_STAV.razitko = uloRazitko(zak);
     ULO_STAV.posledni = JSON.stringify(ZAK);
+    ULO_STAV.kdyUlozeno = null;
     if (typeof seznamReset === 'function') seznamReset();
     /* Zakázka ze složky se otevírá s platným ceníkem: rozpracované varianty
      * se srovnají s tím, co platí dnes (zadání 31. 7. 2026). Uzamčené

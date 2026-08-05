@@ -18,7 +18,20 @@ function nastRefresh() {
 }
 function nastPanel(p) { NAST.panel = p; renderNastaveni(); }
 
-function nastSetAdmin(v) { NAST.jeAdmin = !!v; nastRefresh(); }
+/* Přepínač rolí je z doby před přihlašováním – byl to náhled pro toho,
+ * kdo si soubor otevřel na svém disku. Od chvíle, kdy role chodí ze
+ * serveru, se přes něj nesmí zapnout pohled administrátora nikomu, komu
+ * ho server nepřiznal: skryté záložky Ceník OCK a Ceník projekce se
+ * schovávají právě podle `NAST.jeAdmin` a data v prohlížeči už jsou.
+ * Skrýt tlačítko nestačí, funkce jde zavolat i z konzole. */
+function nastSetAdmin(v) {
+  if (v && typeof smiPohledAdmina === 'function' && !smiPohledAdmina()) {
+    alert('Pohled administrátora má jen účet s rolí Administrátor. '
+      + 'Potřebujete-li vidět ceník, požádejte administrátora.');
+    return;
+  }
+  NAST.jeAdmin = !!v; nastRefresh();
+}
 function nastToggleTab(t, v) { NAST.tabViditelnost[t] = !!v; nastRefresh(); }
 function nastSetNaklady(v) { NAST.zobrazitNaklady = !!v; nastRefresh(); }
 

@@ -48,11 +48,13 @@ function zakUlozeniStav() {
     return uloUlozeniStav({
       zakazka: ZAK, dostupne: true, prihlasen: true,
       ulozeno: ONLINE_STAV.soubor, zmeneno: text !== ONLINE_STAV.posledni,
+      kdy: ONLINE_STAV.kdyUlozeno,
     });
   if (kanal === 'slozka')
     return uloUlozeniStav({
       zakazka: ZAK, dostupne: true, prihlasen: true,
       ulozeno: ULO_STAV.soubor, zmeneno: text !== ULO_STAV.posledni,
+      kdy: ULO_STAV.kdyUlozeno,
     });
   /* Bez databáze: rozlišíme „server tu vůbec není" (běžíme ze souboru)
    * od „server běží, jen nejsme přihlášení" — jsou to dvě různé rady. */
@@ -141,9 +143,9 @@ function zakNactiUI() {
  * do databáze jako záznam bez čísla. Po zapomenutí je nová zakázka ve stavu
  * „vyplnit" a čeká na hlavičku – přesně jak je zadáno. */
 function zakOdpojUlozeni() {
-  ONLINE_STAV.soubor = ''; ONLINE_STAV.razitko = ''; ONLINE_STAV.posledni = '';
+  ONLINE_STAV.soubor = ''; ONLINE_STAV.razitko = ''; ONLINE_STAV.posledni = ''; ONLINE_STAV.kdyUlozeno = null;
   if (ONLINE_STAV.timer) { clearTimeout(ONLINE_STAV.timer); ONLINE_STAV.timer = null; }
-  ULO_STAV.soubor = ''; ULO_STAV.razitko = ''; ULO_STAV.posledni = '';
+  ULO_STAV.soubor = ''; ULO_STAV.razitko = ''; ULO_STAV.posledni = ''; ULO_STAV.kdyUlozeno = null;
   if (ULO_STAV.timer) { clearTimeout(ULO_STAV.timer); ULO_STAV.timer = null; }
   zakUlozeniZprava('');
 }

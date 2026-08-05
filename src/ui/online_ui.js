@@ -44,6 +44,11 @@ const ONLINE_STAV = {
   soubor: '',        // pod jakým jménem je otevřená zakázka online
   razitko: '',
   posledni: '',      // co jsme naposledy zapsali (proti zbytečným zápisům)
+  /* Kdy se naposledy povedl zápis do databáze. Lišta z toho ukazuje
+   * „uloženo v HH:MM" – bez času vypadá stejně ráno i večer a obchodník
+   * z ní nepozná, jestli tam poslední úprava opravdu je. Otevření zakázky
+   * čas NENASTAVUJE: otevřít není totéž co uložit. */
+  kdyUlozeno: null,
   auto: true,
   timer: null,
   hledat: '',
@@ -152,6 +157,7 @@ function onlineOdhlas() {
     ONLINE_STAV.ja = null; ONLINE_STAV.db = null; ONLINE_STAV.cenikPouzit = false;
     ONLINE_STAV.firma = null; ONLINE_STAV.firmaPouzita = false;
     ONLINE_STAV.rejstrik = []; ONLINE_STAV.soubor = ''; ONLINE_STAV.razitko = ''; ONLINE_STAV.posledni = '';
+    ONLINE_STAV.kdyUlozeno = null;
     ONLINE_STAV.uzivatele = []; ONLINE_STAV.uzivateleNacteno = false; ONLINE_STAV.formHeslo = '';
     ONLINE_STAV.otisky = []; ONLINE_STAV.otiskyNacteno = false;
     if (ONLINE_STAV.timer) { clearTimeout(ONLINE_STAV.timer); ONLINE_STAV.timer = null; }
@@ -319,6 +325,7 @@ function onlineUloz(opts) {
   return onlineApi('/api/zakazky', { zakazka: ZAK }).then(o => {
     ONLINE_STAV.soubor = o.soubor; ONLINE_STAV.razitko = o.razitko || '';
     ONLINE_STAV.posledni = JSON.stringify(ZAK);
+    ONLINE_STAV.kdyUlozeno = new Date();
     onlineZprava('Uloženo online jako ' + o.soubor + ' (' + new Date().toLocaleTimeString('cs-CZ') + ').');
     if (typeof historieOznacUlozeno === 'function') historieOznacUlozeno();
     /* Zakázka je v databázi – nouzová záloha v prohlížeči už nemá co chránit.
@@ -346,6 +353,7 @@ function onlineOtevri(soubor) {
     ONLINE_STAV.soubor = soubor;
     ONLINE_STAV.razitko = (typeof uloRazitko === 'function') ? uloRazitko(ZAK) : '';
     ONLINE_STAV.posledni = JSON.stringify(ZAK);
+    ONLINE_STAV.kdyUlozeno = null;
     if (typeof seznamReset === 'function') seznamReset();
     /* Otevřít se musí nad ceníkem, který právě platí – rozpracované varianty
      * se srovnají, uzamčené se nedotknou (stejné pravidlo jako u složky). */

@@ -83,6 +83,14 @@ const NAST = {
   },
 };
 function jeAdmin() { return !!NAST.jeAdmin; }
+/* Smí si přihlášený zapnout pohled administrátora? Pravidlo je v
+ * `src/prava.js` a má vlastní testy; tady se jen dohledá, kdo je
+ * přihlášený. Guardy `typeof` jsou kvůli pořadí sestavení — render()
+ * může proběhnout dřív, než se online vrstva ohlásí. */
+function smiPohledAdmina() {
+  const ja = (typeof ONLINE_STAV !== 'undefined' && ONLINE_STAV) ? ONLINE_STAV.ja : null;
+  return typeof pravaSmiAdmin === 'function' ? pravaSmiAdmin(ja) : true;
+}
 /* aktivní jazyk dokumentů a zkratka pro překlad (viz preklad.js) */
 function jazyk() { return NAST.jazyk || 'cz'; }
 function jazykSet(k) { NAST.jazyk = JAZYK_IDX[k] === undefined && k !== 'cz' ? 'cz' : k;
@@ -799,6 +807,7 @@ function nactiZakazku(ev) {
 /* ---------- hlavní render ---------- */
 function render() {
   document.body.classList.toggle('role-user', !NAST.jeAdmin);
+  document.body.classList.toggle('muze-admin', smiPohledAdmina());
   document.body.classList.toggle('skryt-naklady', !(NAST.jeAdmin && NAST.zobrazitNaklady));
   // #34: obalení zapisujících funkcí je jednorázové, ale musí proběhnout až
   // po sestavení celé aplikace – proto tady, ne na úrovni souboru.

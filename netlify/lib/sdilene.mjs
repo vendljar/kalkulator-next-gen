@@ -87,10 +87,34 @@ export function json(data, status = 200, hlavicky = {}) {
 export async function prihlaseny(req) {
   return relaceOver(req.headers.get('cookie'));
 }
+
+/* Ověření, kdo požadavek posílá a jestli na něj má právo.
+ *
+ * PROČ SE ÚČET DOČÍTÁ Z DATABÁZE A NEVĚŘÍ SE COOKIE (rozhodnutí 5. 8. 2026,
+ * bezpečnostní audit). Relace je podepsaná cookie s platností 12 hodin a nese
+ * v sobě roli. Dokud se role četla z ní, platilo tohle: administrátor, kterému
+ * se v poledne role sníží na obchodníka, si až do večera dál stahoval celou
+ * zálohu databáze a zveřejňoval ceníky; vypnutý účet — kolega, který odchází
+ * z firmy — pracoval dál, protože cookie v jeho prohlížeči nikdo neodebral.
+ * Přesně ve chvíli, kdy na právech záleží nejvíc, tedy nedržela.
+ *
+ * Teď se při každém požadavku načte účet z úložiště a rozhoduje jeho DNEŠNÍ
+ * stav: neexistuje-li nebo je vypnutý, je to 401 (ať se přihlásí znovu a uvidí
+ * proč), a roli určuje účet, ne cookie. Povýšení tím platí okamžitě, bez
+ * odhlášení. Cena je jedno čtení z Blobs navíc na požadavek — proti riziku,
+ * že odebrané právo dvanáct hodin nic neznamená, je to laciné. */
 export async function vyzadujRoli(req, ...role) {
   const r = await prihlaseny(req);
   if (!r) return { chyba: json({ ok: false, chyba: 'Nepřihlášen.' }, 401) };
-  if (role.length && !role.includes(r.role))
+
+  const ucet = await (await uloziste('uzivatele')).cti(r.email);
+  if (!ucet)
+    return { chyba: json({ ok: false, chyba: 'Účet už neexistuje. Přihlaste se znovu.' }, 401) };
+  if (ucet.aktivni === false)
+    return { chyba: json({ ok: false, chyba: 'Účet je vypnutý. Obraťte se na správce.' }, 401) };
+
+  const relace = { ...r, role: ucet.role, jmeno: ucet.jmeno || '' };
+  if (role.length && !role.includes(relace.role))
     return { chyba: json({ ok: false, chyba: 'K této akci je potřeba role: ' + role.join(' / ') + '.' }, 403) };
-  return { relace: r };
+  return { relace, ucet };
 }

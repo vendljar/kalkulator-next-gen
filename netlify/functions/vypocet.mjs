@@ -10,10 +10,19 @@
  * (esbuild) neumí vystopovat, zdrojáky se do balíčku nedostaly a funkce
  * padala hned při načtení chybou 502. Podrobný rozbor je v lib/jadro_moduly.cjs. */
 import { jadro, jadroChyba } from '../lib/jadro.mjs';
+import { vyzadujRoli } from '../lib/sdilene.mjs';
 
 export default async (req) => {
   if (req.method !== 'POST')
     return Response.json({ ok: false, chyba: 'Použijte POST s tělem { zakazka, program }.' }, { status: 405 });
+
+  /* Přihlášení se vyžaduje od 5. 8. 2026 (bezpečnostní audit). Dosud tahle
+   * cesta jako jediná nikoho nekontrolovala — kdokoli z internetu si mohl
+   * nechat počítat libovolně velké zakázky na náš účet, a v odpovědi navíc
+   * viděl, jak výpočet uvnitř vypadá. Aplikace ji dnes nevolá vůbec (je to
+   * služba K2 pro budoucí napojení), takže tím nic nepřestává fungovat. */
+  const { chyba } = await vyzadujRoli(req);
+  if (chyba) return chyba;
 
   let JEKLY;
   try { ({ JEKLY } = await jadro()); } catch (e) { return jadroChyba(e); }
