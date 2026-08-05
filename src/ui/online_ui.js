@@ -33,7 +33,12 @@ const ONLINE_STAV = {
   bezi: false,       // /api/zdravi odpovědělo → běžíme na serveru s funkcemi
   sondaHotova: false,// první dotaz na /api/zdravi už doběhl (ať tak, či tak)
   nouzove: false,    // uživatel vědomě pokračuje bez přihlášení (server neběží)
-  ja: null,          // { email, jmeno, role } po přihlášení
+  /* { email, jmeno, titul, funkce, telefon, role, podpis } po přihlášení.
+   * Od 5. 8. 2026 (#145) nese účet i to, čím se člověk podepisuje pod cenovou
+   * nabídkou — titul před jménem, funkci, telefon a sken podpisu s razítkem.
+   * Dřív byl tenhle blok zapečený v šabloně, takže každá nabídka odcházela
+   * pod jménem jednoho kolegy, ať ji dělal kdokoli. */
+  ja: null,
   db: null,          // normalizovaná databáze programu ze serveru
   cenikPouzit: false,// online ceník je právě nasazený v aplikaci
   firma: null,       // { udaje, kdo, kdy } – firemní údaje ze serveru
@@ -61,7 +66,14 @@ const ONLINE_STAV = {
   /* Formulář „založit účet" žije ve stavu, ne jen v polích: panel se při
    * každé akci překresluje a hodnoty v DOM by se ztratily. Maže se až po
    * ÚSPĚŠNÉM založení — po chybě zůstává vyplněný (4. 8. 2026 večer). */
-  uzForm: { email: '', jmeno: '', role: 'Obchodník', heslo: '' },
+  uzForm: { email: '', jmeno: '', titul: '', funkce: 'Obchodní technik', telefon: '',
+            role: 'Obchodník', heslo: '' },
+  /* Okno „Můj profil" (#145). Drží rozpracované hodnoty stejně jako uzForm:
+   * panel se překresluje po každé akci (třeba po nahrání podpisu) a rozepsaný
+   * telefon v poli DOM by se ztratil. */
+  profil: null,
+  profilHlaska: '',
+  profilTyp: '',
   hesloPro: '',      // e-mail účtu, u kterého je rozbalený reset hesla
   formEmail: '',     // přihlašovací formulář přežívá překreslení
   formHeslo: '',
@@ -143,7 +155,9 @@ function onlinePrihlas() {
  * protokolu, role do viditelnosti záložek (skutečná práva beztak hlídá
  * server – upravenému klientovi role v prohlížeči nepomůže). */
 function onlinePoPrihlaseni(ja) {
-  ONLINE_STAV.ja = { email: ja.email, jmeno: ja.jmeno || '', role: ja.role };
+  ONLINE_STAV.ja = { email: ja.email, jmeno: ja.jmeno || '', role: ja.role,
+    titul: ja.titul || '', funkce: ja.funkce || '', telefon: ja.telefon || '',
+    podpis: ja.podpis || '' };
   ONLINE_STAV.uzivateleNacteno = false;   // seznam účtů se načte čerstvý
   if (typeof NAST !== 'undefined') {
     NAST.uzivatel = ja.jmeno || ja.email;
@@ -257,14 +271,32 @@ function onlineNactiFirmu() {
   });
 }
 
+/* Srovnání toho, co je v aplikaci, se zveřejněnou kopií (#142).
+ * Logika je ve firma.js, tady jen sáhnutí na živý stav. */
+function onlineFirmaShoda() {
+  if (typeof firmaShodaSOnline !== 'function')
+    return { maOnline: false, shodne: false, rozdily: [] };
+  return firmaShodaSOnline(typeof NAST !== 'undefined' ? NAST.firma : null,
+    ONLINE_STAV.firma ? ONLINE_STAV.firma.udaje : null);
+}
+
 /* Krátký popis stavu do Nastavení → Firma. */
 function onlineFirmaPopis() {
   if (!ONLINE_STAV.ja) return 'Nepřihlášen – online firemní údaje se načtou po přihlášení.';
   if (!ONLINE_STAV.firma)
     return 'V online databázi firemní údaje zatím nejsou. Dokud je tam nezveřejníte, '
       + 'mají obchodníci v hlavičce nabídky ukázkovou firmu ze sestavení.';
+  /* Zadání 5. 8. 2026 (#142): „Proč musím pořád zveřejňovat firemní údaje?
+   * Ty už jsem nahrál a zveřejnil." Věta musí sama říct, jestli je nahoře
+   * totéž. Dosavadní „· právě platí v aplikaci" na to neodpovídalo: rozsvítilo
+   * se jen tomu, komu se online kopie do aplikace opravdu nasadila, a tomu, kdo
+   * má připojenou složku _DB, se nenasazuje nikdy – tedy právě administrátorovi,
+   * který se ptá. */
+  const sh = onlineFirmaShoda();
   return 'Online zveřejněno ' + String(ONLINE_STAV.firma.kdy || '').slice(0, 16).replace('T', ' ')
     + ' (' + (ONLINE_STAV.firma.kdo || '?') + ') · ' + (ONLINE_STAV.firma.udaje.nazev || '')
+    + (sh.shodne ? ' · shodné s tím, co máte v Nastavení → Firma'
+                 : ' · liší se od toho, co máte tady')
     + (ONLINE_STAV.firmaPouzita ? ' · právě platí v aplikaci' : '');
 }
 
@@ -300,12 +332,28 @@ function onlineZverejniFirmu() {
 function onlineFirmaPanel() {
   if (!onlineMozne() || !ONLINE_STAV.bezi || !jeAdminOnline()) return '';
   const lze = firmaLzeZverejnit(typeof NAST !== 'undefined' ? NAST.firma : null);
+  const sh = onlineFirmaShoda();
+  /* Když je nahoře totéž, co má administrátor u sebe, nemá se po něm chtít
+   * gesto, které už jednou udělal (#142). Tlačítko nezmizí – jen přestane být
+   * tím hlavním, co panel nabízí, a řekne rovnou, k čemu je: zveřejnit znovu
+   * má smysl leda po ruční opravě na serveru. Zmizet nesmí proto, že jediná
+   * cesta, jak online kopii přepsat, vede právě tudy. */
+  const hotovo = sh.shodne;
+  const rozdilVeta = (sh.maOnline && !sh.shodne)
+    ? 'Oproti online kopii se liší: ' + sh.rozdily.slice(0, 6).join(', ')
+      + (sh.rozdily.length > 6 ? ' a další' : '') + '.'
+    : '';
   return `<div class="sec-title">Firemní údaje v online databázi</div>
     <div class="note" style="margin-top:0">${esc(onlineFirmaPopis())}</div>
     ${lze.ok ? '' : `<div class="note" style="color:var(--warn)">⚠ ${esc(lze.duvod)}</div>`}
+    ${hotovo ? `<div class="note" style="color:var(--ok)">✓ Online databáze má přesně tyhle údaje.
+      Zveřejňovat je znovu není potřeba.</div>` : ''}
+    ${rozdilVeta ? `<div class="note" style="color:var(--warn)">⚠ ${esc(rozdilVeta)}
+      Dokud je nezveřejníte, platí pro ostatní pořád ta starší verze.</div>` : ''}
     <div class="btns" style="margin-top:8px">
-      <button class="primary" onclick="onlineZverejniFirmu()"
-        ${ONLINE_STAV.pracuje || !lze.ok ? 'disabled' : ''}>Zveřejnit firemní údaje online</button>
+      <button class="${hotovo ? 'mini' : 'primary'}" onclick="onlineZverejniFirmu()"
+        ${ONLINE_STAV.pracuje || !lze.ok ? 'disabled' : ''}>${hotovo
+          ? 'Zveřejnit znovu (není potřeba)' : 'Zveřejnit firemní údaje online'}</button>
       <button class="mini" onclick="onlineNactiFirmu().then(function(){render();nastRefresh()})">Načíst online znovu</button>
     </div>
     <div class="note">Obchodník ani vedoucí složku <code>_DB</code> nemapují – hlavičku nabídky
@@ -613,13 +661,21 @@ function onlineUzZaloz() {
     onlineZprava('Počáteční heslo musí mít aspoň 8 znaků.', 'varovani');
     onlineUzivateleObnov(); return Promise.resolve(false);
   }
-  return onlineUzAkce({ akce: 'zaloz', email, jmeno: String(f.jmeno || '').trim(), role: f.role, heslo: f.heslo },
+  /* Titul, funkce a telefon jdou na server rovnou při založení účtu (#145):
+   * kolega jinak udělá první nabídku dřív, než si profil vyplní, a zákazníkovi
+   * odejde patička bez telefonu. Povinné nejsou – kdo je nezná, doplní je později. */
+  const profil = { titul: String(f.titul || '').trim(), funkce: String(f.funkce || '').trim(),
+                   telefon: String(f.telefon || '').trim() };
+  return onlineUzAkce({ akce: 'zaloz', email, jmeno: String(f.jmeno || '').trim(),
+      role: f.role, heslo: f.heslo, ...profil },
     'Účet ' + email + ' (' + f.role + ') je založený. Heslo předejte osobně – e-mailem se neposílá.',
     { poUspechu: () => {
       /* nový účet do tabulky hned z odpovědi; formulář se maže až teď */
       if (!ONLINE_STAV.uzivatele.some(u => u.email === email))
-        ONLINE_STAV.uzivatele.push({ email, jmeno: String(f.jmeno || '').trim(), role: f.role, aktivni: true });
-      ONLINE_STAV.uzForm = { email: '', jmeno: '', role: 'Obchodník', heslo: '' };
+        ONLINE_STAV.uzivatele.push({ email, jmeno: String(f.jmeno || '').trim(),
+          ...profil, role: f.role, aktivni: true });
+      ONLINE_STAV.uzForm = { email: '', jmeno: '', titul: '', funkce: 'Obchodní technik',
+        telefon: '', role: 'Obchodník', heslo: '' };
     } });
 }
 
@@ -809,14 +865,29 @@ function renderOnlineLista() {
   if (!el) return;
   if (!onlineMozne()) { el.innerHTML = ''; return; }
   if (!ONLINE_STAV.ja) {
-    el.innerHTML = ONLINE_STAV.nouzove
-      ? `<button class="mini" onclick="onlineZpetKPrihlaseni()">Přihlásit se</button>` : '';
+    /* Tlačítko svítí VŽDY, když nikdo není přihlášený – ne jen v nouzovém
+     * režimu. Normálně ho stejně zakryje přihlašovací překryv, takže nikoho
+     * neruší; smysl má právě ve chvíli, kdy se překryv z jakéhokoli důvodu
+     * nevykreslí. Přesně na tohle narazil uživatel 5. 8. 2026: v hlavičce
+     * nebyl ani panáček, ani „Přihlásit se", ani překryv, a k přihlášení
+     * nevedla žádná cesta než tvrdé obnovení stránky. */
+    el.innerHTML = `<button class="mini" onclick="onlineZpetKPrihlaseni()">Přihlásit se</button>`;
     return;
   }
-  el.innerHTML = `<b>👤 ${esc(ONLINE_STAV.ja.jmeno || ONLINE_STAV.ja.email)}</b>
+  /* Titul se ukazuje i v liště: člověk tak hned vidí, v jaké podobě půjde
+   * jeho jméno do nabídky, a nemusí kvůli kontrole nic generovat. */
+  el.innerHTML = `<b>👤 ${esc(onlineJmenoSTitulem() || ONLINE_STAV.ja.email)}</b>
     <span>(${esc(ONLINE_STAV.ja.role)})</span>
+    <button class="mini" onclick="otevriMujProfil()">Můj profil</button>
     <button class="mini" onclick="otevriZmenaHesla()">Změnit heslo</button>
     <button class="mini" onclick="onlineOdhlas()">Odhlásit</button>`;
+}
+
+/* Jméno tak, jak patří pod nabídku: „Ing. Jiří Lauda". Titul je nepovinný,
+ * takže se nikdy nelepí prázdná mezera navíc. */
+function onlineJmenoSTitulem(u) {
+  const x = u || ONLINE_STAV.ja || {};
+  return [String(x.titul || '').trim(), String(x.jmeno || '').trim()].filter(Boolean).join(' ');
 }
 
 /* ---------- změna vlastního hesla (staré + nové, viz server 'mojeheslo') ---------- */
@@ -873,6 +944,195 @@ function onlineZmenHeslo() {
     })
     .catch(e => { ONLINE_STAV.hesloHlaska = e.message; })
     .then(() => { ONLINE_STAV.pracuje = false; renderZmenaHesla(); render(); });
+}
+
+/* ======================================================================
+ * MŮJ PROFIL — údaje pod cenovou nabídku (5. 8. 2026, #145)
+ *
+ * Zadání: „V cenové nabídce se musí zobrazovat jméno a kontaktní údaje
+ * obchodníka = Obchodního technika, která nabídku tvořil. … doplnit i titul
+ * před jménem a telefonní číslo … Zároveň tam přidej možnost uživateli nahrát
+ * snímek s podpisem a rozítkem."
+ *
+ * Blok „Vypracoval: Ing. Jiří Lauda / Obchodní technik / Tel: … / Email: …"
+ * byl v šabloně vepsaný natvrdo a pod ním zapečený obrázek podpisu s razítkem.
+ * Ať nabídku dělal kdokoli, odešla pod jménem jednoho kolegy — a kdo ji
+ * posílal za sebe, přepisoval to po každém vygenerování ručně ve Wordu.
+ * Teď si každý svoje údaje jednou uloží a dokument si je bere sám.
+ * ====================================================================== */
+
+/* Strop na velikost obrázku. Musí sedět se serverem (PODPIS_MAX v sdilene.mjs)
+ * — jinak by uživatel narazil až po odeslání, po zbytečném čekání. */
+const PODPIS_MAX_ZNAKU = 900000;
+/* Na jakou šířku se sken zmenšuje, když je moc velký. 1400 bodů na podpis
+ * s razítkem bohatě stačí (ve Wordu to vyjde na několik centimetrů) a soubor
+ * spadne z několika megabajtů na desítky kilobajtů. */
+const PODPIS_SIRKA = 1400;
+
+function otevriMujProfil() {
+  const j = ONLINE_STAV.ja || {};
+  ONLINE_STAV.profil = { jmeno: j.jmeno || '', titul: j.titul || '',
+    funkce: j.funkce || '', telefon: j.telefon || '', podpis: j.podpis || '' };
+  ONLINE_STAV.profilHlaska = ''; ONLINE_STAV.profilTyp = '';
+  renderMujProfil();
+  const o = document.getElementById('profil-overlay');
+  if (o) o.style.display = 'flex';
+}
+
+function zavriMujProfil() {
+  const o = document.getElementById('profil-overlay');
+  if (o) o.style.display = 'none';
+}
+
+function renderMujProfil() {
+  const el = document.getElementById('profil-panel');
+  if (!el || !ONLINE_STAV.profil) return;
+  const p = ONLINE_STAV.profil;
+  const email = (ONLINE_STAV.ja && ONLINE_STAV.ja.email) || '';
+  /* Náhled ukazuje přesně to, co půjde do dokumentu. Podpis se kreslí na bílé
+   * ploše se slabým rámečkem: sken bývá průhledný nebo skoro bílý a na šedém
+   * pozadí panelu by vypadal jinak než ve Wordu. */
+  const nahled = p.podpis
+    ? `<div style="border:1px solid #ccc;background:#fff;padding:6px;display:inline-block;max-width:100%">
+         <img src="${esc(p.podpis)}" alt="podpis a razítko" style="max-width:320px;max-height:160px;display:block"></div>
+       <div class="btns" style="margin-top:6px">
+         <button class="mini" onclick="onlineOdeberPodpis()">Odebrat podpis</button></div>`
+    : `<div class="note">Zatím nemáte nahraný žádný podpis. Nabídka se vygeneruje bez něj —
+         nic se nedoplňuje ani nekreslí za vás.</div>`;
+
+  el.innerHTML = `<h2>Můj profil
+      <button class="mini" style="margin-left:auto" onclick="zavriMujProfil()">Zavřít</button></h2>
+    <div class="body">
+      ${ONLINE_STAV.profilHlaska ? `<div class="${zapisTridaHlasky(ONLINE_STAV.profilTyp)}">${esc(ONLINE_STAV.profilHlaska)}</div>` : ''}
+      <div class="note">Tyhle údaje jdou do bloku <b>„Vypracoval"</b> v cenové nabídce — pod ni se
+        podepisujete vy, ne firma. E-mail se bere z přihlášení a měnit ho tady nejde.</div>
+      <div class="row"><label>Titul před jménem</label>
+        <input type="text" id="profilTitul" value="${esc(p.titul)}" placeholder="Ing."
+          oninput="ONLINE_STAV.profil.titul=this.value"><span class="u"></span></div>
+      <div class="row"><label>Jméno a příjmení</label>
+        <input type="text" id="profilJmeno" value="${esc(p.jmeno)}" placeholder="Jiří Lauda"
+          oninput="ONLINE_STAV.profil.jmeno=this.value"><span class="u"></span></div>
+      <div class="row"><label>Funkce</label>
+        <input type="text" id="profilFunkce" value="${esc(p.funkce)}" placeholder="Obchodní technik"
+          oninput="ONLINE_STAV.profil.funkce=this.value"><span class="u"></span></div>
+      <div class="row"><label>Telefon</label>
+        <input type="text" id="profilTelefon" value="${esc(p.telefon)}" placeholder="+420 602 590 945"
+          oninput="ONLINE_STAV.profil.telefon=this.value"
+          onkeydown="if(event.key==='Enter')onlineUlozProfil()"><span class="u"></span></div>
+      <div class="row"><label>E-mail</label>
+        <input type="text" value="${esc(email)}" disabled><span class="u"></span></div>
+      <div class="note" style="margin-top:10px"><b>Podpis s razítkem</b> — sken nebo fotka
+        v PNG či JPEG. Nejlépe na bílém papíře, ořízlé kolem podpisu; velký obrázek si aplikace
+        sama zmenší.</div>
+      ${nahled}
+      <div class="btns" style="margin-top:8px">
+        <input type="file" id="profilPodpisSoubor" accept="image/png,image/jpeg"
+          onchange="onlineNahrajPodpis(this)" style="max-width:280px">
+      </div>
+      <div class="btns" style="margin-top:12px">
+        <button class="primary" onclick="onlineUlozProfil()" ${ONLINE_STAV.pracuje ? 'disabled' : ''}>Uložit profil</button>
+      </div>
+      <div class="note">Podpis se ukládá u vašeho účtu na serveru a použije se jen ve vašich
+        nabídkách. Cizí podpis nahrát nejde — hlídá to server, aby nešlo poslat nabídku
+        jménem kolegy.</div>
+    </div>`;
+}
+
+function onlineUlozProfil() {
+  const p = ONLINE_STAV.profil || {};
+  ONLINE_STAV.pracuje = true; renderMujProfil();
+  return onlineApi('/api/uzivatele', { akce: 'profil', jmeno: p.jmeno, titul: p.titul,
+    funkce: p.funkce, telefon: p.telefon })
+    .then(o => {
+      Object.assign(ONLINE_STAV.ja, { jmeno: o.jmeno || '', titul: o.titul || '',
+        funkce: o.funkce || '', telefon: o.telefon || '' });
+      /* Jméno razítkuje zámky i protokol — po změně musí platit hned to nové,
+       * jinak by se zbytek dne podepisovaly zápisy starým tvarem. */
+      if (typeof NAST !== 'undefined') NAST.uzivatel = o.jmeno || ONLINE_STAV.ja.email;
+      ONLINE_STAV.profilHlaska = 'Profil je uložený. Do dalších nabídek půjde '
+        + (onlineJmenoSTitulem() || ONLINE_STAV.ja.email) + '.';
+      ONLINE_STAV.profilTyp = '';
+    })
+    .catch(e => { ONLINE_STAV.profilHlaska = e.message; ONLINE_STAV.profilTyp = 'chyba'; })
+    .then(() => { ONLINE_STAV.pracuje = false; renderMujProfil(); render(); });
+}
+
+/* Načtení souboru z disku. Prohlížeč umí obrázek přečíst jako datový zápis,
+ * takže se nikam nenahrává „na půl cesty" — buď se uloží celý k účtu, nebo
+ * se neuloží nic. */
+function onlineNahrajPodpis(vstup) {
+  const soubor = vstup && vstup.files && vstup.files[0];
+  if (!soubor) return Promise.resolve(false);
+  if (!/^image\/(png|jpeg)$/.test(soubor.type)) {
+    ONLINE_STAV.profilHlaska = 'Podpis musí být obrázek PNG nebo JPEG. Formát „'
+      + (soubor.type || 'neznámý') + '" použít nejde.';
+    ONLINE_STAV.profilTyp = 'chyba'; renderMujProfil(); return Promise.resolve(false);
+  }
+  ONLINE_STAV.pracuje = true;
+  ONLINE_STAV.profilHlaska = 'Zpracovávám obrázek…'; ONLINE_STAV.profilTyp = '';
+  renderMujProfil();
+  return new Promise((hotovo, chyba) => {
+    const c = new FileReader();
+    c.onload = () => hotovo(String(c.result || ''));
+    c.onerror = () => chyba(new Error('Soubor se nepodařilo přečíst.'));
+    c.readAsDataURL(soubor);
+  })
+    .then(podpisZmensi)
+    .then(obrazek => onlineApi('/api/uzivatele', { akce: 'podpis', obrazek })
+      .then(() => {
+        ONLINE_STAV.profil.podpis = obrazek;
+        ONLINE_STAV.ja.podpis = obrazek;
+        ONLINE_STAV.profilHlaska = 'Podpis je uložený (' + Math.round(obrazek.length / 1024)
+          + ' kB). Objeví se v každé vaší další nabídce.';
+        ONLINE_STAV.profilTyp = '';
+        return true;
+      }))
+    .catch(e => { ONLINE_STAV.profilHlaska = e.message; ONLINE_STAV.profilTyp = 'chyba'; return false; })
+    .then(v => { ONLINE_STAV.pracuje = false; renderMujProfil(); return v; });
+}
+
+/* Fotka z mobilu má klidně 4 MB; do dokumentu i do databáze je to zbytečné
+ * a server takový obrázek odmítne. Zmenšení dělá prohlížeč sám — uživatel
+ * nemá důvod hledat grafický program kvůli tomu, aby mohl nahrát podpis.
+ * Malý obrázek se NEPŘEKRESLUJE: překódováním by se jen ztratila kvalita. */
+function podpisZmensi(dataUrl) {
+  const s = String(dataUrl || '');
+  if (s.length <= PODPIS_MAX_ZNAKU) return Promise.resolve(s);
+  if (typeof Image === 'undefined' || typeof document === 'undefined') return Promise.resolve(s);
+  return new Promise((hotovo, chyba) => {
+    const obr = new Image();
+    obr.onload = () => {
+      const pomer = Math.min(1, PODPIS_SIRKA / (obr.naturalWidth || PODPIS_SIRKA));
+      const platno = document.createElement('canvas');
+      platno.width = Math.max(1, Math.round((obr.naturalWidth || PODPIS_SIRKA) * pomer));
+      platno.height = Math.max(1, Math.round((obr.naturalHeight || PODPIS_SIRKA) * pomer));
+      const k = platno.getContext('2d');
+      /* Bílé pozadí: JPEG průhlednost neumí a bez podkladu by se z ní stala
+       * černá plocha přes celý podpis. */
+      k.fillStyle = '#fff'; k.fillRect(0, 0, platno.width, platno.height);
+      k.drawImage(obr, 0, 0, platno.width, platno.height);
+      let out = platno.toDataURL('image/png');
+      if (out.length > PODPIS_MAX_ZNAKU) out = platno.toDataURL('image/jpeg', 0.85);
+      if (out.length > PODPIS_MAX_ZNAKU)
+        return chyba(new Error('Obrázek je i po zmenšení příliš velký. Ořízněte ho prosím '
+          + 'jen na podpis s razítkem a zkuste to znovu.'));
+      hotovo(out);
+    };
+    obr.onerror = () => chyba(new Error('Obrázek se nepodařilo načíst — je soubor v pořádku?'));
+    obr.src = s;
+  });
+}
+
+function onlineOdeberPodpis() {
+  ONLINE_STAV.pracuje = true; renderMujProfil();
+  return onlineApi('/api/uzivatele', { akce: 'podpis', obrazek: '' })
+    .then(() => {
+      ONLINE_STAV.profil.podpis = ''; ONLINE_STAV.ja.podpis = '';
+      ONLINE_STAV.profilHlaska = 'Podpis je odebraný. Další nabídky se vygenerují bez něj.';
+      ONLINE_STAV.profilTyp = '';
+    })
+    .catch(e => { ONLINE_STAV.profilHlaska = e.message; ONLINE_STAV.profilTyp = 'chyba'; })
+    .then(() => { ONLINE_STAV.pracuje = false; renderMujProfil(); });
 }
 
 function renderOnlineKarta() {
@@ -1009,16 +1269,24 @@ function onlineRadekUzivatele(u) {
     ${['Obchodník', 'Vedoucí', 'Administrátor'].map(r => `<option ${r === u.role ? 'selected' : ''}>${r}</option>`).join('')}
   </select>`;
   const resetRadek = ONLINE_STAV.hesloPro === u.email
-    ? `<tr><td colspan="5" style="text-align:left;padding:6px 10px">
+    ? `<tr><td colspan="7" style="text-align:left;padding:6px 10px">
         Nové heslo pro ${esc(u.email)} (min. 8 znaků):
         <input type="password" id="onlineUzNoveHeslo" style="width:180px" minlength="8"
           placeholder="alespoň 8 znaků" title="Heslo musí mít alespoň 8 znaků."
           onkeydown="if(event.key==='Enter')onlineUzHesloUloz('${escJs(u.email)}')">
         <button class="mini" onclick="onlineUzHesloUloz('${escJs(u.email)}')">Uložit heslo</button>
         <button class="mini" onclick="onlineUzHesloPanel('')">Zrušit</button></td></tr>` : '';
+  /* Titul, funkce a telefon jsou v tabulce vidět proto, že přesně tyhle údaje
+   * odcházejí zákazníkovi v bloku „Vypracoval" pod cenovou nabídkou (#145).
+   * Administrátor tak na jednom místě pozná, komu chybí telefon, a nabídka
+   * neodejde s poloprázdnou patičkou. Funkce je pod jménem drobným písmem,
+   * aby tabulka nenarostla o další sloupec. */
   return `<tr>
     <td style="text-align:left">${esc(u.email)}${hlavni ? ' <b>·</b> hlavní' : ''}</td>
-    <td style="text-align:left">${esc(u.jmeno || '—')}</td>
+    <td style="text-align:left">${esc(u.titul || '—')}</td>
+    <td style="text-align:left">${esc(u.jmeno || '—')}${u.funkce
+      ? `<div class="note" style="margin:0">${esc(u.funkce)}</div>` : ''}</td>
+    <td style="text-align:left">${esc(u.telefon || '—')}</td>
     <td>${roleSel}</td>
     <td><input type="checkbox" ${u.aktivni ? 'checked' : ''} ${hlavni ? 'disabled' : ''}
         onchange="onlineUzAktivni('${escJs(u.email)}', this.checked)"></td>
@@ -1034,15 +1302,28 @@ function onlineUzivateleHtml() {
    * jen do karty na jiné záložce a založení účtu vypadalo, že nic nedělá. */
   return `${ONLINE_STAV.hlaska ? `<div class="${zapisTridaHlasky(ONLINE_STAV.hlaskaTyp)}">${esc(ONLINE_STAV.hlaska)}</div>` : ''}
     <table class="vartbl archtbl">
-      <tr><th style="text-align:left">E-mail</th><th style="text-align:left">Jméno</th>
+      <tr><th style="text-align:left">E-mail</th><th style="text-align:left">Titul</th>
+          <th style="text-align:left">Jméno / funkce</th><th style="text-align:left">Telefon</th>
           <th>Role</th><th>Aktivní</th><th></th></tr>
       ${ONLINE_STAV.uzivatele.map(onlineRadekUzivatele).join('')}</table>
     <div class="note" style="margin-top:12px"><b>Založit nový účet</b> – heslo je počáteční
       (min. 8 znaků), předejte ho osobně (e-mailem se nic neposílá):</div>
     <div class="row"><label>E-mail</label><input type="email" id="onlineUzEmail" value="${esc(f.email)}"
       oninput="ONLINE_STAV.uzForm.email=this.value"><span class="u"></span></div>
-    <div class="row"><label>Jméno</label><input type="text" id="onlineUzJmeno" value="${esc(f.jmeno)}"
+    <div class="row"><label>Titul před jménem</label><input type="text" id="onlineUzTitul" value="${esc(f.titul || '')}"
+      placeholder="např. Ing." maxlength="40"
+      oninput="ONLINE_STAV.uzForm.titul=this.value"><span class="u"></span></div>
+    <div class="row"><label>Jméno a příjmení</label><input type="text" id="onlineUzJmeno" value="${esc(f.jmeno)}"
       oninput="ONLINE_STAV.uzForm.jmeno=this.value"><span class="u"></span></div>
+    <div class="row"><label>Funkce</label><input type="text" id="onlineUzFunkce" value="${esc(f.funkce || '')}"
+      placeholder="Obchodní technik" maxlength="80"
+      oninput="ONLINE_STAV.uzForm.funkce=this.value"><span class="u"></span></div>
+    <div class="row"><label>Telefon</label><input type="text" id="onlineUzTelefon" value="${esc(f.telefon || '')}"
+      placeholder="+420 602 000 000" maxlength="40"
+      oninput="ONLINE_STAV.uzForm.telefon=this.value"><span class="u"></span></div>
+    <div class="note" style="margin:2px 0 8px">Titul, funkce a telefon se tisknou v nabídce do bloku
+      <b>„Vypracoval"</b>. Nejsou povinné a každý si je později opraví sám v okně
+      <b>Můj profil</b> – tam si taky nahraje sken podpisu s razítkem.</div>
     <div class="row"><label>Role</label><select id="onlineUzRole" onchange="ONLINE_STAV.uzForm.role=this.value">
       ${['Obchodník', 'Vedoucí', 'Administrátor'].map(r => `<option ${r === f.role ? 'selected' : ''}>${r}</option>`).join('')}
     </select><span class="u"></span></div>

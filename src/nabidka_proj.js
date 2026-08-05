@@ -372,11 +372,22 @@ function nabidkaProjData(zak, varianta, lang) {
     Object.assign(placeholders, firmaPlaceholders(
       typeof firmaAktualni === 'function' ? firmaAktualni() : null, P));
 
+  /* Zpracovatel nabídky (#146) – u projekce platí totéž co u OCK. */
+  if (typeof zpracovatelPlaceholders === 'function')
+    Object.assign(placeholders, zpracovatelPlaceholders(
+      typeof firmaAktualni === 'function' ? firmaAktualni() : null));
+
+  /* Smluvní a platební podmínky PROJ (#147) – tytéž symboly {{PODM_…}} jako
+   * u OCK, jen ze druhého krycího listu. */
+  if (typeof kryciProjPodminkoveSymboly === 'function')
+    Object.assign(placeholders, kryciProjPodminkoveSymboly(zak, varianta, P));
+
   const nazevSouboru = ('NABÍDKA_PROJ_' + (placeholders.CISLO_NABIDKY || 'OVP-CN')
     + (varianta && varianta.zakaznik ? '_' + varianta.zakaznik : '')
     + (L !== 'cz' ? '_' + L.toUpperCase() : '')).replace(/[\\/:*?"<>|]+/g, '-');
 
   return { placeholders, bloky, rekapitulace, jazyk: L, nazevSouboru,
+    obrazky: typeof zpracovatelObrazky === 'function' ? zpracovatelObrazky() : {},
     souhrn: { bezDph: celkemBezDph, bezDphPred: celkemPred, zaokrKc: zaokrKcNum,
               dphPct: dphPct, dphKc: dphKc, sDph: celkemBezDph + dphKc } };
 }

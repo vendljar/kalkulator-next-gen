@@ -39,7 +39,12 @@ async function dokumentVygeneruj(typ, templateArrayBuffer, zak, varianta, jekly,
   // Režim B – vyplnění existující .docx šablony placeholdery {{...}}
   if (typeof def.builder !== 'function') throw new Error('Dokument „' + typ + '" nemá builder ani generate.');
   const data = def.builder(zak, varianta, jekly, lang);
-  const blob = await docxVyplnSablonu(templateArrayBuffer, data.placeholders, data.priplatky || []);
+  /* data.obrazky = { SYMBOL: 'data:image/…' } – obrázky, které se v šabloně
+   * vymění za tvar označený alternativním textem {{SYMBOL}} (#146: sken
+   * podpisu a razítka zpracovatele). Builder, který žádné nedodá, se chová
+   * jako dřív. */
+  const blob = await docxVyplnSablonu(templateArrayBuffer, data.placeholders,
+    data.priplatky || [], data.obrazky || {});
   return { blob, nazevSouboru: data.nazevSouboru, data };
 }
 /* seznam typů daného „druhu" (např. všechny krycí listy) dle prefixu */

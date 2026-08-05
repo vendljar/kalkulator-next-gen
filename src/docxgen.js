@@ -220,10 +220,209 @@ function expandujPriplatky(xml, priplatky) {
   return xml.slice(0, t.zac) + (kopie.length ? kopie.join('<w:p/>') : '<w:p/>') + xml.slice(t.kon);
 }
 
+/* ============================================================
+ * OBRÁZKY V ŠABLONĚ (#146) – podpis a razítko zpracovatele nabídky
+ *
+ * Text se do dokumentu dostane symbolem {{...}}, obrázek ale ne – ten musí
+ * do souboru vstoupit jako bajty a musí na něj vést relace. Řešíme to tak,
+ * že se obrázek NEVKLÁDÁ nově: v šabloně zůstane původní plovoucí tvar
+ * (VML <v:shape>) i s pozicí, obtékáním a velikostí, jak si ho uživatel ve
+ * Wordu nastavil. Označí se alternativním textem, tedy ve Wordu
+ * Formát obrázku → Alternativní text → Název: {{ZPRAC_PODPIS}}.
+ *
+ * Proč zrovna takhle:
+ *  – vzhled nabídky se nezmění ani o milimetr a uživatel si může tvar ve
+ *    Wordu chytit myší, posunout ho nebo zvětšit; kód to bude respektovat,
+ *  – odpadá starost se jmennými prostory (kořen šablony nemá xmlns:a ani
+ *    xmlns:pic, takže moderní <w:drawing> by se do ní musel doplňovat),
+ *  – je to podstatně méně kódu než vlastní generátor obrázkových částí.
+ *
+ * Když přihlášený obchodní technik podpis nahraný nemá, celý tvar
+ * z dokumentu zmizí. V nabídce nesmí zůstat cizí podpis ani prázdný rámeček.
+ * ============================================================ */
+
+/* Přípony podle typu obsahu. Držíme se jen rastrových formátů, které Word
+ * spolehlivě vykreslí; SVG je XML, které umí nést skript, a do dokumentu
+ * odcházejícího zákazníkovi nepatří (stejné pravidlo hlídá i server). */
+const OBRAZEK_TYPY = { 'image/png': 'png', 'image/jpeg': 'jpeg' };
+
+/* Rozbor data URL („data:image/png;base64,iVBOR…“) na typ a bajty.
+ * Podpis přichází z profilu uživatele právě v této podobě – prohlížeč ho tak
+ * vyrobí při nahrání i uloží na server, takže se nikde nemusí překlápět. */
+function dataUrlNaBajty(dataUrl) {
+  const s = String(dataUrl || '');
+  const m = /^data:([a-z/+.-]+);base64,([\s\S]+)$/i.exec(s);
+  if (!m) return null;
+  const mime = m[1].toLowerCase();
+  const pripona = OBRAZEK_TYPY[mime];
+  if (!pripona) return null;
+  let bin;
+  try {
+    bin = typeof atob === 'function' ? atob(m[2].replace(/\s+/g, ''))
+      : Buffer.from(m[2], 'base64').toString('binary');
+  } catch (e) { return null; }
+  const data = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) data[i] = bin.charCodeAt(i) & 255;
+  if (!data.length) return null;
+  return { mime, pripona, data };
+}
+
+/* Rozměry v bodech obrázku (pixelech) přímo z hlavičky souboru.
+ * Potřebujeme je jen kvůli poměru stran – bez něj by se podpis v rámečku
+ * roztáhl a razítko by bylo oválné. Vrací null, když formát nepoznáme;
+ * volající pak velikost tvaru nechá tak, jak je v šabloně. */
+function rozmeryObrazku(u8) {
+  if (!u8 || u8.length < 24) return null;
+  // PNG: signatura + chunk IHDR, šířka a výška jsou na pevných pozicích
+  if (u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4E && u8[3] === 0x47) {
+    const cti = i => (u8[i] << 24 | u8[i + 1] << 16 | u8[i + 2] << 8 | u8[i + 3]) >>> 0;
+    const s = cti(16), v = cti(20);
+    return s && v ? { sirka: s, vyska: v } : null;
+  }
+  // JPEG: procházíme značky, dokud nenarazíme na hlavičku rámce (SOFn)
+  if (u8[0] === 0xFF && u8[1] === 0xD8) {
+    let i = 2;
+    while (i + 9 < u8.length) {
+      if (u8[i] !== 0xFF) { i++; continue; }
+      const znacka = u8[i + 1];
+      if (znacka === 0xFF || znacka === 0x01 || (znacka >= 0xD0 && znacka <= 0xD9)) { i += 2; continue; }
+      const delka = (u8[i + 2] << 8) | u8[i + 3];
+      const jeRamec = (znacka >= 0xC0 && znacka <= 0xCF)
+        && znacka !== 0xC4 && znacka !== 0xC8 && znacka !== 0xCC;
+      if (jeRamec) {
+        const v = (u8[i + 5] << 8) | u8[i + 6], s = (u8[i + 7] << 8) | u8[i + 8];
+        return s && v ? { sirka: s, vyska: v } : null;
+      }
+      if (delka < 2) return null;
+      i += 2 + delka;
+    }
+  }
+  return null;
+}
+
+/* Najde tag (<…>), uvnitř kterého leží zadaná pozice. */
+function obalTagu(xml, poz) {
+  const zac = xml.lastIndexOf('<', poz);
+  const kon = xml.indexOf('>', poz);
+  return zac < 0 || kon < 0 ? null : { zac, kon: kon + 1, text: xml.slice(zac, kon + 1) };
+}
+/* Odstraní celý <w:r>…</w:r>, ve kterém tvar leží. Kdybychom smazali jen
+ * <w:pict>, zůstal by v dokumentu prázdný run – Word ho sice snese, ale
+ * v nabídce by po něm mohla zůstat mezera navíc. */
+function odstranRunSTvarem(xml, poz) {
+  const zacR = Math.max(xml.lastIndexOf('<w:r>', poz), xml.lastIndexOf('<w:r ', poz));
+  const konR = xml.indexOf('</w:r>', poz);
+  if (zacR >= 0 && konR > zacR) return xml.slice(0, zacR) + xml.slice(konR + 6);
+  const zacP = xml.lastIndexOf('<w:pict', poz), konP = xml.indexOf('</w:pict>', poz);
+  if (zacP >= 0 && konP > zacP) return xml.slice(0, zacP) + xml.slice(konP + 9);
+  return xml;
+}
+
+/* Přepočet velikosti tvaru tak, aby se obrázek vešel do PŮVODNÍHO rámečku
+ * a zachoval poměr stran. Rámeček zůstává tím, co uživatel nastavil ve
+ * Wordu – měníme jen to, kolik z něj obrázek zabere. */
+function upravRozmeryTvaru(tag, rozmery) {
+  if (!rozmery) return tag;
+  const m = /style="([^"]*)"/.exec(tag);
+  if (!m) return tag;
+  const styl = m[1];
+  const ms = /width:\s*([\d.]+)pt/.exec(styl), mv = /height:\s*([\d.]+)pt/.exec(styl);
+  if (!ms || !mv) return tag;
+  const ramS = Number(ms[1]), ramV = Number(mv[1]);
+  if (!(ramS > 0 && ramV > 0)) return tag;
+  const pomer = rozmery.sirka / rozmery.vyska;
+  let s = ramS, v = ramS / pomer;
+  if (v > ramV) { v = ramV; s = ramV * pomer; }
+  const zaokr = x => String(Math.round(x * 100) / 100);
+  const novy = styl.replace(/width:\s*[\d.]+pt/, 'width:' + zaokr(s) + 'pt')
+                   .replace(/height:\s*[\d.]+pt/, 'height:' + zaokr(v) + 'pt');
+  return tag.slice(0, m.index) + 'style="' + novy + '"' + tag.slice(m.index + m[0].length);
+}
+
+/* Vymění obrázky označené alternativním textem {{KLÍČ}} za obrázky z mapy
+ * `obrazky` ({ KLÍČ: 'data:image/png;base64,…' }). Mění položky archivu na
+ * místě a vrací počet zásahů (aby volající poznal, že se šablona změnila,
+ * i když v ní žádný textový symbol nebyl). */
+function docxVlozObrazky(polozky, obrazky) {
+  const dekoder = new TextDecoder(), enkoder = new TextEncoder();
+  const najdi = n => polozky.find(p => p.nazev === n);
+  let zasahu = 0;
+
+  for (const p of polozky) {
+    const m = /^word\/((document|header\d*|footer\d*)\.xml)$/.exec(p.nazev);
+    if (!m) continue;
+    let xml = dekoder.decode(p.data);
+    if (xml.indexOf('o:title="{{') < 0) continue;
+    const relsNazev = 'word/_rels/' + m[1] + '.rels';
+
+    // od konce, aby se pozice dřívějších výskytů nerozházely mazáním
+    const pozice = [];
+    const re = /o:title="\{\{([A-Z0-9_]+)\}\}"/g;
+    let x;
+    while ((x = re.exec(xml))) pozice.push({ poz: x.index, klic: x[1], cely: x[0] });
+
+    for (let i = pozice.length - 1; i >= 0; i--) {
+      const { poz, klic, cely } = pozice[i];
+      const obr = dataUrlNaBajty(obrazky ? obrazky[klic] : null);
+      if (!obr) { xml = odstranRunSTvarem(xml, poz); zasahu++; continue; }
+
+      const tag = obalTagu(xml, poz);
+      const mId = tag && /r:id="([^"]+)"/.exec(tag.text);
+      const rels = najdi(relsNazev);
+      let relsXml = rels ? dekoder.decode(rels.data) : '';
+      const mRel = mId && new RegExp('<Relationship[^>]*Id="' + mId[1] + '"[^>]*>').exec(relsXml);
+      const mCil = mRel && /Target="([^"]+)"/.exec(mRel[0]);
+      const cast = mCil && najdi('word/' + mCil[1].replace(/^\/+/, ''));
+      /* Šablona, ve které tvar na nic neukazuje (třeba po ruční editaci),
+       * nesmí shodit celé generování – nabídka je důležitější než podpis. */
+      if (!cast) { xml = odstranRunSTvarem(xml, poz); zasahu++; continue; }
+
+      cast.data = obr.data;
+      const puvodniPripona = (/\.([a-z0-9]+)$/i.exec(cast.nazev) || [, ''])[1].toLowerCase();
+      if (puvodniPripona !== obr.pripona) {
+        const novyNazev = cast.nazev.replace(/\.[a-z0-9]+$/i, '.' + obr.pripona);
+        const novyCil = mCil[1].replace(/\.[a-z0-9]+$/i, '.' + obr.pripona);
+        cast.nazev = novyNazev;
+        relsXml = relsXml.slice(0, mRel.index)
+          + mRel[0].replace('Target="' + mCil[1] + '"', 'Target="' + novyCil + '"')
+          + relsXml.slice(mRel.index + mRel[0].length);
+        rels.data = enkoder.encode(relsXml);
+        // typ obsahu pro novou příponu – bez něj Word soubor odmítne otevřít
+        const ct = najdi('[Content_Types].xml');
+        if (ct) {
+          let ctXml = dekoder.decode(ct.data);
+          if (!new RegExp('Extension="' + obr.pripona + '"', 'i').test(ctXml)) {
+            ctXml = ctXml.replace(/<Types([^>]*)>/,
+              '<Types$1><Default Extension="' + obr.pripona + '" ContentType="' + obr.mime + '"/>');
+            ct.data = enkoder.encode(ctXml);
+          }
+        }
+      }
+
+      /* Úklid značky (aby v odeslaném souboru nezůstal {{…}}) děláme dřív než
+       * velikost: tvar začíná před značkou, takže se jeho pozice tímhle
+       * zásahem neposune a nemusíme nic přepočítávat. */
+      xml = xml.slice(0, poz) + 'o:title=""' + xml.slice(poz + cely.length);
+      const shp = xml.lastIndexOf('<v:shape', poz);
+      if (shp >= 0) {
+        const konShp = xml.indexOf('>', shp) + 1;
+        const upraveny = upravRozmeryTvaru(xml.slice(shp, konShp), rozmeryObrazku(obr.data));
+        xml = xml.slice(0, shp) + upraveny + xml.slice(konShp);
+      }
+      zasahu++;
+    }
+    p.data = enkoder.encode(xml);
+  }
+  return zasahu;
+}
+
 /* ---------- hlavní funkce: vyplní šablonu a vrátí Blob .docx ---------- */
-async function docxVyplnSablonu(arrayBuffer, placeholders, priplatky) {
+async function docxVyplnSablonu(arrayBuffer, placeholders, priplatky, obrazky) {
   const polozky = await zipPrecti(new Uint8Array(arrayBuffer));
   const dekoder = new TextDecoder(), enkoder = new TextEncoder();
+  /* Obrázky nejdřív: pracují s alternativním textem {{…}}, který by textová
+   * náhrada mohla považovat za neznámý symbol a nechat v dokumentu. */
+  const obrazku = docxVlozObrazky(polozky, obrazky || {});
   let nahrad = 0;
   for (const p of polozky) {
     if (/^word\/(document|header\d*|footer\d*)\.xml$/.test(p.nazev)) {
@@ -238,7 +437,7 @@ async function docxVyplnSablonu(arrayBuffer, placeholders, priplatky) {
       p.data = enkoder.encode(po);
     }
   }
-  if (!nahrad) throw new Error('V šabloně nebyly nalezeny žádné symboly {{...}} – je to správný soubor šablony?');
+  if (!nahrad && !obrazku) throw new Error('V šabloně nebyly nalezeny žádné symboly {{...}} – je to správný soubor šablony?');
   return zipZapis(polozky);
 }
 
@@ -402,5 +601,6 @@ async function docxPrelozSablonu(arrayBuffer, lang, stat) {
 if (typeof module !== 'undefined')
   module.exports = { docxVyplnSablonu, nahradPlaceholdery, expandujPriplatky, zipPrecti, zipZapis, crc32,
     odstranPrazdneTsRadky, jePrazdnaHodnota, klicePlaceholderu,
+    docxVlozObrazky, rozmeryObrazku, dataUrlNaBajty,
     docxDokumentBlob, docxTeloZeSekci, docxSestavBlob, docxPar, docxEsc,
     docxPrelozSablonu, docxPrelozXml, odstavcoveSpany, odstavecText, xmlUnesc };

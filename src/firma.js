@@ -246,8 +246,51 @@ function firmaKZverejneni(f) {
   return out;
 }
 
+/* ---------- shoda místních údajů se zveřejněnou kopií (5. 8. 2026, #142) ----
+ *
+ * Zadání: „Proč musím pořád zveřejňovat firemní údaje? Ty už jsem nahrál
+ * a zveřejnil."
+ *
+ * Server si zveřejněnou kopii drží spolehlivě – v tom chyba nebyla. Chyběla
+ * věta. Administrátor otevřel Nastavení → Firma a viděl tam pokaždé plné modré
+ * tlačítko „Zveřejnit firemní údaje online", tedy přesně to gesto, které už
+ * jednou udělal. Nic mu neřeklo, že nahoře leží táž firma. Poznámka
+ * „· právě platí v aplikaci" mu nepomůže: ta se rozsvítí jen tomu, komu se
+ * online kopie do aplikace opravdu nasadila – a administrátorovi s připojenou
+ * složkou _DB má přednost složka, takže se nerozsvítí nikdy.
+ *
+ * Tahle funkce odpovídá na otázku „je nahoře totéž, co mám tady?". Srovnává se
+ * přes firmaKZverejneni(), protože právě tu kopii server ukládá; srovnávat celý
+ * NAST.firma by hlásilo rozdíl kvůli klíčům, které nahoru nikdy neputují.
+ *
+ * Se značkou `ukazkove` tohle nemá co dělat – na tu se ptá firmaLzeZverejnit()
+ * a panel se jí ptá dřív. */
+function firmaSrovnatelna(f, p) {
+  const v = f ? f[p.id] : undefined;
+  /* Zaškrtávátko je ano/ne, ne text: `true`, `1` i `'ano'` znamenají totéž
+   * a rozdíl dělat nesmí. */
+  if (p.typ === 'check') return v ? '1' : '';
+  /* Prázdno se dá zapsat třemi způsoby (chybí klíč, prázdný řetězec, mezera).
+   * Pro člověka je to pořád „nevyplněno". */
+  return String(v === undefined || v === null ? '' : v).trim();
+}
+
+function firmaShodaSOnline(mistni, online) {
+  if (!online || typeof online !== 'object')
+    return { maOnline: false, shodne: false, rozdily: [] };
+  const a = firmaKZverejneni(mistni || {});
+  const b = firmaKZverejneni(online);
+  const rozdily = FIRMA_POLE
+    .filter(p => firmaSrovnatelna(a, p) !== firmaSrovnatelna(b, p))
+    .map(p => p.label);
+  /* Logo není v FIRMA_POLE (není to textové pole formuláře), ale do dokumentů
+   * jde a zveřejňuje se s sebou – vyměněné logo je změna jako každá jiná. */
+  if (String((a.logo || '')).trim() !== String((b.logo || '')).trim()) rozdily.push('Logo');
+  return { maOnline: true, shodne: rozdily.length === 0, rozdily };
+}
+
 if (typeof module !== 'undefined')
   module.exports = { FIRMA_POLE, FIRMA_SEKCE, DEFAULT_FIRMA, firmaDefault, firmaAktualni,
     firmaPole, firmaHodnota, firmaAdresaRadek, firmaSidlo, firmaKorespondencni, firmaBankaRadek,
     firmaIcoDic, firmaPaticka, firmaPlaceholders, firmaSymboly, firmaRadky, firmaKontrola,
-    firmaLzeZverejnit, firmaKZverejneni };
+    firmaLzeZverejnit, firmaKZverejneni, firmaShodaSOnline };

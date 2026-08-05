@@ -238,8 +238,12 @@ function importZakazka(obj) {
       // KL-5: „Zádržné" se rozdělilo na dva řádky s procenty (kryci.js).
       // Guard kvůli Node testům, které zakazka.js načítají samostatně.
       if (typeof kryciMigraceZadrzne === 'function') kryciMigraceZadrzne(d.kryci.hodnoty);
+      // KL-7: sazba DPH už není přepisovatelné pole – ruční hodnota ze starší
+      // verze by se stejně nečetla, tak ať v datech neleží a nemate.
+      if (typeof kryciMigraceSazbaDph === 'function') kryciMigraceSazbaDph(d.kryci.hodnoty);
       if (!d.kryciProj) d.kryciProj = { hodnoty: {} };   // migrace: krycí list PROJ přibyl později
       if (!d.kryciProj.hodnoty) d.kryciProj.hodnoty = {};
+      if (typeof kryciProjMigraceSazbaDph === 'function') kryciProjMigraceSazbaDph(d.kryciProj.hodnoty);
       /* Migrace 4. 8. 2026: obchodní zaokrouhlení se rozdělilo na část OCK
        * a část PROJ. Starší varianta má jen společné pole – zaokrZajisti()
        * ho do obou dosadí, takže se cena nezmění ani o korunu. Guard kvůli

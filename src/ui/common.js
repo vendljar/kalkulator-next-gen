@@ -92,6 +92,20 @@ const NAST = {
     ],
   },
 };
+
+/* Otisk výchozí podoby nastavení, pořízený dřív, než ho stihne cokoli
+ * přepsat (import konfigurace, _DB/_nastaveni.json, matice ze serveru).
+ * Slouží jako vzor pro konfigDorovnejNast(): když přijde nastavení uložené
+ * starší verzí, dorovnají se z něj přepínače, které tehdy ještě nebyly.
+ * Bez něj by se s každou novou záložkou opakovalo hlášení z 5. 8. 2026
+ * („nevidím záložku schvalování slev") – stará konfigurace klíč nenesla,
+ * a protože se nastavení nahrazuje celé, prostě zmizel. */
+const NAST_VYCHOZI = JSON.parse(JSON.stringify({
+  tabViditelnost: NAST.tabViditelnost,
+  kpiViditelne: NAST.kpiViditelne,
+  zobrazeni: NAST.zobrazeni,
+}));
+
 function jeAdmin() { return !!NAST.jeAdmin; }
 /* Smí si přihlášený zapnout pohled administrátora? Pravidlo je v
  * `src/prava.js` a má vlastní testy; tady se jen dohledá, kdo je
@@ -875,7 +889,53 @@ function nactiZakazku(ev) {
 }
 
 /* ---------- hlavní render ---------- */
+/* Přihlášení se kreslí ODDĚLENĚ od zbytku aplikace.
+ *
+ * Poučení z 5. 8. 2026: přihlašovací lištu i celoplošný překryv kreslil až
+ * onlineTik() jako úplně poslední krok render(). Když se cokoli mezitím
+ * pokazilo, uživateli zůstala hlavička bez panáčka, bez „Přihlásit se"
+ * a bez překryvu – aplikace vypadala funkčně, ale k přihlášení nevedla
+ * žádná cesta. Přihlášení je jediný ovládací prvek, přes který se dá
+ * z rozbitého stavu dostat ven, takže se kreslí PRVNÍ a nesmí záviset na
+ * tom, že se povedlo překreslit tabulky. */
+function renderPrihlaseniNejdriv() {
+  try {
+    if (typeof renderPrihlaseni === 'function') renderPrihlaseni();
+    if (typeof renderOnlineLista === 'function') renderOnlineLista();
+  } catch (e) { /* i tohle smí selhat – zbytek aplikace se překreslí dál */ }
+}
+
+/* Viditelné hlášení místo tiché poloviční obrazovky. Chyba se navíc vyhodí
+ * asynchronně dál, aby ji zachytily testy (pageerror) i konzole prohlížeče –
+ * skrytá chyba je horší než hlášená. */
+function renderChybaBanner(e) {
+  let el = document.getElementById('render-chyba');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'render-chyba';
+    el.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:300;background:#b00020;'
+      + 'color:#fff;padding:8px 12px;font:13px/1.45 system-ui,sans-serif';
+    document.body.appendChild(el);
+  }
+  el.textContent = 'Překreslení skončilo chybou: ' + ((e && e.message) || e)
+    + ' — část obrazovky může být neaktuální. Uložte rozpracovanou zakázku a obnovte stránku (F5).';
+  el.style.display = 'block';
+}
+
 function render() {
+  renderPrihlaseniNejdriv();
+  try {
+    renderTelo();
+    const b = document.getElementById('render-chyba');
+    if (b) b.style.display = 'none';
+  } catch (e) {
+    renderChybaBanner(e);
+    renderPrihlaseniNejdriv();          // ať zůstane cesta k přihlášení
+    setTimeout(() => { throw e; });
+  }
+}
+
+function renderTelo() {
   document.body.classList.toggle('role-user', !NAST.jeAdmin);
   document.body.classList.toggle('muze-admin', smiPohledAdmina());
   /* Ozubené kolo je jediný prvek, který se dál schovává třídou (je v šabloně,

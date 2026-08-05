@@ -16,6 +16,20 @@
  * ============================================================ */
 
 /* devět činností v pořadí VZORu (klíče sekcí engine_proj.js) */
+/* Kdo nabídku vypracoval (#146) – u projekce platí totéž co u OCK; funkce
+ * z kryci.js se v sestavené aplikaci sdílejí, v Node testech (kde je načtený
+ * jen tenhle modul) se použije firemní záloha. */
+function kryciProjObchodnik(f) {
+  return typeof kryciObchodnikJmeno === 'function'
+    ? kryciObchodnikJmeno(f) : firmaHodnota(f, 'zpracoval');
+}
+function kryciProjObchodnikKontakt(f) {
+  return typeof kryciObchodnikKontakt === 'function'
+    ? kryciObchodnikKontakt(f)
+    : [firmaHodnota(f, 'zpracoval'), firmaHodnota(f, 'zpracovalTelefon'),
+       firmaHodnota(f, 'zpracovalEmail')].filter(Boolean).join(', ');
+}
+
 const KRYCI_PROJ_CINNOSTI = [
   ['zamereni', 'Zaměření a zpracování výstupů (ZA)'],
   ['studie', 'Studie proveditelnosti (ST)'],
@@ -58,7 +72,7 @@ const KRYCI_PROJ_SEKCE = [
   { sekce: 'Základní údaje', pole: [
     /* KL-4: obchodník = kdo nabídku vypracoval (Nastavení → Firma). Aplikace
      * nemá přihlášeného uživatele, tohle je jediný spolehlivý zdroj. */
-    { id: 'obchodnik', label: 'Jméno obchodníka', verze: ['bo', 'techdata'], prefill: c => firmaHodnota(c.firma, 'zpracoval'), src: 'Nastavení → Firma (Vypracoval)' },
+    { id: 'obchodnik', label: 'Jméno obchodníka', verze: ['bo', 'techdata'], prefill: c => kryciProjObchodnik(c.firma), src: 'přihlášený uživatel / Nastavení → Firma' },
     /* Pořadí i názvy prvních čtyř polí jsou schválně stejné jako v krycím listu
      * OCK – oba listy se čtou vedle sebe a rozdílné pořadí mate.
      * Prázdné pole hlavičky PROJ se čte z hlavičky OCK (projHlavickaEfektivni),
@@ -85,7 +99,7 @@ const KRYCI_PROJ_SEKCE = [
     { id: 'dodSidlo', label: 'Sídlo zhotovitele', verze: ['bo'], prefill: c => firmaSidlo(c.firma), src: 'Nastavení → Firma' },
     { id: 'dodBanka', label: 'Bankovní spojení zhotovitele', verze: ['bo'], prefill: c => firmaBankaRadek(c.firma), src: 'Nastavení → Firma' },
     { id: 'dodKontakt', label: 'Kontakt na zhotovitele (telefon, e-mail)', verze: ['bo', 'techdata'], prefill: c => [firmaHodnota(c.firma, 'telefon'), firmaHodnota(c.firma, 'email')].filter(Boolean).join(', '), src: 'Nastavení → Firma' },
-    { id: 'dodZpracoval', label: 'Nabídku vypracoval', verze: ['bo', 'techdata'], prefill: c => [firmaHodnota(c.firma, 'zpracoval'), firmaHodnota(c.firma, 'zpracovalTelefon'), firmaHodnota(c.firma, 'zpracovalEmail')].filter(Boolean).join(', '), src: 'Nastavení → Firma' },
+    { id: 'dodZpracoval', label: 'Nabídku vypracoval', verze: ['bo', 'techdata'], prefill: c => kryciProjObchodnikKontakt(c.firma), src: 'přihlášený uživatel / Nastavení → Firma' },
     { id: 'hlavniProjektant', label: 'Hlavní projektant (jméno, autorizace)', verze: ['bo', 'techdata'] },
   ] },
   { sekce: 'Zákazník (smluvní partner)', pole: [
@@ -123,7 +137,11 @@ const KRYCI_PROJ_SEKCE = [
     { id: 'pokutaLimit', label: 'Limit smluvních pokut', verze: ['bo', 'techdata'], prefill: () => 'NEUPLATNĚN limit 10 %', src: 'výchozí' },
     { id: 'pokutyJine', label: 'Jiné', verze: ['bo'], typ: 'textarea' },
     { id: 'platceDph', label: 'Plátce DPH', verze: ['bo'], typ: 'radio', o: ['Ano', 'Ne'], prefill: () => 'Ano', src: 'výchozí' },
-    { id: 'sazbaDph', label: 'Sazba DPH', verze: ['bo'], prefill: c => c.dph + ' %', src: 'z ceníku zakázky' },
+    /* KL-7: viz kryci.js. Projekce má vlastní sazbu (PC.dph) — projekční práce
+     * bývají v jiné sazbě než stavební část, takže výběr míří do hlavičky
+     * Kalkulace PROJ, ne do sazby OCK. */
+    { id: 'sazbaDph', label: 'Sazba DPH', verze: ['bo'], typ: 'dph', dphBind: 'PC.dph',
+      prefill: c => c.dph + ' %', src: 'z hlavičky kalkulace PROJ' },
     { id: 'pojisteni', label: 'Pojištění odpovědnosti projektanta', verze: ['bo'], prefill: () => 'ANO – dle pojistné smlouvy zhotovitele', src: 'výchozí' },
   ] },
   { sekce: 'Termíny', pole: [
@@ -157,7 +175,7 @@ const KRYCI_PROJ_SEKCE = [
   /* KL-7: patička z předlohy („Dne" / „Podpis obchodníka" / „Informován") */
   { sekce: 'Podpis', pole: [
     { id: 'podpisDne', label: 'Dne', verze: ['bo', 'techdata'], typ: 'date' },
-    { id: 'podpisObchodnik', label: 'Podpis obchodníka', verze: ['bo', 'techdata'], prefill: c => firmaHodnota(c.firma, 'zpracoval'), src: 'Nastavení → Firma (Vypracoval)' },
+    { id: 'podpisObchodnik', label: 'Podpis obchodníka', verze: ['bo', 'techdata'], prefill: c => kryciProjObchodnik(c.firma), src: 'přihlášený uživatel / Nastavení → Firma' },
     { id: 'podpisInformovan', label: 'Informován', verze: ['bo', 'techdata'], ph: 'kdo byl o zakázce informován…' },
   ] },
 ];
@@ -204,9 +222,18 @@ function kryciProjCtx(zak, varianta) {
   return { zak, hl, hlSrc, sekce, hodnota, ocenene, neocenene, dph, firma, sazby };
 }
 
+/* KL-7: totéž jako kryciMigraceSazbaDph() v kryci.js, jen nad úložištěm PROJ —
+ * ruční sazba DPH uložená starší verzí se z dat uklidí, aby se nevozila dál. */
+function kryciProjMigraceSazbaDph(h) {
+  if (h && h.sazbaDph !== undefined) delete h.sazbaDph;
+  return h;
+}
+
 /* hodnota pole: ruční přepis (data.kryciProj.hodnoty) > prefill > '' */
 function kryciProjHodnota(pole, kl, c) {
-  if (!pole.bind) {   // provázaná pole (bind) čtou přímo ze ZAK, ne z ručních přepisů
+  /* `dphBind` je totéž provázání jako `bind`, jen mířené do sazby DPH
+   * v hlavičce Kalkulace PROJ — ruční přepis se proto nečte ani tady. */
+  if (!pole.bind && !pole.dphBind) {   // provázaná pole (bind) čtou přímo ze ZAK, ne z ručních přepisů
     const h = (kl && kl.hodnoty) || {};
     if (h[pole.id] !== undefined && h[pole.id] !== '') return h[pole.id];
   }
@@ -248,5 +275,18 @@ if (typeof dokumentRegistruj === 'function') {
  * jeden do druhého, aniž by to bylo nutné hlídat kódem. */
 const KRYCI_PROJ_NABIDKA_SEKCE = ['Typ smlouvy', 'Platební podmínky'];
 
+/* Symboly {{PODM_…}} do šablony nabídky PROJ (#147). Stavitel je společný
+ * s OCK (kryci.js), jen čte druhé úložiště — nabídka OCK a nabídka PROJ jsou
+ * dva samostatné dokumenty, každý se svou šablonou, takže stejná jména symbolů
+ * si navzájem nepřekážejí. */
+function kryciProjPodminkoveSymboly(zak, varianta, P) {
+  if (typeof kryciSymbolyZeSekci !== 'function') return {};
+  const c = kryciProjCtx(zak, varianta);
+  const kl = (varianta && varianta.data && varianta.data.kryciProj) || { hodnoty: {} };
+  return kryciSymbolyZeSekci(KRYCI_PROJ_SEKCE, KRYCI_PROJ_NABIDKA_SEKCE,
+    p => kryciProjHodnota(p, kl, c), P);
+}
+
 if (typeof module !== 'undefined')
-  module.exports = { KRYCI_PROJ_SEKCE, KRYCI_PROJ_NABIDKA_SEKCE, KRYCI_PROJ_CINNOSTI, kryciProjCtx, kryciProjHodnota, kryciProjData };
+  module.exports = { KRYCI_PROJ_SEKCE, KRYCI_PROJ_NABIDKA_SEKCE, KRYCI_PROJ_CINNOSTI, kryciProjCtx,
+    kryciProjHodnota, kryciProjData, kryciProjMigraceSazbaDph, kryciProjPodminkoveSymboly };

@@ -40,7 +40,68 @@ const KONFIG_SEKCE = [
 const KONFIG_NAST_KLICE = ['tabViditelnost', 'zobrazitNaklady', 'kpiViditelne', 'jazyk',
   'firma', 'role', 'uzivatele', 'slevy', 'zobrazeni'];
 
+/* Struktury, u nichž „klíč chybí" znamená „tenhle přepínač tehdy ještě
+ * neexistoval", ne „administrátor ho vypnul". Jen u nich se po importu
+ * doplňují chybějící klíče z výchozí struktury aplikace.
+ *
+ * `firma` tu schválně NENÍ: doplnění chybějících polí z DEFAULT_FIRMA by
+ * do skutečných firemních údajů propašovalo ukázkové hodnoty a nabídka by
+ * je vytiskla. `role`, `uzivatele` a `slevy.schemata` jsou pole hodnot –
+ * tam „chybí" opravdu znamená „smazáno". */
+const KONFIG_DOPLNIT_KLICE = ['tabViditelnost', 'kpiViditelne', 'zobrazeni'];
+
 function konfigKopie(v) { return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
+
+/* Doplní do cíle klíče, které v něm nejsou, podle vzoru. Existující hodnoty
+ * nechává být – včetně false, prázdného řetězce a nuly; „vypnuto" je platná
+ * odpověď a nesmí se přepsat výchozím „zapnuto".
+ *
+ * Pole se nedoplňují po prvcích: seznam rolí u prvku matice zobrazení nebo
+ * seznam slevových schémat je hodnota jako celek a jeho zkrácení je legitimní
+ * nastavení, ne ztráta dat.
+ *
+ * Vrací tečkové cesty doplněných klíčů, aby import mohl říct, co dorovnal. */
+function konfigDoplnChybejici(cil, vzor) {
+  if (!cil || !vzor || typeof cil !== 'object' || typeof vzor !== 'object') return [];
+  if (Array.isArray(cil) || Array.isArray(vzor)) return [];
+  const doplnene = [];
+  Object.keys(vzor).forEach(k => {
+    if (cil[k] === undefined) {
+      cil[k] = konfigKopie(vzor[k]);
+      doplnene.push(k);
+    } else if (cil[k] && vzor[k] && typeof cil[k] === 'object' && typeof vzor[k] === 'object'
+               && !Array.isArray(cil[k]) && !Array.isArray(vzor[k])) {
+      konfigDoplnChybejici(cil[k], vzor[k]).forEach(x => doplnene.push(k + '.' + x));
+    }
+  });
+  return doplnene;
+}
+
+/* Výchozí podoba NAST. V prohlížeči ji ui/common.js zmrazí do globální
+ * NAST_VYCHOZI hned po definici NAST (dřív, než ji stihne cokoli přepsat);
+ * v Node testech a v serverovém kódu se předává přes ctx.NASTVychozi.
+ * Když není ani jedno, doplňování se prostě přeskočí – import musí projít
+ * i tam, kde výchozí struktura není k dispozici. */
+function konfigVychoziNast(ctx) {
+  if (ctx && ctx.NASTVychozi) return ctx.NASTVychozi;
+  if (typeof NAST_VYCHOZI !== 'undefined' && NAST_VYCHOZI) return NAST_VYCHOZI;
+  return null;
+}
+
+/* Dorovná strukturální klíče NAST po jakémkoli převzetí cizího nastavení
+ * (import konfigurace, _DB/_nastaveni.json, matice zobrazení ze serveru).
+ * Vrací seznam doplněných cest. */
+function konfigDorovnejNast(NAST, ctx) {
+  const vzor = konfigVychoziNast(ctx);
+  if (!vzor || !NAST) return [];
+  const doplnene = [];
+  KONFIG_DOPLNIT_KLICE.forEach(k => {
+    if (!NAST[k] || typeof NAST[k] !== 'object' || Array.isArray(NAST[k])) return;
+    if (!vzor[k] || typeof vzor[k] !== 'object') return;
+    konfigDoplnChybejici(NAST[k], vzor[k]).forEach(x => doplnene.push(k + '.' + x));
+  });
+  return doplnene;
+}
 
 /* nahradí obsah cílového objektu/pole NA MÍSTĚ (zachová referenci) */
 function konfigNahradVMiste(cil, zdroj) {
@@ -150,6 +211,13 @@ function konfiguraceImport(data, ctx, volby) {
       ctx.NAST.uzivatele.forEach(u => { if (u && u.role) u.role = roleMigruj(u.role); });
     if (typeof stropyMigruj === 'function' && ctx.NAST.slevy && ctx.NAST.slevy.stropy)
       ctx.NAST.slevy.stropy = stropyMigruj(ctx.NAST.slevy.stropy);
+    /* Konfigurace uložená starší verzí nezná přepínače, které tehdy
+     * neexistovaly. Protože konfigNahradVMiste() nahrazuje obsah celý,
+     * bez tohohle dorovnání by po importu zmizely – přesně takhle přišel
+     * uživatel 5. 8. 2026 o záložku „Schvalování slev". */
+    const doplneno = konfigDorovnejNast(ctx.NAST, ctx);
+    if (doplneno.length) varovani.push('konfigurace je z dřívější verze a neznala: '
+      + doplneno.join(', ') + ' – doplněno výchozím nastavením');
     zmeneno.push('nastavení aplikace (' + n + ' oddílů)');
     if (data.nastaveni.jeAdmin !== undefined) varovani.push('role administrátora se z konfigurace nepřebírá (bezpečnost)');
   }
@@ -196,6 +264,6 @@ function konfiguraceNazevSouboru(build) {
 }
 
 if (typeof module !== 'undefined')
-  module.exports = { KONFIG_VERZE, KONFIG_SEKCE, KONFIG_NAST_KLICE,
+  module.exports = { KONFIG_VERZE, KONFIG_SEKCE, KONFIG_NAST_KLICE, KONFIG_DOPLNIT_KLICE,
     konfiguraceExport, konfiguraceImport, konfiguracePopis, konfiguraceNazevSouboru,
-    konfigNahradVMiste };
+    konfigNahradVMiste, konfigDoplnChybejici, konfigDorovnejNast };

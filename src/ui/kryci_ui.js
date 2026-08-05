@@ -25,20 +25,66 @@ function klOdkaz(val) {
     ? ` <a class="mini noprint" href="${esc(val)}" target="_blank" rel="noopener noreferrer" title="otevřít odkaz">↗</a>` : '';
 }
 
-/* jeden řádek krycího listu; opts: {prefill, type:'text|textarea|date|radio|link', o:[...], src:'zdroj'} */
+/* Skupina přepínačů je v HTML určena atributem `name` a platí pro CELÝ
+ * dokument. Podmínky se přitom vykreslují vícekrát na jedné stránce —
+ * v Kalkulaci OCK, v Přehledu cenových nabídek a v Krycím listu — a dokud
+ * všechny kopie sdílely `name="kl_typSmlouvy"`, nechal prohlížeč zaškrtnutou
+ * jen tu poslední vykreslenou. Obchodník klikl v Kalkulaci, hodnota se
+ * uložila správně, ale kolečko zůstalo prázdné (hlášení 5. 8. 2026:
+ * „není vidět volba po vybrání ano / ne nebo typ smlouvy").
+ *
+ * Řešení je dát každé vykreslené kopii vlastní název skupiny. Na název se
+ * nikde nespoléháme — hodnotu zapisuje obsluha onchange, ne formulář — takže
+ * je jedno, že se s každým překreslením mění. */
+let KL_SKUPINA_N = 0;
+function klSkupina(predpona, id) { return predpona + '_' + id + '_' + (++KL_SKUPINA_N); }
+
+/* KL-7 (hlášení 5. 8. 2026): „Sazba DPH nemůže být přepisovatelná, ale musí
+ * být volitelná 12/21 % a navázaná na hlavičku kalkulace."
+ *
+ * Do 5. 8. byl řádek „Sazba DPH" v podmínkách obyčejné textové pole. Šlo do
+ * něj napsat „19 %" — a krycí list i nabídka pak tvrdily jinou sazbu, než
+ * jakou se počítalo „Celkem s DPH" o kus výš. Rozdíl nešlo poznat jinak než
+ * porovnáním dvou míst v dokumentu, takže se dřív nebo později dostal do
+ * nabídky pro zákazníka.
+ *
+ * Řešení je stejné jako u ostatních polí s `bind`: žádná vlastní hodnota se
+ * neukládá, výběr zapisuje rovnou do sazby v hlavičce kalkulace (C.dph pro
+ * OCK, PC.dph pro projekci). Tím je vyloučeno, aby se ta dvě čísla rozešla —
+ * je to jedno číslo ve dvou pohledech, ne dvě kopie. Funkce je sdílená pro
+ * OCK i PROJ (celé UI je jeden skript), liší se jen cesta v `bind`. */
+function klDphPole(bind) {
+  const sazby = (typeof KRYCI_DPH_SAZBY !== 'undefined') ? KRYCI_DPH_SAZBY : [12, 21];
+  let ted = 0;
+  try { ted = Math.round((get(bind) || 0) * 100); } catch (e) { ted = 0; }
+  /* Kdyby v zakázce byla uložená jiná sazba (starší zakázka, dřívější právní
+   * stav), nabídne se navíc — jinak by ji vykreslení výběru tiše přepsalo. */
+  const nabidka = sazby.includes(ted) || !ted ? sazby.slice() : sazby.concat([ted]).sort((a, b) => a - b);
+  const popis = { 12: '12 % snížená', 21: '21 % základní' };
+  const opts = nabidka.map(s =>
+    `<option value="${s}" ${s === ted ? 'selected' : ''}>${esc(popis[s] || (s + ' %'))}</option>`).join('');
+  return `<select onchange="set('${bind}', (+this.value) / 100)">${opts}</select>`;
+}
+
+/* jeden řádek krycího listu; opts: {prefill, type:'text|textarea|date|radio|link|dph', o:[...], src:'zdroj', dphBind:'C.dph'} */
 function klRow(id, label, opts = {}) {
   opts = opts || {};
   const pref = opts.prefill != null ? String(opts.prefill) : '';
   const val = klVal(id, pref);
   const manual = klManual(id);
   let field;
+  if (opts.type === 'dph' && opts.dphBind) {
+    /* Bez „ručně" a bez ↺: není co vracet, hodnota nikdy nebyla ruční. */
+    return `<div class="kl-row"><div class="lbl">${label}</div><div>${klDphPole(opts.dphBind)}</div>
+      <div class="src"><span class="note" style="font-size:10px">${esc(opts.src || 'hlavička kalkulace')} ↔</span></div></div>`;
+  }
   if (opts.type === 'textarea')
     field = `<textarea onchange="klSet('${id}', this.value)" placeholder="${esc(opts.ph || '')}">${esc(val)}</textarea>`;
   else if (opts.type === 'date')
     field = `<input type="date" value="${esc(val)}" onchange="klSet('${id}', this.value)">`;
   else if (opts.type === 'radio')
     field = `<div class="kl-radio">${opts.o.map(x =>
-      `<label><input type="radio" name="kl_${id}" ${String(val) === String(x) ? 'checked' : ''}
+      `<label><input type="radio" name="${klSkupina('kl', id)}" ${String(val) === String(x) ? 'checked' : ''}
         onchange="klSet('${id}', this.value)" value="${esc(x)}">${esc(x)}</label>`).join('')}</div>`;
   else if (opts.type === 'link')
     field = `<input type="url" value="${esc(val)}" onchange="klSet('${id}', this.value)" placeholder="${esc(opts.ph || 'https://…')}">${klOdkaz(val)}`;
@@ -77,7 +123,7 @@ function kryciPodminkyBlok() {
     const rows = s.pole.filter(p => !p.bind).map(p => {
       let pref = null;
       if (p.prefill && c) { try { pref = p.prefill(c); } catch (e) { pref = null; } }
-      return klRow(p.id, p.label, { prefill: pref, type: p.typ, o: p.o, src: p.src, ph: p.ph });
+      return klRow(p.id, p.label, { prefill: pref, type: p.typ, o: p.o, src: p.src, ph: p.ph, dphBind: p.dphBind });
     }).join('');
     return `<h3>${s.sekce}</h3>${rows}`;
   }).join('');
@@ -116,7 +162,7 @@ function renderKryci() {
       }
       const pref = p.prefill ? p.prefill(c) : null;
       return klRow(p.id, p.label + ' ' + znacka(p.verze),
-        { prefill: pref, type: p.typ, o: p.o, src: p.src, ph: p.ph });
+        { prefill: pref, type: p.typ, o: p.o, src: p.src, ph: p.ph, dphBind: p.dphBind });
     }).join('');
     return `<h3>${s.sekce}</h3>${rows}`;
   }).join('');

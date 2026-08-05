@@ -25,13 +25,17 @@ function klpRow(id, label, opts = {}) {
   const val = klpVal(id, pref);
   const manual = klpManual(id);
   let field;
+  if (opts.type === 'dph' && opts.dphBind) {   // KL-7 – viz klDphPole() v kryci_ui.js
+    return `<div class="kl-row"><div class="lbl">${label}</div><div>${klDphPole(opts.dphBind)}</div>
+      <div class="src"><span class="note" style="font-size:10px">${esc(opts.src || 'hlavička kalkulace')} ↔</span></div></div>`;
+  }
   if (opts.type === 'textarea')
     field = `<textarea onchange="klpSet('${id}', this.value)" placeholder="${esc(opts.ph || '')}">${esc(val)}</textarea>`;
   else if (opts.type === 'date')
     field = `<input type="date" value="${esc(val)}" onchange="klpSet('${id}', this.value)">`;
   else if (opts.type === 'radio')
     field = `<div class="kl-radio">${opts.o.map(x =>
-      `<label><input type="radio" name="klp_${id}" ${String(val) === String(x) ? 'checked' : ''}
+      `<label><input type="radio" name="${klSkupina('klp', id)}" ${String(val) === String(x) ? 'checked' : ''}
         onchange="klpSet('${id}', this.value)" value="${esc(x)}">${esc(x)}</label>`).join('')}</div>`;
   else if (opts.type === 'link')   // KL-6: scoring je odkaz (klOdkaz je sdílený s OCK verzí)
     field = `<input type="url" value="${esc(val)}" onchange="klpSet('${id}', this.value)" placeholder="${esc(opts.ph || 'https://…')}">${klOdkaz(val)}`;
@@ -59,7 +63,7 @@ function kryciProjPodminkyBlok() {
       let pref = null;
       if (p.prefill && c) { try { pref = p.prefill(c); } catch (e) { pref = null; } }
       const zdroj = typeof p.src === 'function' ? (c ? p.src(c) : '') : p.src;
-      return klpRow(p.id, p.label, { prefill: pref, type: p.typ, o: p.o, src: zdroj, ph: p.ph });
+      return klpRow(p.id, p.label, { prefill: pref, type: p.typ, o: p.o, src: zdroj, ph: p.ph, dphBind: p.dphBind });
     }).join('');
     return `<h3>${s.sekce}</h3>${rows}`;
   }).join('');
@@ -102,7 +106,7 @@ function renderKryciProj() {
       }
       const pref = p.prefill ? p.prefill(c) : null;
       return klpRow(p.id, p.label + ' ' + znacka(p.verze),
-        { prefill: pref, type: p.typ, o: p.o, src: zdroj, ph: p.ph });
+        { prefill: pref, type: p.typ, o: p.o, src: zdroj, ph: p.ph, dphBind: p.dphBind });
     }).join('');
     return `<h3>${s.sekce}</h3>${rows}`;
   }).join('');

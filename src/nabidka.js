@@ -126,6 +126,22 @@ function nabidkaData(zak, varianta, jekly, lang) {
     Object.assign(placeholders, firmaPlaceholders(
       typeof firmaAktualni === 'function' ? firmaAktualni() : null, P));
 
+  /* Zpracovatel nabídky (#146) – symboly {{ZPRAC_…}} do bloku „Vypracoval“.
+   * Nabídku podepisuje ten obchodní technik, který je právě přihlášený;
+   * do 5. 8. 2026 byl v šabloně natvrdo jeden kolega. Bez přihlášení
+   * (offline build na ploše) se použijí firemní údaje – viz zpracovatel.js. */
+  if (typeof zpracovatelPlaceholders === 'function')
+    Object.assign(placeholders, zpracovatelPlaceholders(
+      typeof firmaAktualni === 'function' ? firmaAktualni() : null));
+
+  /* Smluvní a platební podmínky (#147) – symboly {{PODM_…}}. Do 5. 8. 2026
+   * byla procenta splátek a splatnost natvrdo v šabloně, takže se přepis
+   * v podmínkách nabídky do odeslaného dokumentu nedostal. Teď jde do šablony
+   * přesně to, co má obchodník v sekci pod „Celkem s DPH" (a tedy i v krycím
+   * listu – je to jedno úložiště). */
+  if (typeof kryciPodminkoveSymboly === 'function')
+    Object.assign(placeholders, kryciPodminkoveSymboly(zak, varianta, jekly, P));
+
   // Příplatky do sekce „II. Rozšíření cenové nabídky" – včetně množství a ceny.
   // Zahrnou se položky nevyřazené v kalkulaci (sloupec „Nabídka" v tabulce příplatků).
   const vynech = Zv.priplatkyVynechat || [];
@@ -140,6 +156,8 @@ function nabidkaData(zak, varianta, jekly, lang) {
     + (varianta.ridici ? '' : '_' + varianta.nazev)
     + (L !== 'cz' ? '_' + L.toUpperCase() : '');
   return { placeholders, priplatky: priplatkyList, jazyk: L,
+           /* sken podpisu s razítkem – vymění se za obrázek v šabloně (#146) */
+           obrazky: typeof zpracovatelObrazky === 'function' ? zpracovatelObrazky() : {},
            nazevSouboru: nazevSouboru.replace(/[\\/:*?"<>|]+/g, '-') };
 }
 
