@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kalkulátor OCK + PROJ</title>
+<style>
+  :root { --ink:#1a2332; --mut:#6b7686; --line:#dde3ea; --bg:#f4f6f9; --card:#fff;
+          --acc:#1f5eff; --ok:#0a7d4f; --warn:#b45309; --sec:#eef2f8; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.45 "Segoe UI", system-ui, sans-serif; color:var(--ink); background:var(--bg); }
+  header { background:var(--ink); color:#fff; padding:14px 22px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  header h1 { font-size:17px; margin:0; font-weight:600; }
+  header .ver { color:#9fb0c8; font-size:12px; }
+  header .sp { flex:1; }
+  .layout { display:grid; grid-template-columns: 380px 1fr; gap:18px; padding:18px 22px; max-width:1500px; margin:0 auto; }
+  @media (max-width:1000px){ .layout { grid-template-columns:1fr; } }
+  /* Karty zadání na plné šířce (3. 8. 2026): úzké řádky label+pole by se
+   * roztáhly do nečitelné nudle, proto uvnitř karty tečou do sloupců —
+   * na širokém monitoru tři vedle sebe, na užším méně, na mobilu jeden.
+   * Vysvětlivky (.note) se roztahují přes celou šířku karty. */
+  .inputs .card .body { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); column-gap:28px; align-content:start; }
+  .inputs .card .body > .note { grid-column:1 / -1; }
+  /* sdílená hlavička zakázka + varianta (Kalkulace OCK i PROJ) */
+  .zak-bar { border-color:var(--acc); }
+  .zak-bar-h { font-size:13px; text-transform:uppercase; letter-spacing:.04em; margin:0; padding:10px 14px;
+               background:#eaf0ff; color:var(--acc); border-bottom:1px solid var(--line); font-weight:700; }
+  .zak-head { display:flex; gap:34px; flex-wrap:wrap; }
+  .zak-head-col { flex:1; min-width:280px; display:flex; flex-direction:column; }
+  /* Datum vytvoření má stát „na úrovni sazby DPH" (zadání 31. 7. 2026). Sloupce
+     nemají stejný počet řádků – pod IČO je ještě tlačítko ARES –, takže se datum
+     neřadí pořadím, ale odsune se na konec sloupce. Sloupce jsou stejně vysoké,
+     poslední řádky tím vyjdou na stejnou výšku. */
+  .zak-head-col .row.na-konec { margin-top:auto; }
+  /* datová pole vpravo, popisky vlevo v rámci sloupce, jednotná šířka = zarovnané pravé okraje */
+  .zak-head .row > label { flex:1; text-align:left; }
+  .zak-head .row input[type=text], .zak-head .row input[type=date], .zak-head .row select { width:200px; text-align:left; }
+  .zak-head .pct-wrap { width:200px; text-align:right; color:var(--mut); }
+  .zak-head .pct-wrap input { width:70px; text-align:right; }
+  .zak-cena { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:10px;
+              padding:8px 12px; background:#eef4ff; border:1px solid #cfe0ff; border-radius:8px; }
+  /* Trojice „uložit / načíst / nová zakázka" stojí od 4. 8. 2026 na začátku
+     lišty (zadání) a od zbytku ji odděluje svislá čárka – ať je na první
+     pohled vidět, že jde o práci se zakázkou, ne s variantou. */
+  .zak-cena-del { width:1px; align-self:stretch; background:#cfe0ff; margin:0 2px; }
+  button.mini.vyzva { background:var(--acc); color:#fff; border-color:var(--acc); font-weight:600; }
+  button.mini.vyzva:hover { filter:brightness(1.08); }
+  .zak-ulozeni { margin-top:8px; font-size:12px; }
+  /* úchop pro přetahování řádků + úzké admin sloupce */
+  .grip { cursor:grab; color:#9aa6b6; user-select:none; margin-right:4px; font-size:13px; }
+  .grip:active { cursor:grabbing; }
+  tr.drag-over td { border-top:2px solid var(--acc); }
+  th.admincol, td.admincol { width:64px; text-align:center; }
+  .page { max-width:1500px; margin:0 auto; padding:18px 22px; }
+  .page.narrow { max-width:1100px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; margin-bottom:16px; overflow:hidden; }
+  .card h2 { font-size:13px; text-transform:uppercase; letter-spacing:.04em; margin:0; padding:10px 14px;
+             background:var(--sec); border-bottom:1px solid var(--line); cursor:pointer; user-select:none; }
+  .card h2::before { content:"▾ "; color:var(--mut); }
+  .card.closed h2::before { content:"▸ "; }
+  .card.closed .body { display:none; }
+  .body { padding:12px 14px; }
+  .row { display:flex; align-items:center; gap:8px; margin:5px 0; }
+  .row label { flex:1; color:var(--ink); }
+  .row .u { color:var(--mut); width:34px; font-size:12px; }
+  /* Parametrový řádek nad kalkulací (globální přirážka, globální sleva).
+   * Na rozdíl od .row se popis netáhne přes celou šířku, ale drží se u svého
+   * pole vpravo – jak si uživatel vyžádal u návrhu A: „Popisy Globální sleva
+   * a globální přirážka posuň doprava k hodnotovým buňkám." */
+  .prm { display:flex; justify-content:flex-end; align-items:center; gap:8px; margin:5px 0; }
+  .prm .prm-l { text-align:right; }
+  .prm .prm-u { width:14px; color:var(--mut); font-size:12px; text-align:left; }
+  input[type=number], select, input[type=text], input[type=date] { width:110px; padding:5px 7px; border:1px solid var(--line);
+      border-radius:6px; font:inherit; background:#fff; text-align:right; }
+  select { text-align:left; width:130px; }
+  input[type=checkbox], input[type=radio]{ width:16px; height:16px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { text-align:right; font-weight:600; color:var(--mut); padding:6px 8px; border-bottom:1.5px solid var(--line); font-size:12px; }
+  th:first-child, td:first-child { text-align:left; }
+  td { padding:5px 8px; border-bottom:1px solid #eef1f5; text-align:right; white-space:nowrap; }
+  td:first-child { white-space:normal; }
+  tr.sec td { background:var(--sec); font-weight:700; border-top:1.5px solid var(--line); }
+  /* název sekce (nad položkami) – světlejší; součet sekce (CELKEM) – tmavší */
+  tr.sechd td { background:#f4f7fb; font-weight:600; border-top:1.5px solid var(--line); }
+  tr.sectot td { background:#d6e0ef; font-weight:700; border-top:1.5px solid #c2cfe0; }
+  tr.tot td { font-weight:700; border-top:2px solid var(--ink); background:#fbfcfe; }
+  /* zarovnání volitelné položky: zaškrtávátko + název na jednom řádku */
+  .vol-name { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .vol-name > input[type=checkbox] { margin:0; flex:0 0 auto; }
+  .vol-name > .vol-spacer { flex:0 0 auto; width:16px; }
+  .vol-name input.nazev-ed { flex:1 1 180px; min-width:0; width:auto; }
+  /* titulek nad cenovou kalkulací (název akce) */
+  .kalk-title { font-size:15px; font-weight:700; color:var(--ink); margin:0 0 10px; }
+  .kalk-title .kt-cislo { color:var(--mut); font-weight:600; font-size:12.5px; margin-right:8px; }
+  /* ozubené kolo + modální panel Nastavení */
+  header .gear { background:transparent; border-color:#3a4761; color:#cdd7e8; font-size:16px; line-height:1; padding:6px 10px; }
+  header .gear:hover { background:#2b3850; }
+  .modal-overlay { position:fixed; inset:0; background:rgba(16,22,34,.55); z-index:50; display:flex; align-items:flex-start; justify-content:center; padding:40px 16px; overflow:auto; }
+  /* Přihlašovací stránka (4. 8. 2026): plné, NEPRŮHLEDNÉ pozadí – dokud se
+     nikdo nepřihlásí, z aplikace není vidět nic. Stojí nad všemi overlayi. */
+  .prihlaseni-overlay { position:fixed; inset:0; background:#eef2f7; z-index:200;
+    display:flex; align-items:center; justify-content:center; padding:24px; overflow:auto; }
+  .prihlaseni-box { background:#fff; border:1px solid var(--line); border-radius:12px;
+    box-shadow:0 12px 40px rgba(16,22,34,.14); padding:28px 30px; width:100%; max-width:420px; }
+  .prihlaseni-box h1 { margin:0 0 2px; font-size:22px; }
+  .prihlaseni-box .ver { display:block; margin-bottom:16px; }
+  .prihlaseni-box .row { max-width:none; }
+  .online-lista { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:#3b4453; }
+  .online-lista b { white-space:nowrap; }
+  .modal { background:#fff; border-radius:12px; max-width:760px; width:100%; box-shadow:0 20px 60px rgba(0,0,0,.35); }
+  .modal h2 { font-size:16px; margin:0; padding:16px 20px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:10px; }
+  .modal .body { padding:18px 20px; }
+  .modal .sec-title { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--mut); font-weight:700; margin:18px 0 8px; }
+  .modal .sec-title:first-child { margin-top:0; }
+  .modal .nast-tabs { display:flex; gap:4px; padding:10px 20px 0; border-bottom:1px solid var(--line); }
+  .modal .nast-tabs button { border:1px solid var(--line); border-bottom:none; background:#f3f6fa; color:var(--ink);
+    padding:7px 14px; border-radius:8px 8px 0 0; font-size:13px; cursor:pointer; }
+  .modal .nast-tabs button.act { background:#fff; font-weight:600; color:#1d4ed8; position:relative; top:1px; }
+  .sd-tbl { width:100%; border-collapse:collapse; font-size:12.5px; margin-top:4px; }
+  .sd-tbl th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:var(--mut);
+    border-bottom:2px solid var(--line); padding:4px 6px; }
+  .sd-tbl td { border-bottom:1px solid #eef2f6; padding:3px 6px; }
+  .sd-tbl input[type=text], .sd-tbl select { width:100%; text-align:left; }
+  .tab.skryt, button.skryt { opacity:.5; }
+  /* role běžného uživatele: skryté prvky jen pro admina */
+  body.role-user .admin-only { display:none !important; }
+  #btnZpetAdmin { display:none; background:#b45309; border-color:#b45309; color:#fff; }
+  /* Návrat z náhledu se nabízí jen tomu, kdo se do náhledu má jak vrátit,
+     tedy skutečnému administrátorovi (třída `muze-admin` se nastavuje
+     v render() podle role ze serveru). Do 5. 8. 2026 stačilo `role-user`
+     a tlačítko svítilo i obchodníkovi — jeden klik a měl otevřené ceníky. */
+  body.role-user.muze-admin #btnZpetAdmin { display:inline-block; }
+  /* ochrana rozpracované práce (#1): Zpět/Znovu, stav zálohy, lišta obnovy */
+  /* Zpět/Znovu jsou po úklidu hlavičky (4. 8. 2026) jediná pracovní tlačítka
+     nahoře – a zároveň jediná pojistka proti ztrátě rozdělané práce. Dokud
+     byla průhledná, splývala s pozadím a v šedivém stavu je nebylo vidět
+     vůbec. Teď svítí bíle s tmavým písmem a aktivní „Zpět" má ještě modrý
+     rámeček, aby bylo poznat, že je co vracet. */
+  header .hist { background:#fff; border-color:#fff; color:#16233a; padding:7px 14px;
+    font-weight:600; font-size:13px; box-shadow:0 1px 3px rgba(0,0,0,.35); }
+  header .hist:hover:not(:disabled) { background:#dbe7fb; border-color:#dbe7fb; }
+  header .hist:not(:disabled) { border-color:#7aa7f5; box-shadow:0 0 0 2px rgba(122,167,245,.35); }
+  header .hist:disabled { background:#2b3850; border-color:#3a4761; color:#8593ab;
+    box-shadow:none; opacity:.75; cursor:default; }
+  #autoStav { color:#9fb0c8; font-size:11px; white-space:nowrap; align-self:center; }
+  #obnovaLista { display:none; background:#fef3c7; border-bottom:1px solid #fcd34d; color:#78350f;
+    padding:10px 22px; font-size:13px; align-items:center; gap:10px; flex-wrap:wrap; }
+  #obnovaLista.zobraz { display:flex; }
+  #obnovaLista button { padding:5px 12px; font-size:12.5px; }
+  /* #40 – lišta se stářím sestavení. Vypadá jako lišta obnovy, protože dělá
+     totéž: řekne jednu větu a nechá uživatele pracovat dál. */
+  .build-lista { display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    background:#eef2f8; border-bottom:1px solid var(--line); color:#3d4a5c;
+    padding:9px 22px; font-size:12.5px; line-height:1.5; }
+  .build-lista.durazne { background:#fef3c7; border-bottom-color:#fcd34d; color:#78350f; }
+  .build-lista .ikona { font-size:16px; }
+  .build-lista .sp { flex:1 1 auto; }
+  /* #42 – zápis do složky selhal. Nejvyšší priorita v okně: rozdělaná
+     práce není nikde na disku a se zavřením okna se ztratí. */
+  .zapis-lista { display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    background:#7f1d1d; border-bottom:2px solid #991b1b; color:#fff;
+    padding:10px 22px; font-size:13px; line-height:1.5; }
+  .zapis-lista .ikona { font-size:17px; }
+  .zapis-lista .sp { flex:1 1 auto; }
+  .zapis-lista button { padding:5px 12px; font-size:12.5px; }
+  /* #40 – lišta ukázkových dat. Nejvýraznější prvek v okně, a to schválně:
+     říká, že čísla na obrazovce nejsou skutečná. Zavírací tlačítko nemá –
+     zhasne se připojením složky se skutečnými daty, ne odkliknutím. */
+  .ukazkove-lista { display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    background:#fee2e2; border-bottom:2px solid #f87171; color:#7f1d1d;
+    padding:10px 22px; font-size:13px; line-height:1.5; font-weight:600; }
+  .ukazkove-lista .ikona { font-size:17px; }
+  .ukazkove-lista .sp { flex:1 1 auto; }
+  .ukazkove-lista .kde { font-weight:400; font-size:12px; white-space:nowrap; opacity:.85; }
+  /* Tlačítko „připojit složku" stojí uvnitř červené lišty, takže si nemůže
+     vzít modrou z běžných primárních tlačítek – v červeném poli by zmizelo.
+     Tmavě červená drží kontrast a zároveň říká, že patří k varování. */
+  .ukazkove-lista button.primary { background:#991b1b; border-color:#7f1d1d; color:#fff;
+    font-weight:600; font-size:12.5px; padding:6px 12px; white-space:nowrap; }
+  .ukazkove-lista button.primary:hover { background:#7f1d1d; }
+  .ukazkove-tisk { display:block; background:#fee2e2; border:1px solid #f87171;
+    color:#7f1d1d; border-radius:8px; padding:9px 12px; margin:0 0 8px;
+    font-size:13px; line-height:1.5; font-weight:600; }
+  /* #34 – lišta zámku odeslané nabídky a stav varianty v přehledu */
+  .zamek-lista { display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    background:#fff7ed; border-bottom:1px solid #fdba74; color:#7c2d12;
+    padding:10px 22px; font-size:13px; line-height:1.5; }
+  .zamek-lista .ikona { font-size:17px; }
+  .zamek-lista .sp { flex:1 1 auto; }
+  .zamek-lista button { padding:5px 12px; font-size:12.5px; }
+  .zamek-stav { font-size:12px; white-space:nowrap; color:#6b7686; }
+  .zamek-stav.zamceno { color:#7c2d12; font-weight:600; }
+  .zamek-stav.odemceno { color:#92400e; }
+  /* Zamčená varianta: pole zůstávají čitelná, ale je vidět, že se needitují.
+     Záložka Přehled je z toho vyňatá – hlavička zakázky patří celé zakázce,
+     ne variantě, a upravovat ji lze i tehdy, když je varianta zamčená. */
+  body.zamceno .page:not(#page-zakazka) .card input:not([type=checkbox]):not([type=radio]),
+  body.zamceno .page:not(#page-zakazka) .card select,
+  body.zamceno .page:not(#page-zakazka) .card textarea { background:#fbfaf7; }
+  /* krycí list – dokumentová podoba */
+  .kl-doc { background:#fff; border:1px solid var(--line); border-radius:10px; padding:24px 30px; max-width:900px; margin:0 auto 16px; }
+  .kl-doc h1 { font-size:19px; margin:0 0 4px; }
+  .kl-doc h3 { font-size:12.5px; text-transform:uppercase; letter-spacing:.04em; background:var(--sec); padding:7px 10px; margin:18px -10px 8px; border-radius:6px; }
+  .kl-row { display:grid; grid-template-columns:280px 1fr auto; gap:8px; align-items:center; padding:3px 0; border-bottom:1px solid #f0f3f7; }
+  .kl-row .lbl { font-size:12.5px; color:var(--ink); font-weight:600; }
+  .kl-row input[type=text], .kl-row input[type=date], .kl-row textarea, .kl-row select { width:100%; text-align:left; }
+  .kl-row textarea { min-height:38px; resize:vertical; padding:5px 7px; border:1px solid var(--line); border-radius:6px; font:inherit; }
+  .kl-row .src { font-size:10px; width:80px; text-align:center; }
+  .kl-radio { display:flex; gap:14px; flex-wrap:wrap; align-items:center; }
+  .kl-radio label { display:flex; gap:5px; align-items:center; font-weight:400; }
+  /* detail výpočtu */
+  .dv-krok { background:#fff; border:1px solid var(--line); border-radius:10px; margin-bottom:14px; overflow:hidden; }
+  .dv-krok > h3 { font-size:13px; margin:0; padding:9px 14px; background:var(--ink); color:#fff; font-weight:600; }
+  .dv-krok .dv-body { padding:10px 14px; }
+  table.dv { width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.dv td { padding:4px 8px; border-bottom:1px solid #eef1f5; vertical-align:top; }
+  table.dv td.f { color:var(--mut); font-size:11.5px; white-space:normal; }
+  table.dv td.val { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  table.dv td:first-child { font-weight:600; }
+  /* Klouzající lišta kalkulací (OCK i PROJ): Zpět/Znovu + kotvy sekcí.
+     Musí být MIMO .card (ta má overflow:hidden, sticky by uvnitř nefungovalo).
+     A pozor na rodiče: sticky se lepí jen v HRANICÍCH svého rodiče. Lišta OCK
+     se vykresluje do #kalk-hlavicka, který končí hned pod ní – display:contents
+     ho pro layout „zprůhlední", takže se lišta lepí vůči celé stránce.
+     Barvu má stejnou jako lišty názvů sekcí (.zak-bar-h) – světle modrý podklad
+     #eaf0ff a akcentové písmo. Podklad musí zůstat neprůhledný, jinak by
+     přilepenou lištou prosvítal obsah, který pod ní podjíždí.
+     Rámeček je tlumená modř #bfd0f5, ne plná akcentová – plnou modř kolem
+     dokola oko čte jako druhý nadpis a lišta pak přebíjí obsah pod sebou.
+     Stín zůstal jen tak silný, aby bylo poznat, že lišta „leží nahoře“;
+     modrý zářivý stín (luminiscence) je pryč (zadání 29. 7. 2026). */
+  #kalk-hlavicka { display:contents; }
+  .kalk-lista { position:sticky; top:0; z-index:40; background:#eaf0ff; border:1px solid #bfd0f5;
+    border-radius:10px; padding:8px 12px; margin-bottom:16px; color:var(--acc);
+    display:flex; flex-wrap:wrap; align-items:center; gap:5px 7px;
+    box-shadow:0 1px 4px rgba(26,35,50,.07); }
+  .kalk-lista .hist2 { padding:4px 11px; font-size:12.5px; background:#fff;
+    border-color:var(--acc); color:var(--acc); font-weight:600; }
+  .kalk-lista .hist2:hover:not(:disabled) { background:var(--acc); color:#fff; }
+  .kalk-lista .hist2:disabled { opacity:.45; cursor:default; }
+  .kalk-lista .odd { width:1px; height:20px; background:var(--acc); opacity:.35; margin:0 4px; }
+  /* kotvy na modrém podkladu: bílé pilulky s akcentovým písmem, ať zůstanou čitelné */
+  .kalk-lista a.dv-kotva { background:#fff; color:var(--acc); border-color:#c3d3fb; font-weight:600; }
+  .kalk-lista a.dv-kotva:hover { background:var(--acc); color:#fff; border-color:var(--acc); }
+  /* cíl kotvy nesmí zajet pod přilepenou lištu */
+  #page-kalk [id], #page-proj [id] { scroll-margin-top:64px; }
+  /* Lišta detailu je o řádek vyšší (přepínač a tisk stojí nad kotvami),
+     proto má cíl kotvy větší odstup než v kalkulacích. */
+  #page-detail [id] { scroll-margin-top:96px; }
+  html { scroll-behavior:smooth; }
+  /* DET-1/DET-3: ovládací lišta detailu výpočtu. Vzhled je záměrně shodný
+     s klouzající lištou kalkulací (zadání 29. 7. 2026) – obě dělají totéž
+     (ovládání + kotvy), takže mají vypadat jako jedna věc.
+     Od 30. 7. 2026 se i chová stejně: position:sticky, aby při čtení dlouhého
+     rozpisu zůstalo po ruce přepnutí vzorců i skok na jiný krok. Detail se
+     vykresluje přímo do .page (žádná .card s overflow:hidden nad ním), takže
+     se lišta lepí vůči celé stránce. Podklad musí zůstat neprůhledný –
+     jinak by přilepenou lištou prosvítaly tabulky, které pod ní podjíždějí. */
+  .dv-lista { position:sticky; top:0; z-index:40;
+    background:#eaf0ff; border:1px solid #bfd0f5; border-radius:10px; padding:9px 12px; margin-bottom:14px;
+    color:var(--acc); box-shadow:0 1px 4px rgba(26,35,50,.07);
+    display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; }
+  .dv-prep { display:flex; align-items:center; gap:6px; font-weight:600; font-size:12.5px; }
+  /* tlačítko tisku na modrém podkladu: bílé s akcentovým písmem, jako kotvy */
+  .dv-lista .mini { background:#fff; border-color:#c3d3fb; color:var(--acc); font-weight:600; }
+  .dv-lista .mini:hover { background:var(--acc); color:#fff; border-color:var(--acc); }
+  .dv-kotvy { flex-basis:100%; display:flex; flex-wrap:wrap; gap:4px 6px; }
+  a.dv-kotva { font-size:11.5px; color:var(--mut); text-decoration:none; border:1px solid var(--line);
+    border-radius:999px; padding:2px 9px; background:#fbfcfe; }
+  a.dv-kotva:hover { color:#1d4ed8; border-color:#1d4ed8; }
+  .dv-lista a.dv-kotva { background:#fff; color:var(--acc); border-color:#c3d3fb; font-weight:600; }
+  .dv-lista a.dv-kotva:hover { background:var(--acc); color:#fff; border-color:var(--acc); }
+  .grand { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }
+  .kpi { border:1px solid var(--line); border-radius:10px; padding:12px 14px; background:#fff; }
+  .kpi .l { font-size:12px; color:var(--mut); text-transform:uppercase; letter-spacing:.03em; }
+  .kpi .v { font-size:21px; font-weight:700; margin-top:2px; }
+  .kpi.main { background:var(--ink); color:#fff; border-color:var(--ink); }
+  .kpi.main .l { color:#9fb0c8; }
+  .kpi-multi { display:flex; flex-direction:column; justify-content:center; gap:6px; padding:10px 14px; }
+  .kpi-line { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+  .kpi-line .kl { font-size:11.5px; color:var(--mut); text-transform:uppercase; letter-spacing:.02em; display:flex; align-items:center; gap:5px; }
+  .kpi-line .kv { font-size:16px; font-weight:700; white-space:nowrap; }
+  .kpi-chk { transform:scale(.9); }
+  .pill { display:inline-block; font-size:11px; padding:2px 8px; border-radius:99px; background:#e7efe9; color:var(--ok); font-weight:600; }
+  .pill.warn { background:#fdf1e3; color:var(--warn); }
+  .pill.mut { background:#eef1f5; color:var(--mut); }
+  .note { color:var(--mut); font-size:12px; margin:6px 0; }
+  button { font:inherit; padding:7px 14px; border-radius:7px; border:1px solid var(--line); background:#fff; cursor:pointer; }
+  button.primary { background:var(--acc); border-color:var(--acc); color:#fff; }
+  button.mini { padding:3px 9px; font-size:12px; }
+  .btns { display:flex; gap:8px; flex-wrap:wrap; }
+  .tabs { display:flex; gap:2px; padding:0 22px; background:var(--ink); flex-wrap:wrap; }
+  .tabs button { border:none; border-radius:8px 8px 0 0; padding:9px 18px; background:#2b3850; color:#c6d1e2; font-weight:600; }
+  .tabs button.act { background:var(--bg); color:var(--ink); }
+  .ceniktbl td input[type=number] { width:120px; }
+  .ceniktbl td:nth-child(2) { width:140px; }
+  .ceniktbl td:nth-child(3) { width:70px; text-align:left; color:var(--mut); }
+  .ceniktbl td:nth-child(4) { text-align:left; color:var(--mut); font-size:12px; white-space:normal; }
+  .subhead td { color:var(--mut); font-size:11px; text-transform:uppercase; background:#fafbfd; }
+  .neg { color:#b91c1c; }
+  /* editovatelný název položky přímo v tabulce (vypadá jako text, edit po najetí/kliknutí) */
+  input.nazev-ed { width:100%; min-width:260px; text-align:left; border:1px solid transparent;
+              background:transparent; padding:3px 5px; border-radius:5px; font:inherit; color:inherit; }
+  input.nazev-ed:hover { border-color:var(--line); background:#fff; }
+  input.nazev-ed:focus { border-color:var(--acc); background:#fff; outline:none; }
+  tr.pridat td { background:#fbfcfe; border-bottom:1px solid #eef1f5; }
+  /* Vyřazená položka (PROJ, #8): zůstává vidět i s hodinami a cenou, jen se
+     nepočítá. Proto se ztlumí a přeškrtne — na první pohled je jasné, co u téhle
+     stavby neděláme a za kolik, aniž by to mizelo ze seznamu. */
+  tr.vyrazeno td { opacity:.5; text-decoration:line-through; }
+  tr.vyrazeno td input, tr.vyrazeno td button { text-decoration:none; }
+  /* Interní poznámka k položce — do nabídky ani krycího listu nejde (pravidlo #37),
+     tak ať ani v tabulce nekřičí: menší, tlumená, rozbalí se až při psaní. */
+  input.pozn-ed { display:block; width:100%; min-width:260px; margin-top:2px; padding:2px 5px;
+              font:inherit; font-size:11.5px; color:var(--mut); background:transparent;
+              border:1px solid transparent; border-radius:5px; }
+  input.pozn-ed:hover { border-color:var(--line); background:#fff; }
+  input.pozn-ed:focus { border-color:var(--acc); background:#fff; color:var(--ink); outline:none; }
+  /* Sjednaná cena/sazba pro jednu zakázku. Žlutý podklad odlišuje „tady jsme se
+     domluvili jinak" od ceny z ceníku, aby se přepis nedal přehlédnout. */
+  input.prepis-ed { width:110px; }
+  input.prepis-ed.aktivni { background:#fdf6e3; border-color:#e0c98a; font-weight:600; }
+  tr.pridat button { color:var(--acc); border-style:dashed; }
+  /* Technická specifikace – dokumentová podoba */
+  .spec-doc { background:#fff; border:1px solid var(--line); border-radius:10px; padding:26px 32px; max-width:900px; margin:0 auto 16px; }
+  .spec-doc h1 { font-size:19px; margin:0 0 2px; }
+  .spec-doc .sub { color:var(--mut); font-size:12px; margin-bottom:14px; }
+  .spec-doc h3 { font-size:13px; text-transform:uppercase; letter-spacing:.04em; background:var(--sec);
+                 padding:7px 10px; margin:18px -10px 6px; border-radius:6px; }
+  .spec-row { display:grid; grid-template-columns: 300px 1fr auto; gap:8px; align-items:center;
+              padding:3px 0; border-bottom:1px solid #f0f3f7; }
+  .spec-row .lbl { font-size:12.5px; color:var(--ink); font-weight:600; }
+  .spec-row input[type=text] { width:100%; text-align:left; }
+  .spec-row select { width:100%; text-align:left; }
+  .spec-row .src { font-size:10px; width:74px; text-align:center; }
+  /* jazykové mutace (N1) */
+  .spec-row.ro > div:nth-child(2) { font-size:12.5px; padding:2px 0; }
+  button.mini.aktivni { background:var(--ink); color:#fff; border-color:var(--ink); }
+  .neprelozeno { border-bottom:1px dotted var(--warn); color:var(--warn); }
+  @media print { .neprelozeno { border-bottom:none; color:inherit; } }
+  /* TS-1 kontrola vyplnění – pouze upozornění, nic neblokuje */
+  .ts-kontrola { border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin-bottom:10px;
+                 font-size:12px; background:var(--card); }
+  .ts-kontrola.warn { border-color:var(--warn); }
+  .ts-kontrola-sekce { margin-top:4px; color:var(--mut); font-size:11.5px; }
+  .spec-row.chybi { background:#fffaf2; }
+  .kl-verze { font-size:9px; margin-left:6px; vertical-align:middle; }
+  /* Technická specifikace OCK Data (admin editor) */
+  .sd-h2 { font-size:15px; margin:6px 0 4px; padding-bottom:4px; border-bottom:2px solid var(--line); }
+  .sd-lists .card { margin:6px 0; }
+  .sd-lists .card h2 { font-size:12.5px; font-weight:600; }
+  .sd-key { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11.5px; color:#2b6cb0; }
+  .sd-uses { margin:0 0 6px; }
+  .sd-item { display:grid; grid-template-columns:1fr auto; gap:6px; align-items:center; padding:2px 0; }
+  .sd-item input[type=text] { width:100%; text-align:left; }
+  .sd-item-btns { display:flex; gap:3px; }
+  .sd-item-btns .mini { padding:1px 6px; }
+  .proj-sek td input[type=number] { width:80px; }
+  .proj-sek td input[type=text] { width:100%; text-align:left; }
+  .proj-sek td:first-child { min-width:220px; }
+  /* Textová pole v seznamu variant se přizpůsobují šířce sloupce (dřív měla
+     pevných 110 px a tabulka kvůli tomu přetékala přes okraj karty). */
+  /* 12 sloupců na úzké stránce – drobnější odsazení buněk ušetří tolik místa,
+     že se seznam vejde do karty bez posouvání */
+  .vartbl { width:100%; }
+  .vartbl th, .vartbl td { padding:6px 4px; }
+  .vartbl input[type=text] { width:100%; min-width:78px; text-align:left; }
+  /* název varianty se čte nejčastěji, dostane víc místa než zbytek */
+  .vartbl td:nth-child(2) input[type=text] { min-width:130px; }
+  /* #18 – seznam kalkulací: ovládací lišta, řaditelná záhlaví, prázdný výsledek.
+     Lišta je záměrně mimo #seznamTelo (překresluje se jen tělo), takže si
+     vyhledávací políčko drží kurzor i při psaní. */
+  .seznam-ovladani { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+  .seznam-ovladani .sp { flex:1 1 auto; }
+  .seznam-ovladani .note { margin:0; white-space:nowrap; }
+  .seznam-hledat { min-width:240px; text-align:left; }
+  /* Tabulka variant je široká (12 sloupců) a na užším okně přetékala přes
+     okraj karty – tlačítka kopie a smazání pak nešlo dosáhnout vůbec.
+     Vodorovné posouvání drží celý seznam přístupný i na notebooku. */
+  #seznamTelo { overflow-x:auto; }
+  /* Tlačítka kopie a smazání zůstávají přilepená u pravého okraje i při
+     posunu – jinak by se k nim na užší obrazovce muselo dorolovat, a přitom
+     jimi se v zamčené nabídce pokračuje dál (#34). */
+  .vartbl tr.aktivni { background:#f0f5ff; }
+  .vartbl td:last-child, .vartbl th:last-child { position:sticky; right:0; background:#fff;
+    box-shadow:-7px 0 7px -7px rgba(26,35,50,.25); }
+  .vartbl tr.aktivni td:last-child { background:#f0f5ff; }
+  /* bez nowrap – záhlaví se smí zalomit, jinak by široká tabulka variant
+     přetekla přes okraj karty stejně jako před #18 */
+  .vartbl th.sort { cursor:pointer; user-select:none; }
+  .vartbl th.sort:hover { background:#eef2f8; }
+  .vartbl th.sort.aktivni { color:var(--acc); }
+  .vartbl th .sipka { font-size:10px; }
+  .seznam-prazdno { border:1px dashed var(--line); border-radius:8px; padding:14px 16px;
+    color:var(--mut); font-size:13px; line-height:1.6; background:#fbfcfe; }
+  .seznam-varovani { background:#fef3c7; border:1px solid #fcd34d; color:#78350f;
+    border-radius:8px; padding:8px 12px; margin-bottom:8px; font-size:12.5px; line-height:1.5; }
+  /* Zápis do složky selhal. Žlutá „varovani" tu nestačí: dokud se to
+     nespraví, změny nikde nejsou a po zavření okna zmizí. */
+  .seznam-chyba { background:#fee2e2; border:1px solid #f87171; color:#7f1d1d;
+    border-radius:8px; padding:9px 12px; margin-bottom:8px; font-size:12.5px;
+    line-height:1.55; font-weight:600; }
+  .seznam-chyba .rada { display:block; font-weight:400; margin-top:4px; }
+  /* #17 – panel historických kalkulací. Je širší než ostatní modály (osm
+     sloupců plus dvě tlačítka) a tabulka se roluje uvnitř, aby ovládací
+     lišta i vysvětlivky zůstaly vidět. */
+  #archiv-panel { max-width:1180px; }
+  #archivTelo { overflow:auto; max-height:52vh; }
+  /* Databáze ve složce – stejně široký panel jako archiv, tabulka se roluje
+     uvnitř, aby hledání i hláška o stavu složky zůstaly nad ní vidět. */
+  #uloziste-panel { max-width:1180px; }
+  #ulozisteTelo { overflow:auto; max-height:52vh; }
+  .archtbl th, .archtbl td { border-bottom:1px solid var(--line); vertical-align:middle; }
+  .archtbl tr:hover td { background:#f7f9fe; }
+  .archiv-soubory { display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+    margin:6px 0 10px; font-size:12px; color:var(--mut); }
+  .archiv-chip { display:inline-flex; align-items:center; gap:6px; background:#f3f6fa;
+    border:1px solid var(--line); border-radius:999px; padding:2px 4px 2px 10px; }
+  /* #35 – upozornění na ceník starší, než jaký nese dnešní sestavení.
+     Barevně stejné jako .seznam-varovani: je to upozornění, ne chyba – ceník
+     bývá u konkrétní zakázky upravený schválně a nic se neblokuje. */
+  .cenik-stari { background:#fef3c7; border:1px solid #fcd34d; color:#78350f;
+    border-radius:8px; padding:8px 12px; margin:0 0 10px; font-size:12.5px; line-height:1.55; }
+  .cenik-stari .btns { display:flex; gap:6px; flex-wrap:wrap; }
+  #prepocet-panel { max-width:900px; }
+  #prepocetTelo { overflow:auto; max-height:50vh; }
+  /* globální pravidlo pro <td> je „doprava a bez zalomení" (číselník cen);
+     v tabulce rozdílů je ale první sloupec text, který se má číst zleva */
+  #prepocetTelo th, #prepocetTelo td { text-align:left; }
+  #prepocetTelo td:nth-child(2) { white-space:normal; }
+  .zm-up { color:#b91c1c; font-weight:600; }     /* zdraženo */
+  .zm-down { color:#15803d; font-weight:600; }   /* zlevněno */
+  /* #36 – marže pod firemním minimem. Červená, ne oranžová: na rozdíl od
+     starého ceníku tady nejde o „stojí za ověření", ale o cenu, na které se
+     prodělá. Přesto nic neblokuje – pod minimum se chodí i schválně. */
+  .marze-lista { display:flex; align-items:flex-start; gap:9px; margin:10px 0 0;
+    background:#fff1f2; border:1px solid #fda4af; color:#881337;
+    border-radius:8px; padding:8px 12px; font-size:12.5px; line-height:1.55; }
+  .marze-lista.ztrata { background:#fee2e2; border-color:#f87171; font-weight:600; }
+  .marze-lista .ikona { font-size:15px; line-height:1.3; }
+  /* #33 – kontrola logických chyb před nabídkou. Žlutá, ne červená: tohle
+     nejsou čísla, která nesedí, ale otázky, na které má někdo odpovědět.
+     Panel nic neblokuje – tlačítka nabídky pod ním zůstávají funkční. */
+  .kontroly-panel { margin:12px 0 0; background:#fffbeb; border:1px solid #fcd34d;
+    color:#78350f; border-radius:8px; padding:10px 13px; font-size:12.5px; line-height:1.55; }
+  .kontroly-panel.odklepnuto { background:#f8fafc; border-color:var(--line); color:var(--mut); }
+  .kontroly-panel.ok { display:flex; align-items:center; gap:9px; background:#f0fdf4;
+    border-color:#86efac; color:#14532d; }
+  .kontroly-panel .ikona { font-size:15px; }
+  .kontroly-hlava { display:flex; align-items:center; gap:9px; }
+  .kontroly-seznam { margin:7px 0 0; padding:0 0 0 4px; list-style:none; }
+  .kontroly-seznam li { display:flex; gap:9px; padding:4px 0; align-items:baseline;
+    border-top:1px solid rgba(120,53,15,.13); }
+  .kontroly-seznam li:first-child { border-top:0; }
+  .kontroly-seznam .kde { flex:0 0 132px; font-size:11.5px; font-weight:600; opacity:.75; }
+  .kontroly-seznam .txt { flex:1 1 auto; }
+  .kontroly-seznam .detail { display:block; font-size:11.5px; opacity:.8; }
+  .kontroly-btns { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:9px; }
+  .kontroly-btns .pozn { font-size:11.5px; opacity:.8; }
+  .kontroly-odklep { margin-top:9px; font-size:11.5px; opacity:.85; }
+  /* Zábrana: nenahraný ceník (30. 7. 2026). Červená, ne žlutá – kontroly výš
+     jsou otázky k zodpovězení, tohle je konec cesty. Panel stojí přímo nad
+     tlačítky, která zhasla, aby bylo vidět proč. */
+  .zabrana-panel { margin:12px 0 0; background:#fef2f2; border:1px solid #fca5a5;
+    color:#7f1d1d; border-radius:8px; padding:10px 13px; font-size:12.5px; line-height:1.55; }
+  .zabrana-hlava { display:flex; align-items:center; gap:9px; }
+  .zabrana-hlava .ikona { font-size:15px; }
+  .zabrana-txt { margin-top:5px; }
+  .zabrana-btns { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:9px; }
+  .zabrana-btns .pozn { font-size:11.5px; opacity:.85; }
+  button[disabled] { opacity:.45; cursor:not-allowed; }
+  /* ARES (#10): odpověď z rejstříku. Modrá, ne žlutá ani červená – nic se
+     neděje špatně, jen se ukazuje, co veřejný rejstřík ví. Tabulka staví
+     „teď" a „z rejstříku" vedle sebe, aby bylo potvrzení vědomé. */
+  .ares-panel { margin:6px 0 10px; background:#f0f7ff; border:1px solid #bfdbfe;
+    color:#13315c; border-radius:8px; padding:9px 12px; font-size:12.5px; line-height:1.5; }
+  .ares-panel.chyba { background:#fff7ed; border-color:#fed7aa; color:#7c2d12; }
+  .ares-hlava { font-weight:600; font-size:13px; }
+  .ares-txt { margin-top:4px; }
+  .ares-txt.varovne { color:#7f1d1d; }
+  .ares-btns { display:flex; gap:8px; flex-wrap:wrap; margin-top:9px; }
+  .ares-tab { border-collapse:collapse; margin-top:8px; width:100%; font-size:12px; }
+  .ares-tab th, .ares-tab td { border:1px solid #cfe0f5; padding:3px 7px; text-align:left; vertical-align:top; }
+  .ares-tab th { background:#e2edfb; font-weight:600; }
+  .ares-tab td.stara { color:#64748b; }
+  .ares-tab td.nova { font-weight:600; }
+  .ares-zdroj { margin-top:8px; font-size:11px; opacity:.8; }
+  /* #37 – interní zápisník zakázky. Vědomě jiná barva než dokumenty:
+     tohle je vnitřní poznámkový blok, ne nic, co jde ven k zákazníkovi. */
+  .pozn-zapis { background:#f8fafc; border:1px solid var(--line); border-radius:8px; padding:9px 11px; }
+  .pozn-seznam { list-style:none; margin:10px 0 0; padding:0; }
+  .pozn-radek { border-top:1px solid var(--line); padding:8px 2px; }
+  .pozn-radek:first-child { border-top:0; }
+  .pozn-radek.smazana { opacity:.55; }
+  .pozn-radek.smazana .pozn-text { text-decoration:line-through; }
+  .pozn-hlava { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+  .pozn-druh { font-size:11px; font-weight:700; letter-spacing:.02em; text-transform:uppercase;
+    border-radius:999px; padding:2px 9px; background:#e2e8f0; color:#334155; }
+  .pozn-druh.d-sleva { background:#fef3c7; color:#78350f; }
+  .pozn-druh.d-obchod { background:#dbeafe; color:#1e3a8a; }
+  .pozn-druh.d-technika { background:#e0e7ff; color:#3730a3; }
+  .pozn-druh.d-termin { background:#fee2e2; color:#7f1d1d; }
+  .pozn-kdy { font-size:11.5px; color:var(--mut); }
+  .pozn-upr { font-style:italic; }
+  .pozn-ovl { margin-left:auto; display:flex; gap:5px; }
+  .pozn-text { margin-top:4px; font-size:13px; line-height:1.55; white-space:normal; }
+  .pozn-stopa { margin-top:4px; font-size:11.5px; color:var(--mut); }
+  .pozn-prilohy { list-style:none; margin:5px 0 0; padding:0; }
+  .pozn-priloha { display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    border-top:1px solid var(--line); padding:5px 2px; font-size:12.5px; }
+  .pozn-priloha:first-child { border-top:0; }
+  .pozn-priloha .nazev { font-weight:600; }
+  .pozn-priloha .vel, .pozn-priloha .kdy { color:var(--mut); font-size:11.5px; }
+  .pozn-priloha .ovl { margin-left:auto; display:flex; gap:5px; }
+  @media print { .pozn-zapis, .pozn-seznam, .pozn-prilohy { display:none !important; } }
+  /* #41 – protokol o kalkulaci. Záměrně tlumený, skoro jako výpis stroje:
+     není to místo k práci, ale doklad, do kterého se chodí zpětně. */
+  .prot-seznam { list-style:none; margin:8px 0 0; padding:0; }
+  .prot-radek { border-top:1px solid var(--line); padding:6px 2px; font-size:12.5px; }
+  .prot-radek:first-child { border-top:0; }
+  .prot-hlava { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .prot-kde { font-size:11px; font-weight:700; letter-spacing:.02em; text-transform:uppercase;
+    border-radius:999px; padding:2px 9px; background:#eef2f7; color:#475569; }
+  .prot-radek.citlivy .prot-kde { background:#fef3c7; color:#78350f; }
+  .prot-var { font-size:11.5px; color:#1e3a8a; background:#dbeafe; border-radius:999px; padding:1px 8px; }
+  .prot-kdy { margin-left:auto; font-size:11.5px; color:var(--mut); }
+  .prot-co { margin-top:3px; line-height:1.5; }
+  .prot-hod { white-space:nowrap; }
+  .prot-hod .pred { color:var(--mut); text-decoration:line-through; }
+  .prot-hod .sip { color:var(--mut); }
+  .prot-hod .po { font-weight:600; }
+  .prot-hod.skryto { color:var(--mut); font-style:italic; text-decoration:none; }
+  @media print { .prot-seznam { display:none !important; } }
+  /* původ varianty převzaté z archivu – řádek v hlavičce kalkulace */
+  .zak-puvod { margin-top:8px; font-size:12px; color:var(--mut); background:#f3f6fa;
+    border:1px solid var(--line); border-radius:8px; padding:6px 10px; }
+  /* ZAK-2 – porovnání variant vedle sebe (jen čtení) */
+  .portbl { border-collapse:collapse; min-width:100%; }
+  .portbl th, .portbl td { border:1px solid var(--line); padding:5px 9px; text-align:right; white-space:nowrap; }
+  .portbl th.lbl { text-align:left; font-weight:600; background:#fafbfd; white-space:normal; min-width:220px; }
+  .portbl tr:first-child th { text-align:center; background:#eef2f8; white-space:normal; }
+  .portbl th.ridici, .portbl td.ridici { background:#f2f6ff; }
+  .portbl th.rozdil, .portbl td.rozdil { color:var(--mut); font-size:12px; }
+  .portbl tr.hlavni td, .portbl tr.hlavni th { font-weight:700; background:#eaf0ff; }
+  .portbl tr.pozn td, .portbl tr.pozn th.lbl { color:var(--mut); font-style:italic; }
+  .portbl .tag { font-size:11px; font-weight:400; color:#1d4ed8; }
+  .portbl .note { font-weight:400; font-size:11px; white-space:normal; }
+  .pos { color:#15803d; }
+  /* ZAK-2b – detail konkrétních položek, které se mezi variantami liší */
+  .pordet { border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin-bottom:10px; background:#fbfcfe; }
+  .pordet > summary { cursor:pointer; list-style:none; padding:2px 0; }
+  .pordet > summary::-webkit-details-marker { display:none; }
+  .pordet > summary::before { content:'▸ '; color:var(--mut); }
+  .pordet[open] > summary::before { content:'▾ '; }
+  .stav { display:inline-block; font-size:11px; font-weight:600; padding:1px 7px; border-radius:10px; white-space:nowrap; }
+  .stav.pridano { background:#e7f6ec; color:#15803d; }
+  .stav.odebrano { background:#fdeaea; color:#b91c1c; }
+  .stav.zmeneno { background:#fff4e0; color:#a15c00; }
+  .stav.shodne { background:#eef1f6; color:var(--mut); }
+  .poltbl th.lbl { min-width:260px; }
+  .poltbl td.stavc { text-align:left; }
+  .poltbl td, .poltbl th { font-size:12px; }
+  .poltbl thead th::first-letter { text-transform:uppercase; }
+  .poltbl tr.skup th { text-align:left; background:#eef2f8; font-weight:700; }
+  .poltbl tr.st-pridano td { background:#f6fcf8; }
+  .poltbl tr.st-odebrano td { background:#fefafa; }
+  .poltbl td.lbl { text-align:left; white-space:normal; }
+  @media print {
+    header, .tabs, .btns, .inputs, .note, .card h2::before, button, .noprint { display:none !important; }
+    .layout, .kalk-grid { grid-template-columns:1fr; padding:0; }
+    /* Interní karty nepatří do tisku. V OCK sedí sleva + zaokrouhlení + nabídka
+     * uvnitř #kalk-nabidka; v PROJ jsou to samostatné karty, takže se musí
+     * vyjmenovat – jinak tisk ze záložky PROJ vynese marži po slevě a stropy
+     * rolí (audit 1. 8. 2026, N7). */
+    .zak-bar, #kalk-nabidka, #proj-sleva, #proj-zaokr, #proj-nabidka { display:none !important; }
+    body { background:#fff; }
+    .card, .spec-doc, .kl-doc, .dv-krok { break-inside:avoid; border:none; }
+    .spec-doc, .kl-doc { padding:0; max-width:none; }
+    .spec-row, .kl-row { grid-template-columns: 300px 1fr; }
+    .spec-row .src, .kl-row .src { display:none; }
+    .spec-row input[type=text], .spec-row select, .kl-row input, .kl-row textarea { border:none; padding:2px 0; -webkit-appearance:none; appearance:none; }
+    .modal-overlay { display:none !important; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Kalkulačka __VERZE__</h1>
+  <span class="ver">OCK dle šablony VZOR v1.00 / v22.7.1 · PROJ dle interního vzoru · <span id="rezimPill" class="pill warn">výpočet: 1:1 jako Excel (vč. jeho chyb)</span></span>
+  <span class="sp"></span>
+  <div class="btns">
+    <!-- Zpět/Znovu jsou jediná tlačítka hlavičky, která se používají pořád –
+         proto jsou od 4. 8. 2026 světlá a výrazná (zadání: „Z horní lišty
+         odstraň 3 světlá tlačítka a zvýrazni nějak zpět a znovu"). Uložit
+         zakázku, Načíst a Tisk / PDF z hlavičky zmizely; tisk je u každého
+         dokumentu vlastním tlačítkem. Uložení zakázky do databáze obstarává
+         od 4. 8. 2026 trojice „Uložit zakázku / Načíst zakázku / Nová
+         zakázka" na začátku lišty v Kalkulaci OCK i PROJ; záloha do souboru
+         zůstala na záložce Přehled cenových nabídek jako „Uložit do souboru
+         (JSON)" / „Načíst ze souboru". -->
+    <button id="btnHistZpet" class="hist jsHistZpet" disabled onclick="historieZpet()"
+      title="Vrátit poslední změnu (Ctrl+Z)">↶ Zpět</button>
+    <button id="btnHistZnovu" class="hist jsHistZnovu" disabled onclick="historieZnovu()"
+      title="Vrátit zpět vrácenou změnu (Ctrl+Y)">↷ Znovu</button>
+    <span id="autoStav"></span>
+    <!-- Vstup zůstává v dokumentu: „Načíst zakázku" na záložce Přehled
+         cenových nabídek na něj klikne za uživatele. -->
+    <input type="file" id="fileIn" accept=".json" style="display:none" onchange="nactiZakazku(event)">
+    <button id="btnZpetAdmin" onclick="nastSetAdmin(true)">← Ukončit náhled uživatele</button>
+    <!-- pravý horní roh: kdo je přihlášený + Změnit heslo + Odhlásit (4. 8. 2026) -->
+    <span id="onlineLista" class="online-lista"></span>
+    <button id="btnNastaveni" class="gear admin-only" title="Nastavení (jen administrátor)" onclick="otevriNastaveni()">⚙</button>
+  </div>
+</header>
+
+<div id="obnovaLista" class="noprint"></div>
+<div id="zapisLista" class="noprint"></div>
+<div id="ukazkoveLista" class="noprint"></div>
+<div id="buildLista" class="noprint"></div>
+<div id="zamekLista" class="noprint"></div>
+
+<nav class="tabs">
+  <button id="tab-kalk" class="act" onclick="prepniTab('kalk')">Kalkulace OCK</button>
+  <button id="tab-detail" onclick="prepniTab('detail')">Detail výpočtu</button>
+  <button id="tab-spec" onclick="prepniTab('spec')">Technická specifikace OCK</button>
+  <button id="tab-specdata" class="admin-only" onclick="prepniTab('specdata')">Technická specifikace OCK Data</button>
+  <button id="tab-kryci" onclick="prepniTab('kryci')">Krycí list zakázky OCK</button>
+  <button id="tab-proj" onclick="prepniTab('proj')">Kalkulace PROJ</button>
+  <button id="tab-kryciproj" onclick="prepniTab('kryciproj')">Krycí list zakázky PROJ</button>
+  <button id="tab-cenik" onclick="prepniTab('cenik')">Ceník nákladů OCK</button>
+  <button id="tab-cenikproj" onclick="prepniTab('cenikproj')">Ceník nákladů PROJ</button>
+  <button id="tab-zakazka" onclick="prepniTab('zakazka')">Přehled cenových nabídek</button>
+</nav>
+
+<!-- Rozvržení OCK (zadání 3. 8. 2026): boční sloupec zrušen — Zadání šachty,
+     Dimenze profilů a Práce a režie stojí v hlavním sloupci mezi souhrnem
+     a Cenovou kalkulací, vše na plnou šířku jako v kalkulaci PROJ. -->
+<div class="page" id="page-kalk">
+  <div id="kalk-hlavicka"></div>
+  <div id="kalk-souhrn"></div>
+  <div class="inputs" id="inputs"></div>
+  <div class="outputs" id="outputs"></div>
+  <div id="kalk-nabidka" style="margin-top:2px"></div>
+</div>
+<div class="page" id="page-detail" style="display:none"></div>
+<div class="page" id="page-spec" style="display:none"></div>
+<div class="page" id="page-specdata" style="display:none"></div>
+<div class="page" id="page-kryci" style="display:none"></div>
+<div class="page" id="page-proj" style="display:none"></div>
+<div class="page" id="page-kryciproj" style="display:none"></div>
+<div class="page narrow" id="page-cenik" style="display:none"></div>
+<div class="page narrow" id="page-cenikproj" style="display:none"></div>
+<div class="page narrow" id="page-zakazka" style="display:none"></div>
+
+<div id="nastaveni-overlay" class="modal-overlay" style="display:none" onclick="if(event.target===this)zavriNastaveni()">
+  <div class="modal" id="nastaveni-panel"></div>
+</div>
+
+<!-- #17 – nahlédnutí do uložených zakázek a převzetí historické kalkulace -->
+<div id="archiv-overlay" class="modal-overlay" style="display:none" onclick="if(event.target===this)zavriArchiv()">
+  <div class="modal" id="archiv-panel"></div>
+</div>
+
+<!-- Databáze zakázek ve vybrané složce (mezikrok před online úložištěm) -->
+<div id="uloziste-overlay" class="modal-overlay" style="display:none" onclick="if(event.target===this)zavriUloziste()">
+  <div class="modal" id="uloziste-panel"></div>
+</div>
+
+<!-- databáze programu – verze ceníku ve složce -->
+<div id="program-overlay" class="modal-overlay" style="display:none" onclick="if(event.target===this)zavriProgram()">
+  <div class="modal" id="program-panel"></div>
+</div>
+<!-- online databáze – zakázky na serveru a správa účtů (4. 8. 2026) -->
+<div id="online-overlay" class="modal-overlay" style="display:none" onclick="if(event.target===this)zavriOnline()">
+  <div class="modal" id="online-panel"></div>
+</div>
+<!-- změna vlastního hesla (vyžaduje staré heslo) -->
+<div id="heslo-overlay" class="modal-overlay" style="display:none" onclick="if(event.target===this)zavriZmenaHesla()">
+  <div class="modal" id="heslo-panel" style="max-width:460px"></div>
+</div>
+<!-- Přihlašovací stránka: nad http(s) zakrývá aplikaci, dokud se nikdo
+     nepřihlásí. Ze souboru (dvojklik, nouzovka) se nikdy neukáže. -->
+<div id="prihlaseni-overlay" class="prihlaseni-overlay" style="display:none">
+  <div class="prihlaseni-box" id="prihlaseni-box"></div>
+</div>
+<!-- #35 – rozdíly mezi ceníkem varianty a ceníkem dnešního sestavení -->
+<div id="prepocet-overlay" class="modal-overlay" style="display:none" onclick="if(event.target===this)zavriPrepocet()">
+  <div class="modal" id="prepocet-panel"></div>
+</div>
+
+<script>
+/*__CORE__*/
+const JEKLY = /*__JEKLY__*/;
+</script>
+<script>
+/*__UI__*/
+</script>
+</body>
+</html>
