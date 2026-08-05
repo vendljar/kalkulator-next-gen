@@ -131,9 +131,21 @@ function uloHlavickaVyplnena(zak) {
   return uloHlavickaChybi(zak, 'ock').length === 0 || uloHlavickaChybi(zak, 'proj').length === 0;
 }
 
+/* Čas posledního uložení jako „HH:MM". Nečitelný nebo chybějící čas vrací
+ * prázdno — v liště je lepší čas neuvést než uvést vymyšlený; obchodník se
+ * podle něj rozhoduje, jestli může zavřít notebook. */
+function uloCasHhMm(kdy) {
+  if (kdy == null || kdy === '') return '';
+  const d = (kdy instanceof Date) ? kdy : new Date(kdy);
+  if (isNaN(d.getTime())) return '';
+  const dv = n => (n < 10 ? '0' : '') + n;
+  return dv(d.getHours()) + ':' + dv(d.getMinutes());
+}
+
 /* Vstup: { zakazka, ulozeno (jméno souboru v databázi, '' = ještě nikdy),
- *          zmeneno (čeká neuložená změna), prihlasen, dostupne }
- * Výstup: { stav, text, muzeSam, chybi }
+ *          zmeneno (čeká neuložená změna), prihlasen, dostupne,
+ *          kdy (čas posledního úspěšného uložení; smí chybět) }
+ * Výstup: { stav, text, muzeSam, chybi, cas }
  *
  * `muzeSam` je jediné svolení k samočinnému zápisu. `blokuje` se úmyslně
  * nevrací – KONTROLY_UROVEN = 2 znamená informovat, ne zavírat cestu
@@ -146,25 +158,27 @@ function uloUlozeniStav(vstup) {
   const chybiProj = uloHlavickaChybi(zak, 'proj');
   const vyplneno = chybi.length === 0 || chybiProj.length === 0;
   const nejmensi = chybi.length <= chybiProj.length ? chybi : chybiProj;
+  const cas = uloCasHhMm(v.kdy);
 
   if (!v.dostupne)
-    return { stav: 'nedostupne', muzeSam: false, chybi: nejmensi,
+    return { stav: 'nedostupne', muzeSam: false, chybi: nejmensi, cas,
       text: 'Zakázka není v databázi – aplikace neběží proti serveru. '
         + 'Uložte ji do souboru, ať o práci nepřijdete.' };
   if (!v.prihlasen)
-    return { stav: 'neprihlasen', muzeSam: false, chybi: nejmensi,
+    return { stav: 'neprihlasen', muzeSam: false, chybi: nejmensi, cas,
       text: 'Zakázka se do databáze neukládá – nejste přihlášeni. Přihlaste se na záložce Zakázka.' };
   if (ulozeno && !v.zmeneno)
-    return { stav: 'ulozeno', muzeSam: true, chybi: nejmensi,
-      text: 'Uloženo v databázi jako ' + ulozeno + '.' };
+    return { stav: 'ulozeno', muzeSam: true, chybi: nejmensi, cas,
+      text: 'Uloženo v databázi jako ' + ulozeno + (cas ? ' v ' + cas : '') + '.' };
   if (ulozeno)
-    return { stav: 'ceka', muzeSam: true, chybi: nejmensi,
-      text: 'Změny se za chvíli uloží samy do databáze (' + ulozeno + ').' };
+    return { stav: 'ceka', muzeSam: true, chybi: nejmensi, cas,
+      text: 'Změny se za chvíli uloží samy do databáze (' + ulozeno + ')'
+        + (cas ? '; naposledy uloženo v ' + cas : '') + '.' };
   if (!vyplneno)
-    return { stav: 'vyplnit', muzeSam: false, chybi: nejmensi,
+    return { stav: 'vyplnit', muzeSam: false, chybi: nejmensi, cas,
       text: 'Zakázka ještě není v databázi. Vyplňte v hlavičce: ' + nejmensi.join(', ')
         + ' – pak zakázku uložte (dál už se ukládá sama).' };
-  return { stav: 'ulozit', muzeSam: true, chybi: nejmensi,
+  return { stav: 'ulozit', muzeSam: true, chybi: nejmensi, cas,
     text: 'Zakázka ještě není v databázi – uložte ji. Dál se bude ukládat sama po každé změně.' };
 }
 
@@ -393,6 +407,7 @@ if (typeof module !== 'undefined')
                      uloNorm, uloSlova, uloCisloVyplneno, uloKlicSouboru,
                      uloJmenoSouboru, uloJeZakazkovySoubor,
                      ULO_HLAVICKA_POLE, uloHlavickaChybi, uloHlavickaVyplnena, uloUlozeniStav,
+                     uloCasHhMm,
                      ULO_ZALOHA_STARI_DNI, uloZalohaStariDni, uloZalohaRozhodni,
                      uloRazitkoNove, uloRazitko, uloKolize,
                      uloRejstrikZaznam, uloRejstrikNormalizuj, uloRejstrikSloucit,

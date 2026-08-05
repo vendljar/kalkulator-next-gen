@@ -113,6 +113,25 @@ test('uložená zakázka beze změn = stav „ulozeno"', ulozeno.stav === 'uloze
 test('věta o uložené zakázce nese jméno souboru',
   ulozeno.text.includes('2026-OPR-CN-0500.json'), ulozeno.text);
 
+/* „Uloženo v 14:32" — bez času vypadá lišta celý den stejně a obchodník
+ * z ní nepozná, jestli se poslední úprava opravdu dostala na server, nebo
+ * jestli tam visí věta z rána. Čas je to jediné, co tenhle rozdíl ukáže. */
+const KDY = new Date('2026-08-05T14:32:07');
+const sCasem = st({ ulozeno: '2026-OPR-CN-0500.json', zmeneno: false, kdy: KDY });
+test('věta o uložené zakázce nese čas uložení', /14:32/.test(sCasem.text), sCasem.text);
+test('čas se vrací i samostatně (pro lištu)', sCasem.cas === '14:32', sCasem.cas);
+test('bez známého času se žádný čas nevymýšlí',
+  ulozeno.cas === '' && !/\d\d:\d\d/.test(ulozeno.text), ulozeno.text);
+test('nečitelný čas model neshodí a jen se vynechá',
+  st({ ulozeno: 'x.json', zmeneno: false, kdy: 'nesmysl' }).cas === '');
+test('čas jde přijmout i jako text z ISO', st({ ulozeno: 'x.json', zmeneno: false,
+  kdy: '2026-08-05T14:32:07' }).cas === '14:32');
+/* Čekající změna má čas ukázat taky – „naposledy uloženo v 14:32" je přesně
+ * ta informace, kterou člověk hledá, když si není jistý, co se stihlo uložit. */
+const cekaSCasem = st({ ulozeno: '2026-OPR-CN-0500.json', zmeneno: true, kdy: KDY });
+test('čekající změna nese čas posledního uložení', /14:32/.test(cekaSCasem.text), cekaSCasem.text);
+test('čekající změna pořád říká, že se uloží sama', /sam/i.test(cekaSCasem.text), cekaSCasem.text);
+
 const prazdnaUlozena = st({ zakazka: prazdna, ulozeno: '2026-OPR-CN-0500.json', zmeneno: true });
 test('už uložená zakázka se ukládá samo i s vyprázdněnou hlavičkou',
   prazdnaUlozena.muzeSam === true);

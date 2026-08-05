@@ -125,7 +125,11 @@
   /* role běžného uživatele: skryté prvky jen pro admina */
   body.role-user .admin-only { display:none !important; }
   #btnZpetAdmin { display:none; background:#b45309; border-color:#b45309; color:#fff; }
-  body.role-user #btnZpetAdmin { display:inline-block; }
+  /* Návrat z náhledu se nabízí jen tomu, kdo se do náhledu má jak vrátit,
+     tedy skutečnému administrátorovi (třída `muze-admin` se nastavuje
+     v render() podle role ze serveru). Do 5. 8. 2026 stačilo `role-user`
+     a tlačítko svítilo i obchodníkovi — jeden klik a měl otevřené ceníky. */
+  body.role-user.muze-admin #btnZpetAdmin { display:inline-block; }
   /* ochrana rozpracované práce (#1): Zpět/Znovu, stav zálohy, lišta obnovy */
   /* Zpět/Znovu jsou po úklidu hlavičky (4. 8. 2026) jediná pracovní tlačítka
      nahoře – a zároveň jediná pojistka proti ztrátě rozdělané práce. Dokud
