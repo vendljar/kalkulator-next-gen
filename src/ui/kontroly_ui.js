@@ -49,6 +49,10 @@ function kontrolyCtxAkt() {
      * ne ve vnořeném objektu – viz novaZakazka() v zakazka.js. */
     zak: (typeof ZAK !== 'undefined') ? ZAK : null,
     zaokr: (typeof ZO !== 'undefined') ? ZO : null,
+    /* Od 4. 8. 2026 má PROJ vlastní obchodní zaokrouhlení (#38); kontroly
+     * marže musí počítat s tím, které opravdu odejde v nabídce PROJ. */
+    zaokrProj: (typeof ZOP !== 'undefined' && ZOP) ? ZOP
+                 : (typeof ZO !== 'undefined' ? ZO : null),
   };
 }
 

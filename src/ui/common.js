@@ -6,7 +6,7 @@
  * změna přes set() se ukládá rovnou do varianty. */
 
 let ZAK = novaZakazka();
-let Z, C, OCK, PJ, PC, TS, KL, KLP, SL, ZO;
+let Z, C, OCK, PJ, PC, TS, KL, KLP, SL, ZO, ZOP;
 
 function syncVarianta() {
   const v = aktivniVarianta(ZAK);
@@ -20,10 +20,15 @@ function syncVarianta() {
   // novaVariantaData(); chybí-li pole úplně, jde o zakázku uloženou ještě
   // před #38 – té se cena otevřením v novější verzi měnit nesmí, proto
   // vypnuto, ne výchozí nastavení.
+  // Od 4. 8. 2026 má každá část nabídky vlastní nastavení (ZO = výtahová
+  // šachta, ZOP = projekční práce). Variantě, která zná jen společné pole,
+  // se dosadí dosavadní hodnota do obou – cena se rozdělením nemění.
   if (!v.data.zaokr) v.data.zaokr = zaokrVypnuto();
+  zaokrZajisti(v.data);
   OCK = v.data.ock; Z = v.data.ock.zadani; C = v.data.cenik;
   PJ = v.data.proj.zadani; PC = v.data.proj.cenik; TS = v.data.techspec;
-  KL = v.data.kryci; KLP = v.data.kryciProj; SL = v.data.sleva; ZO = v.data.zaokr;
+  KL = v.data.kryci; KLP = v.data.kryciProj; SL = v.data.sleva;
+  ZO = v.data.zaokr; ZOP = v.data.zaokrProj;
   // trvalé (katalogové) položky ceníku → do zadání; idempotentní, páruje přes kid
   katalogAplikuj(KATALOG, Z);
 }

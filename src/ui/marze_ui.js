@@ -32,10 +32,15 @@ function marzePrehledAkt() {
   let ock = null, proj = null;
   try { ock = vypocet(Z, C, JEKLY, OCK.fixes); } catch (e) {}
   try { proj = vypocetProj(PJ, PC); } catch (e) {}
-  /* ZO (#38): hlídá se marže z ceny po obchodním zaokrouhlení, tedy z toho,
-   * co zákazník opravdu zaplatí – zaokrouhlením dolů se marže reálně snižuje. */
+  /* ZO/ZOP (#38): hlídá se marže z ceny po obchodním zaokrouhlení, tedy z toho,
+   * co zákazník opravdu zaplatí – zaokrouhlením dolů se marže reálně snižuje.
+   * Od 4. 8. 2026 má každá část vlastní nastavení: ZO = výtahová šachta,
+   * ZOP = projekční práce. Kdyby ZOP z jakéhokoli důvodu nebyl, spadne se na
+   * ZO – tedy na chování před rozdělením. */
   return marzePrehled(ock, proj, typeof SL !== 'undefined' ? SL : null, NAST,
-                      typeof ZO !== 'undefined' ? ZO : null);
+                      typeof ZO !== 'undefined' ? ZO : null,
+                      (typeof ZOP !== 'undefined' && ZOP) ? ZOP
+                        : (typeof ZO !== 'undefined' ? ZO : null));
 }
 
 /* cast: 'ock' | 'proj' | '' (celá nabídka) */

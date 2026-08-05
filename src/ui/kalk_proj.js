@@ -100,7 +100,7 @@ function renderProj() {
   /* Koncovou cenu skládá zaokrouhleni.js (#38) – hlavička i souhrn musí ukazovat
    * totéž číslo, které pak odejde v nabídce. Ceny jednotlivých činností se
    * nezaokrouhlují, jen jejich součet; rozdíl je proto vidět vlastním řádkem. */
-  const cnp = (typeof cenaNabidkyProj === 'function') ? cenaNabidkyProj(r, ZO) : null;
+  const cnp = (typeof cenaNabidkyProj === 'function') ? cenaNabidkyProj(r, ZOP) : null;
   const projCena = cnp ? cnp.cena : r.souhrn.celkem;
   const projZaokr = cnp ? cnp.zaokrKc : 0;
 
@@ -299,7 +299,7 @@ function renderProj() {
     <tr class="tot"><td>CELKEM</td><td>${fmt(r.souhrn.naklad)}</td><td>${fmt(r.souhrn.marze)}</td><td>${fmt(r.souhrn.doprava)}</td>
       <td>${fmt(r.souhrn.cena)}</td><td>${fmt(r.souhrn.sleva)}</td><td><b>${fmt0(r.souhrn.celkem)}</b></td></tr>
     ${projZaokr && typeof zaokrKc === 'function' ? `
-    <tr><td colspan="6">Obchodní zaokrouhlení${typeof zaokrStav === 'function' && zaokrStav(r.souhrn.celkem, ZO).popis ? ' (' + esc(zaokrStav(r.souhrn.celkem, ZO).popis) + ')' : ''}</td>
+    <tr><td colspan="6">Obchodní zaokrouhlení${typeof zaokrStav === 'function' && zaokrStav(r.souhrn.celkem, ZOP).popis ? ' (' + esc(zaokrStav(r.souhrn.celkem, ZOP).popis) + ')' : ''}</td>
       <td>${esc(zaokrKc(projZaokr))}</td></tr>
     <tr class="tot"><td colspan="6">CENA NABÍDKY PROJ</td><td><b>${fmt0(projCena)}</b></td></tr>` : ''}
   </table>`;
@@ -313,9 +313,16 @@ function renderProj() {
        ${marzeLista({ cast: 'proj' })}</div></div>` +
     card('Cenová kalkulace PROJ', kalkulace, false, 'proj-kalkulace') +
     /* Sleva a obchodní zaokrouhlení stojí hned pod výpočtem, přesně jako
-     * v Kalkulaci OCK (zadání 1. 8. 2026). Jsou to TYTÉŽ karty se stejným
-     * stavem (SL, ZO) – jen vykreslené podruhé s vlastní kotvou. Druhá sada
-     * polí by znamenala dvě politiky nad jednou zakázkou. */
+     * v Kalkulaci OCK (zadání 1. 8. 2026). Ty dvě karty se ale od 4. 8. 2026
+     * chovají různě:
+     *   • SLEVA zůstává jedna schvalovací politika nad celou zakázkou –
+     *     karta se vykresluje podruhé jen s vlastní kotvou, stav je týž (SL).
+     *     Druhá sada polí by znamenala dvě politiky nad jednou zakázkou.
+     *   • ZAOKROUHLENÍ je naopak rozdělené: tady se nastavuje výhradně cena
+     *     projekčních prací (stav ZOP), cena výtahové šachty se nastavuje
+     *     v Kalkulaci OCK (stav ZO). Zadání ze 4. 8. 2026: „do kalkulace ock
+     *     patří pouze část týkající se výtahové šachty, část týkající se
+     *     projekčních prací pak patří do sekce kalkulace proj." */
     (typeof slevaKarta === 'function' ? slevaKarta('proj') : '') +
     (typeof zaokrKarta === 'function' ? zaokrKarta('proj') : '') +
     card('Souhrn projekčních prací', souhrnTbl, false, 'proj-souhrn') +
