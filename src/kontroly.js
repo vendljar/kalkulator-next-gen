@@ -71,7 +71,10 @@ function kontrolyMarze(ctx) {
     /* Zakázka jen projekce (2. 8. 2026): OCK se neprodává, takže jeho čísla
      * do marže nabídky nepatří — jinak by nepoužité zadání OCK tahalo celek. */
     try { p = marzePrehled(ctx.jenProj ? null : ctx.vysledek, ctx.projVysledek,
-                           ctx.jenProj ? null : ctx.sleva, ctx.nast, ctx.zaokr); }
+                           ctx.jenProj ? null : ctx.sleva, ctx.nast, ctx.zaokr,
+                           /* PROJ má od 4. 8. 2026 vlastní zaokrouhlení; kontext
+                            * bez něj se chová jako dřív (jedno pro obě části). */
+                           ctx.zaokrProj === undefined ? ctx.zaokr : ctx.zaokrProj); }
     catch (e) { p = null; }
   }
   try { ctx.__marze = p; } catch (e) { /* zmrazený kontext – nevadí */ }

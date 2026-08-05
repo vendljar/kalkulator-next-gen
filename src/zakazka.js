@@ -22,7 +22,11 @@ function novaVariantaData() {
     kryciProj: { hodnoty: {} },   // krycí list zakázky PROJ – ruční pole (prefill z Kalkulace PROJ)
     // #38: obchodní zaokrouhlení se nové variantě dosazuje ROVNOU, aby šlo
     // poznat zakázku uloženou před #38 (té pole chybí a zůstane vypnuté).
+    // Od 4. 8. 2026 má každá část nabídky vlastní nastavení: zaokr = výtahová
+    // šachta (OCK), zaokrProj = projekční práce. Obě začínají stejně, ale
+    // obchodník je může vést zvlášť – přesně jako slevu a sazbu DPH.
     zaokr: (typeof zaokrDefault === 'function') ? zaokrDefault() : { krok: 100, smer: 'nahoru' },
+    zaokrProj: (typeof zaokrDefault === 'function') ? zaokrDefault() : { krok: 100, smer: 'nahoru' },
   };
 }
 
@@ -235,6 +239,11 @@ function importZakazka(obj) {
       if (typeof kryciMigraceZadrzne === 'function') kryciMigraceZadrzne(d.kryci.hodnoty);
       if (!d.kryciProj) d.kryciProj = { hodnoty: {} };   // migrace: krycí list PROJ přibyl později
       if (!d.kryciProj.hodnoty) d.kryciProj.hodnoty = {};
+      /* Migrace 4. 8. 2026: obchodní zaokrouhlení se rozdělilo na část OCK
+       * a část PROJ. Starší varianta má jen společné pole – zaokrZajisti()
+       * ho do obou dosadí, takže se cena nezmění ani o korunu. Guard kvůli
+       * Node testům, které zakazka.js načítají bez zaokrouhleni.js. */
+      if (typeof zaokrZajisti === 'function') zaokrZajisti(d);
       /* Migrace rolí (zjednodušení 2. 8. 2026): role u slevy se převádí jen
        * u NEZAMČENÝCH variant — zamčená nabídka je doklad a zůstává, jak
        * odešla (jméno role v ní je historie, ne aktivní oprávnění). */
@@ -340,7 +349,12 @@ function porovnaniVariant(zak, vypocty, opts) {
     /* Obchodní zaokrouhlení (#38) se počítá stejnou funkcí jako v nabídce,
      * jinak by porovnání ukazovalo jiná čísla než dokumenty. Chybí-li modul
      * (starší test bez něj), cena zůstává nezaokrouhlená. */
-    const zaokrouhliCenu = x => (typeof zaokrouhli === 'function') ? zaokrouhli(x, d.zaokr) : x;
+    /* Od 4. 8. 2026 má každá část vlastní nastavení; u starších variant
+     * zaokrProjZ() spadne na dosavadní společné pole, takže se porovnání
+     * u archivních zakázek nezmění. */
+    const zaokrOck = x => (typeof zaokrouhli === 'function') ? zaokrouhli(x, d.zaokr) : x;
+    const zaokrProj = x => (typeof zaokrouhli === 'function')
+      ? zaokrouhli(x, (typeof zaokrProjZ === 'function') ? zaokrProjZ(d) : d.zaokr) : x;
     let zaokrCelkem = null;
 
     /* Zakázka jen projekce (2. 8. 2026): část OCK se neporovnává a chybějící
@@ -354,7 +368,7 @@ function porovnaniVariant(zak, vypocty, opts) {
       h.slevaPct = p;
       h.slevaKc = s.zakladCena * p;
       const ockPred = s.zakladCena - h.slevaKc;
-      h.ockPoSleve = zaokrouhliCenu(ockPred);
+      h.ockPoSleve = zaokrOck(ockPred);
       zaokrCelkem = (zaokrCelkem || 0) + (h.ockPoSleve - ockPred);
       h.ockNaklad = s.zakladNaklad;
       h.marzeKc = h.ockPoSleve - s.zakladNaklad;
@@ -366,7 +380,7 @@ function porovnaniVariant(zak, vypocty, opts) {
 
     if (c.proj && c.proj.souhrn) {
       const projPred = c.proj.souhrn.celkem;
-      h.projCelkem = zaokrouhliCenu(projPred);
+      h.projCelkem = zaokrProj(projPred);
       zaokrCelkem = (zaokrCelkem || 0) + (h.projCelkem - projPred);
     } else {
       h.projCelkem = null;

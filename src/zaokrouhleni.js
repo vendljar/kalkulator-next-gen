@@ -23,7 +23,8 @@
  *    pole zaokr vůbec nemá, a její cena už mohla odejít zákazníkovi; té se
  *    proto v syncVarianta() dosazuje výslovně VYPNUTO (zaokrVypnuto), ne
  *    výchozí nastavení. Otevřením v novější verzi se stará cena nezmění.
- *    Nastavení žije u varianty (v.data.zaokr) a putuje s archivem.
+ *    Nastavení žije u varianty (v.data.zaokr pro OCK, v.data.zaokrProj pro
+ *    PROJ – viz zaokrZajisti níž) a putuje s archivem.
  *
  * 2) ROZDÍL JE VIDĚT JAKO VLASTNÍ ÚDAJ, ne schovaný ve slevě. Kdyby se
  *    rozpustil do slevy, nesedělo by uvedené procento; kdyby se neuvedl
@@ -74,6 +75,33 @@ function zaokrDefault() { return { krok: 100, smer: 'nahoru' }; }
  * zákazníkovi, takže otevřením v novější verzi se změnit NESMÍ – proto se
  * jim nedosazuje výchozí nastavení, ale výslovně vypnuto. */
 function zaokrVypnuto() { return { krok: 0, smer: 'dolu' }; }
+
+/* ---------- dvě nastavení, jedno pro každou část nabídky (4. 8. 2026) ----
+ * Do 4. 8. 2026 měla varianta JEDNO pole `zaokr` a platilo pro obě části.
+ * Bylo to v rozporu se vším ostatním, co je v aplikaci po částech: sleva OCK
+ * a sleva PROJ jsou oddělené, sazba DPH taky, hlavičky nabídek jsou dvě
+ * nezávislé sady. Zadání ze 4. 8. 2026 („do kalkulace ock patří pouze část
+ * týkající se výtahové šachty, část týkající se projekčních prací pak patří
+ * do sekce kalkulace proj") to srovnalo i tady: každá karta nastavuje jen
+ * svou vlastní cenu.
+ *
+ * Zpětná slučitelnost je tu důležitější než čistota. Varianta uložená dřív
+ * pole `zaokrProj` nemá – a její cena PROJ už mohla odejít zákazníkovi.
+ * Proto se PRO ČTENÍ spadne na společné `zaokr`: dokud nikdo nesáhne na
+ * přepínač, spočítá se přesně totéž číslo jako předtím. Teprve zaokrZajisti()
+ * (import, syncVarianta) obě pole rozdělí – opět dosazením dosavadní hodnoty,
+ * takže ani ten okamžik cenu nemění. */
+function zaokrOckZ(d) { return d ? (d.zaokr || null) : null; }
+function zaokrProjZ(d) { return d ? (d.zaokrProj || d.zaokr || null) : null; }
+
+/* Dorovná variantu na dvě pole. Volá se z importu i při přepnutí varianty;
+ * je idempotentní a nikdy nemění už nastavenou hodnotu. */
+function zaokrZajisti(d) {
+  if (!d) return d;
+  if (!d.zaokr) d.zaokr = zaokrVypnuto();
+  if (!d.zaokrProj) d.zaokrProj = { krok: zaokrKrok(d.zaokr), smer: zaokrSmer(d.zaokr) };
+  return d;
+}
 
 /* Čtení nastavení odolné vůči nesmyslům (text, záporné číslo, chybějící
  * objekt): raději nezaokrouhlit než zaokrouhlit nečekaně. */
@@ -184,4 +212,5 @@ function cenaSDph(cena, sazba) {
 if (typeof module !== 'undefined')
   module.exports = { ZAOKR_KROKY, ZAOKR_SMERY, zaokrDefault, zaokrVypnuto, zaokrKrok, zaokrSmer,
                      zaokrZapnuto, zaokrouhli, zaokrStav, zaokrKc, zaokrCastka,
-                     zaokrText, cenaNabidkyOck, cenaNabidkyProj, cenaSDph };
+                     zaokrText, cenaNabidkyOck, cenaNabidkyProj, cenaSDph,
+                     zaokrOckZ, zaokrProjZ, zaokrZajisti };

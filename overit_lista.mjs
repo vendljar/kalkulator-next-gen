@@ -797,25 +797,36 @@ ok('porovnání variant ukazuje tutéž cenu', z38zap.porovnani === Math.round(z
    z38zap.porovnani + ' vs ' + z38zap.nabidkova);
 ok('zaokrouhlení nic neblokuje – vstupy zůstávají živé', z38zap.vstupyZive);
 
+/* Od 4. 8. 2026 má PROJ VLASTNÍ nastavení (ZOP) – zadání: „do kalkulace ock
+ * patří pouze část týkající se výtahové šachty, část týkající se projekčních
+ * prací pak patří do sekce kalkulace proj." Krok se schválně volí jiný než
+ * u OCK (5 000 vs. 10 000), aby bylo poznat, když by některé místo sáhlo na
+ * cizí pole. */
 const z38proj = await p.evaluate(() => {
+  const ockPred = cenaNabidkyOck(vypocet(Z, C, JEKLY, OCK.fixes), SL, ZO).cena;
+  zaokrProjSetKrok(5000); zaokrProjSetSmer('dolu');
   const v = aktivniVarianta(ZAK);
   const r = vypocetProj(PJ, PC);
-  const cn = cenaNabidkyProj(r, ZO);
+  const cn = cenaNabidkyProj(r, ZOP);
   const np = nabidkaProjData(ZAK, v, 'cz');
   const cislo = s => +String(s).split(',')[0].replace(/[^\d-]/g, '');
-  return { cena: cn.cena, nasobek: cn.cena % 10000 === 0 || cn.cena === r.souhrn.celkem,
+  return { cena: cn.cena, nasobek: cn.cena % 5000 === 0,
+           ockNezmenena: cenaNabidkyOck(vypocet(Z, C, JEKLY, OCK.fixes), SL, ZO).cena === ockPred,
+           oddelene: ZOP.krok === 5000 && ZO.krok === 10000,
            souhrn: /CENA NABÍDKY PROJ/.test(document.getElementById('page-proj').innerText),
            dokument: cislo(np.placeholders.PROJ_CELKEM_BEZ_DPH),
            dokumentRadek: np.placeholders.PROJ_ZAOKROUHLENI_KC };
 });
-ok('PROJ se zaokrouhlí týmž nastavením', z38proj.nasobek, String(z38proj.cena));
+ok('PROJ se zaokrouhlí vlastním nastavením', z38proj.nasobek, String(z38proj.cena));
+ok('nastavení OCK a PROJ jsou oddělená', z38proj.oddelene);
+ok('změna zaokrouhlení PROJ nezmění cenu OCK', z38proj.ockNezmenena);
 ok('souhrn PROJ ukáže cenu nabídky zvlášť', z38proj.souhrn);
 ok('nabídka PROJ ukazuje tutéž cenu', Math.abs(z38proj.dokument - Math.round(z38proj.cena)) <= 1,
    z38proj.dokument + ' vs ' + z38proj.cena);
 ok('nabídka PROJ nese rozdíl vlastním řádkem', !!z38proj.dokumentRadek, z38proj.dokumentRadek);
 
 const z38zpet = await p.evaluate(() => {
-  zaokrSetKrok(0);
+  zaokrSetKrok(0); zaokrProjSetKrok(0);   // obě části zpět do výchozího stavu
   const r = vypocet(Z, C, JEKLY, OCK.fixes);
   return { cena: cenaNabidkyOck(r, SL, ZO).cena, zaklad: r.souhrn.zakladCena,
            radek: /obchodní zaokrouhlení/i.test(document.getElementById('outputs').innerText) };

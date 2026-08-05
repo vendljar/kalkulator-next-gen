@@ -291,7 +291,10 @@ function nabidkaProjData(zak, varianta, lang) {
    * součet sekcí uvedených v TÉTO nabídce (ne r.souhrn.celkem), aby dokument
    * dával součet sám v sobě; rozdíl se v rekapitulaci ukáže vlastním řádkem. */
   const celkemPred = NABIDKA_PROJ_SEKCE.reduce((a, k) => a + (cenaSekce(k) || 0), 0);
-  const celkemBezDph = (typeof zaokrouhli === 'function') ? zaokrouhli(celkemPred, d.zaokr) : celkemPred;
+  /* Nastavení si PROJ drží vlastní (4. 8. 2026) – u starších variant se
+   * zaokrProjZ spadne na dosavadní společné pole, takže se cena nemění. */
+  const zaokrP = (typeof zaokrProjZ === 'function') ? zaokrProjZ(d) : d.zaokr;
+  const celkemBezDph = (typeof zaokrouhli === 'function') ? zaokrouhli(celkemPred, zaokrP) : celkemPred;
   const zaokrKcNum = Math.round((celkemBezDph - celkemPred) * 100) / 100;
   /* #14 krok 1: DPH jedinou funkcí (záložka pro Node test bez zaokrouhleni.js) */
   const dphKc = (typeof cenaSDph === 'function')

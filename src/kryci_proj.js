@@ -174,7 +174,8 @@ function kryciProjCtx(zak, varianta) {
     r.sekce.forEach(s => { sekce[s.key] = { nazev: s.nazev, celkem: s.celkem }; });
     /* Stejná cena jako v nabídce PROJ, tj. po obchodním zaokrouhlení (#38);
      * ceny jednotlivých činností zůstávají nezaokrouhlené. */
-    const cn = (typeof cenaNabidkyProj === 'function') ? cenaNabidkyProj(r, d.zaokr) : null;
+    const cn = (typeof cenaNabidkyProj === 'function')
+      ? cenaNabidkyProj(r, (typeof zaokrProjZ === 'function') ? zaokrProjZ(d) : d.zaokr) : null;
     hodnota = kryciProjKc(cn ? cn.cena : r.souhrn.celkem);
     const oc = r.sekce.filter(s => s.celkem > 0);
     const ne = r.sekce.filter(s => !(s.celkem > 0));

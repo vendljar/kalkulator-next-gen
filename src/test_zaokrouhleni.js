@@ -140,8 +140,12 @@ test('chybí-li výpočet PROJ, nic se nehádá', zo.cenaNabidkyProj(null, null)
 /* Tohle je jádro testu: kdyby některý dokument zaokrouhlení minul, rozejdou
  * se čísla v nabídce, krycím listu a porovnání variant. */
 v.data.sleva = { procenta: 7, stav: 'schváleno', role: 'Jednatel' };
-v.data.zaokr = { krok: 1000, smer: 'dolu' };
+/* Od 4. 8. 2026 má každá část vlastní nastavení. Schválně jsou tu RŮZNÁ:
+ * kdyby některé místo četlo cizí pole, čísla se hned rozejdou a je to vidět. */
+v.data.zaokr     = { krok: 1000, smer: 'dolu' };
+v.data.zaokrProj = { krok: 500,  smer: 'nahoru' };
 const ocekavana = zo.cenaNabidkyOck(r, v.data.sleva, v.data.zaokr).cena;
+const ocekavanaProj = zo.cenaNabidkyProj(rp, v.data.zaokrProj).cena;
 
 const nd = nabidkaData(zak, v, JEKLY);
 test('nabídka OCK ukazuje zaokrouhlenou cenu',
@@ -170,9 +174,10 @@ const m = k => por.metriky.find(x => x.klic === k);
 test('porovnání variant ukazuje stejnou cenu OCK',
   Math.abs(m('ockPoSleve').hodnoty[0] - ocekavana) < 0.01, m('ockPoSleve').hodnoty[0]);
 test('porovnání variant ukazuje zaokrouhlenou cenu PROJ',
-  Math.abs(m('projCelkem').hodnoty[0] - zo.cenaNabidkyProj(rp, v.data.zaokr).cena) < 0.01);
+  Math.abs(m('projCelkem').hodnoty[0] - ocekavanaProj) < 0.01,
+  [m('projCelkem').hodnoty[0], ocekavanaProj]);
 test('porovnání variant: celkem = OCK + PROJ po zaokrouhlení',
-  Math.abs(m('celkemBezDph').hodnoty[0] - (ocekavana + zo.cenaNabidkyProj(rp, v.data.zaokr).cena)) < 0.01);
+  Math.abs(m('celkemBezDph').hodnoty[0] - (ocekavana + ocekavanaProj)) < 0.01);
 test('porovnání variant zvlášť ukáže zaokrouhlení', !!m('zaokrKc') && m('zaokrKc').hodnoty[0] < 0,
   m('zaokrKc') && m('zaokrKc').hodnoty[0]);
 /* Bez zaokrouhlení nemá řádek v tabulce co dělat – prázdný řádek s nulou je
@@ -254,6 +259,146 @@ test('cenaSDph: nečíselná cena je nula', cenaSDph(undefined, 0.21).sDph === 0
   test('nabídka OCK počítá DPH přes cenaSDph', nab.includes('cenaSDph('));
   test('nabídka PROJ počítá DPH přes cenaSDph', nap.includes('cenaSDph('));
   test('porovnání variant počítá DPH přes cenaSDph', zak2.includes('cenaSDph'));
+}
+
+/* ---------- 10) rozdělení na OCK a PROJ (zadání 4. 8. 2026) ----------
+ * „do kalkulace ock patří pouze část týkající se výtahové šachty. část
+ * týkající se projekčních prací pak patří do sekce kalkulace proj."
+ *
+ * Rozdělení se dělá nad daty, která už mohla odejít zákazníkovi, takže
+ * nejdůležitější test tady není „jde to nastavit zvlášť", ale „variantě
+ * uložené před rozdělením se nezměnila cena ani o korunu". Proto se testuje
+ * ve dvou rovinách: čtení (zaokrProjZ spadne na dosavadní společné pole)
+ * a dorovnání (zaokrZajisti dosadí tutéž hodnotu, ne výchozí). */
+{
+  const spolecne = { krok: 1000, smer: 'nahoru' };
+  const vlastni  = { krok: 100, smer: 'dolu' };
+
+  test('zaokrProjZ: bez vlastního pole čte společné',
+    zo.zaokrProjZ({ zaokr: spolecne }) === spolecne);
+  test('zaokrProjZ: vlastní pole má přednost',
+    zo.zaokrProjZ({ zaokr: spolecne, zaokrProj: vlastni }) === vlastni);
+  test('zaokrOckZ: čte jen svoje pole, PROJ ho neovlivní',
+    zo.zaokrOckZ({ zaokr: spolecne, zaokrProj: vlastni }) === spolecne);
+  test('zaokrProjZ: prázdná data nespadnou', zo.zaokrProjZ(null) === null && zo.zaokrOckZ(null) === null);
+
+  /* Dorovnání nesmí být „nastav výchozí" – to by staré nabídce změnilo cenu. */
+  const d1 = { zaokr: { krok: 1000, smer: 'nahoru' } };
+  const cenaPred = zo.cenaNabidkyProj(rp, zo.zaokrProjZ(d1)).cena;
+  zo.zaokrZajisti(d1);
+  test('zaokrZajisti dosadí PROJ dosavadní hodnotu, ne výchozí',
+    d1.zaokrProj.krok === 1000 && d1.zaokrProj.smer === 'nahoru', JSON.stringify(d1.zaokrProj));
+  test('zaokrZajisti nezmění cenu PROJ ani o korunu',
+    zo.cenaNabidkyProj(rp, zo.zaokrProjZ(d1)).cena === cenaPred);
+  test('zaokrZajisti je idempotentní', (() => {
+    const otiskD = JSON.stringify(d1); zo.zaokrZajisti(d1); zo.zaokrZajisti(d1);
+    return JSON.stringify(d1) === otiskD;
+  })());
+  test('zaokrZajisti nepřepíše už nastavené vlastní pole', (() => {
+    const d = { zaokr: { krok: 1000, smer: 'nahoru' }, zaokrProj: { krok: 100, smer: 'dolu' } };
+    zo.zaokrZajisti(d);
+    return d.zaokrProj.krok === 100 && d.zaokrProj.smer === 'dolu';
+  })());
+  /* Varianta z doby před #38 nemá ani společné pole: musí zůstat vypnutá
+   * v OBOU částech, jinak by se otevřením v nové verzi zaokrouhlila. */
+  test('varianta před #38: dorovnáním se zapne zaokrouhlení nikde', (() => {
+    const d = {};
+    zo.zaokrZajisti(d);
+    return !zo.zaokrZapnuto(zo.zaokrOckZ(d)) && !zo.zaokrZapnuto(zo.zaokrProjZ(d));
+  })());
+
+  /* Nová varianta má obě pole rovnou v datech – ze stejného důvodu jako u #38:
+   * chybějící pole je pak spolehlivá známka staré zakázky. */
+  const nv = zk.novaVariantaData();
+  test('nová varianta má vlastní zaokrouhlení pro PROJ', !!nv.zaokrProj, JSON.stringify(nv.zaokrProj));
+  test('nová varianta začíná v obou částech stejně',
+    nv.zaokr.krok === nv.zaokrProj.krok && nv.zaokr.smer === nv.zaokrProj.smer);
+
+  /* Import staré zakázky: pole se dorovná a cena PROJ zůstane. */
+  const stara2 = JSON.parse(JSON.stringify(zk.novaZakazka()));
+  stara2.varianty.forEach(x => { delete x.data.zaokrProj; x.data.zaokr = { krok: 1000, smer: 'nahoru' }; });
+  const cenaStare = zo.cenaNabidkyProj(rp, stara2.varianty[0].data.zaokr).cena;
+  const naimportovana = zk.importZakazka(JSON.parse(JSON.stringify(stara2)));
+  const dImp = naimportovana.varianty[0].data;
+  test('import staré zakázky dorovná pole PROJ', !!dImp.zaokrProj, JSON.stringify(dImp.zaokrProj));
+  test('import staré zakázky nezmění cenu PROJ',
+    zo.cenaNabidkyProj(rp, zo.zaokrProjZ(dImp)).cena === cenaStare);
+
+  /* Teprve tady se ověřuje vlastní zadání: dvě nastavení, dvě různé ceny,
+   * a přepnutí PROJ se nesmí dotknout ceny šachty (a naopak). */
+  const zak2 = zk.novaZakazka();
+  const v2 = zak2.varianty[0];
+  v2.data.ock.fixes = true;
+  v2.data.zaokr     = { krok: 1000, smer: 'nahoru' };
+  v2.data.zaokrProj = { krok: 100,  smer: 'dolu' };
+  const cOck  = zo.cenaNabidkyOck(r, v2.data.sleva, zo.zaokrOckZ(v2.data));
+  const cProj = zo.cenaNabidkyProj(rp, zo.zaokrProjZ(v2.data));
+  test('OCK se zaokrouhlí podle svého nastavení', cOck.cena % 1000 === 0, cOck.cena);
+  test('PROJ se zaokrouhlí podle svého nastavení', cProj.cena % 100 === 0 && cProj.zaokrKc <= 0,
+    [cProj.cena, cProj.zaokrKc]);
+  test('změna PROJ nezmění cenu OCK', (() => {
+    const pred = zo.cenaNabidkyOck(r, v2.data.sleva, zo.zaokrOckZ(v2.data)).cena;
+    v2.data.zaokrProj = { krok: 10000, smer: 'dolu' };
+    return zo.cenaNabidkyOck(r, v2.data.sleva, zo.zaokrOckZ(v2.data)).cena === pred;
+  })());
+  test('změna OCK nezmění cenu PROJ', (() => {
+    const pred = zo.cenaNabidkyProj(rp, zo.zaokrProjZ(v2.data)).cena;
+    v2.data.zaokr = { krok: 100000, smer: 'dolu' };
+    return zo.cenaNabidkyProj(rp, zo.zaokrProjZ(v2.data)).cena === pred;
+  })());
+
+  /* Porovnání variant čte obě části zvlášť – jinak by tabulka ukázala jinou
+   * cenu PROJ než nabídka PROJ, a to je přesně ta „rozejitá" chyba, kterou
+   * celý tenhle soubor hlídá. */
+  const v3 = zk.novaZakazka();
+  v3.varianty[0].data.ock.fixes = true;
+  v3.varianty[0].data.zaokr     = { krok: 100000, smer: 'dolu' };
+  v3.varianty[0].data.zaokrProj = { krok: 1000,   smer: 'nahoru' };
+  const por3 = zk.porovnaniVariant(v3, [{ id: v3.varianty[0].id, ock: r, proj: rp }]);
+  const m3 = k => por3.metriky.find(x => x.klic === k);
+  test('porovnání variant čte PROJ z vlastního nastavení',
+    Math.abs(m3('projCelkem').hodnoty[0]
+             - zo.cenaNabidkyProj(rp, v3.varianty[0].data.zaokrProj).cena) < 0.01,
+    m3('projCelkem').hodnoty[0]);
+  test('porovnání variant čte OCK z vlastního nastavení',
+    Math.abs(m3('ockPoSleve').hodnoty[0]
+             - zo.cenaNabidkyOck(r, v3.varianty[0].data.sleva, v3.varianty[0].data.zaokr).cena) < 0.01,
+    m3('ockPoSleve').hodnoty[0]);
+
+  /* Marže: šestý parametr je nepovinný, aby starší volání dopadlo jako dřív. */
+  const nastM = { slevy: { minMarze: 0.08 } };
+  const pDve = mz.marzePrehled(r, rp, v3.varianty[0].data.sleva, nastM,
+                               { krok: 100000, smer: 'dolu' }, { krok: 100, smer: 'nahoru' });
+  const pJedno = mz.marzePrehled(r, rp, v3.varianty[0].data.sleva, nastM, { krok: 100000, smer: 'dolu' });
+  test('marzePrehled: PROJ se řídí šestým parametrem',
+    pDve.proj.celek.cena === zo.cenaNabidkyProj(rp, { krok: 100, smer: 'nahoru' }).cena);
+  test('marzePrehled bez šestého parametru se chová jako dřív',
+    pJedno.proj.celek.cena === zo.cenaNabidkyProj(rp, { krok: 100000, smer: 'dolu' }).cena);
+  test('marzePrehled: OCK zůstává na svém nastavení', pDve.ock.cena === pJedno.ock.cena);
+}
+
+/* Rozdělení musí být vidět i na obrazovkách, ne jen v jádře. Zdrojová
+ * kontrola je tu proto, že opomenuté ZO v Kalkulaci PROJ by se v číslech
+ * projevilo až u zákazníka – testem jádra ho nechytneme. */
+{
+  const fs3 = require('fs');
+  const prj = fs3.readFileSync(__dirname + '/ui/kalk_proj.js', 'utf8');
+  const zam = fs3.readFileSync(__dirname + '/ui/zamek_ui.js', 'utf8');
+  const zui = fs3.readFileSync(__dirname + '/ui/zaokrouhleni_ui.js', 'utf8');
+  const com = fs3.readFileSync(__dirname + '/ui/common.js', 'utf8');
+  const kui = fs3.readFileSync(__dirname + '/ui/kontroly_ui.js', 'utf8');
+  const mui = fs3.readFileSync(__dirname + '/ui/marze_ui.js', 'utf8');
+  test('Kalkulace PROJ počítá cenu z vlastního nastavení', prj.includes('cenaNabidkyProj(r, ZOP)'));
+  test('Kalkulace PROJ nikde nesahá na zaokrouhlení OCK',
+    !/zaokrStav\([^)]*,\s*ZO\)/.test(prj) && !/cenaNabidkyProj\(r,\s*ZO\)/.test(prj));
+  test('zámek chrání i přepínače PROJ',
+    zam.includes("'zaokrProjSetKrok'") && zam.includes("'zaokrProjSetSmer'"));
+  test('karta PROJ má vlastní obsluhy',
+    zui.includes('function zaokrProjSetKrok') && zui.includes('function zaokrProjSetSmer'));
+  test('karta se jmenuje podle části', zui.includes('koncové ceny OCK') && zui.includes('koncové ceny PROJ'));
+  test('obrazovky mají stav ZOP', com.includes('ZOP') && com.includes('zaokrZajisti(v.data)'));
+  test('kontroly dostávají zaokrouhlení PROJ', kui.includes('zaokrProj:'));
+  test('lišta marže dostává zaokrouhlení PROJ', mui.includes('ZOP'));
 }
 
 console.log(`\n${ok} prošlo, ${fail} selhalo`);

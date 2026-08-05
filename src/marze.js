@@ -117,10 +117,13 @@ function marzeStavProj(vysl, nast, zaokr) {
 /* ---------- celá nabídka ---------- */
 /* Vrací seznam míst pod minimem (od nejhoršího) a marži nabídky jako celku.
  * Chybí-li výpočet, mlčí – nedopočítává se z ničeho. */
-function marzePrehled(ock, proj, sleva, nast, zaokr) {
+/* zaokrProj je nepovinný: od 4. 8. 2026 má každá část nabídky vlastní
+ * obchodní zaokrouhlení. Když se nepředá (starší volání, starší data),
+ * platí pro obě části totéž nastavení jako dřív. */
+function marzePrehled(ock, proj, sleva, nast, zaokr, zaokrProj) {
   const min = marzeMin(nast);
   const o = marzeStavOck(ock, sleva, nast, zaokr);
-  const p = marzeStavProj(proj, nast, zaokr);
+  const p = marzeStavProj(proj, nast, zaokrProj === undefined ? zaokr : zaokrProj);
   const pod = [];
   if (o && o.podMin) pod.push(o);
   if (p) p.pod.forEach(s => pod.push(s));
