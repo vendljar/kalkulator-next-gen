@@ -425,6 +425,34 @@ test('úklid sazby DPH se ostatních hodnot nedotkne',
   kr.kryciMigraceSazbaDph({ sazbaDph: '19 %', splatnostDni: '30' }).splatnostDni === '30');
 test('úklid sazby DPH nespadne na prázdném vstupu',
   kr.kryciMigraceSazbaDph(null) === null && kr.kryciMigraceSazbaDph(undefined) === undefined);
+/* ============================================================
+ * #122 – krycí list nesmí spadnout na variantě bez ceníku
+ * ============================================================
+ *
+ * Výpočet je v kryciCtx() obalený v try/catch právě proto, aby rozbitá
+ * kalkulace neshodila celý krycí list. Do 11. 8. 2026 se ale zadání a ceník
+ * četly mimo ten blok, takže varianta bez ceníku shodila celou stránku —
+ * a to i pole, která z kalkulace vůbec nepocházejí (objednatel, adresa,
+ * platební podmínky). Nález z 10. 8. 2026 při psaní testů.
+ */
+{
+  const jekly = JSON.parse(require('fs').readFileSync(__dirname + '/jekly.json', 'utf8'));
+  const vada = [
+    ['varianta bez ceníku', { data: { ock: { zadani: {}, fixes: false }, proj: {} } }],
+    ['varianta bez zadání OCK', { data: { cenik: {}, proj: {} } }],
+    ['varianta bez dat', {}],
+    ['varianta undefined', undefined],
+  ];
+  vada.forEach(([popis, v]) => {
+    let ctx = null, spadlo = false;
+    try { ctx = kryciCtx({ cislo: 'X', nazevAkce: 'Y' }, v, jekly); } catch (e) { spadlo = true; }
+    test('krycí list nespadne: ' + popis, !spadlo);
+    test('krycí list vrátí kontext: ' + popis, !!ctx);
+    /* Neznámá hodnota se ukazuje pomlčkou, ne nulou. Nula by v krycím listu
+     * znamenala „zakázka za nic", což je tvrzení, ne chybějící údaj. */
+    test('neznámá hodnota je pomlčka, ne nula: ' + popis, !ctx || ctx.hodnota === '—', ctx && ctx.hodnota);
+  });
+}
 
 console.log('\n' + ok + ' prošlo, ' + fail + ' selhalo');
 process.exit(fail ? 1 : 0);

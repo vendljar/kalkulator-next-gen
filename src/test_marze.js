@@ -144,7 +144,12 @@ test('práce se ztrátou je vážnější', marzeStupen({ podMin: true, marze: -
 const zadaniP3 = JSON.parse(JSON.stringify(zadaniP));
 {
   const seDopravou = zadaniP3.sekce.find(s => s.doprava);
-  seDopravou.prirazkaPct = null;                    // ať platí globální přirážka
+  /* Sekce schválně BEZ přirážky (nula, ne prázdno). Od 11. 8. 2026 je výchozí
+   * hodnotou sekce globální přirážka z ceníku, a ta roste spolu s dopravou —
+   * protože se počítá z ceny včetně dopravy. S ní by marže pod minimum
+   * nespadla nikdy a test by neměřil nic. Předmětem testu je hlídání marže,
+   * ne velikost přirážky. */
+  seDopravou.prirazkaPct = 0;
   /* dopravaKc se odvodí z ceníku (km × sazba); km se zvolí tak, aby doprava
    * několikanásobně převýšila náklad práce – přesně ten případ, kde stará
    * marže „bez dopravy" vycházela vysoko a nová musí spadnout pod minimum. */

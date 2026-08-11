@@ -223,6 +223,11 @@ test('porovnání variant zvlášť ukáže zaokrouhlení', !!m('zaokrKc') && m(
 const varBez = zk.novaZakazka();
 varBez.varianty[0].data.ock.fixes = true;
 varBez.varianty[0].data.zaokr = zo.zaokrVypnuto();
+/* Vypnout se musí OBĚ zaokrouhlení, OCK i PROJ. Do 11. 8. 2026 stačilo jedno,
+ * protože cena projekce vycházela náhodou celá; jakmile sekce dostaly globální
+ * přirážku, přestalo to platit a řádek se objevil kvůli projekci. Test má
+ * ověřovat, že se prázdný řádek neukazuje — ne to, jaká čísla zrovna vyjdou. */
+varBez.varianty[0].data.zaokrProj = zo.zaokrVypnuto();
 const porBez = zk.porovnaniVariant(varBez, [{ id: varBez.varianty[0].id, ock: r, proj: rp }]);
 test('bez zaokrouhlení se řádek v porovnání neukazuje',
   !porBez.metriky.find(x => x.klic === 'zaokrKc'));

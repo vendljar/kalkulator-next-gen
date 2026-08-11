@@ -29,6 +29,9 @@ const ZC = require('./zkusebni_cenik.js');
 
 let ok = 0, fail = 0;
 const test = (n, cond, info) => { if (cond) { ok++; console.log('OK  ' + n); } else { fail++; console.log('FAIL ' + n, info === undefined ? '' : info); } };
+/* Test, který se ptá v obou režimech – režim se propíše do názvu, aby bylo
+ * z výpisu hned vidět, který z nich spadl. */
+const testR = (n, cond, info) => test(`${n} [${rezimNazev()}]`, cond, info);
 const JEKLY = JSON.parse(fs.readFileSync(__dirname + '/jekly.json', 'utf8'));
 
 const engProj = require('./engine_proj.js');
@@ -37,14 +40,30 @@ const eng_proj_zadani = () => JSON.parse(JSON.stringify(engProj.DEFAULT_ZADANI_P
 const cenik = () => ZC.zkusebniCenik();
 const blizko = (a, b, tol = 1e-6) => Math.abs(a - b) <= tol;
 
-/* Zapnutá i vypnutá varianta téhož lešení. `zap` říká, jestli je položka ve
- * volitelných (a tedy v základní ceně), nebo jestli spadla mezi příplatky. */
-function spocti(volby, uprav) {
+/* OBA REŽIMY, ne jeden.
+ *
+ * Kalkulátor počítá ve dvou režimech: kompatibilní („1:1 jako Excel", včetně
+ * zdokumentovaných chyb předlohy) a opravený. Když se testuje jen jeden,
+ * druhý se může rozejít a nikdo si toho nevšimne — a přitom obchodník počítá
+ * v tom druhém. Proto se všechno, co se dnes mění, ptá v obou režimech;
+ * `REZIM` říká, který je zrovna na řadě, a je vidět v názvu každého testu.
+ *
+ * Výjimka jsou jen ty testy, které se ptají PŘÍMO na rozdíl mezi režimy —
+ * ty mají režim v sobě a jsou dole v oddílu 5. */
+let REZIM = false;
+const rezimNazev = () => (REZIM ? 'opravený' : 'Excel 1:1');
+
+function spocti(volby, uprav, rezim) {
   const z = zadani();
   z.volitelne = Object.assign({}, z.volitelne, volby);
   const c = cenik();
   if (uprav) uprav(c);
-  return eng.vypocet(z, c, JEKLY, false);
+  return eng.vypocet(z, c, JEKLY, rezim === undefined ? REZIM : rezim);
+}
+/* Spustí blok testů dvakrát – jednou v každém režimu. */
+function vObouRezimech(blok) {
+  for (const r of [false, true]) { REZIM = r; blok(); }
+  REZIM = false;
 }
 const volitelna = (r, nazev) => r.sekce.volitelne.find(x => x.origNazev === nazev);
 const priplatek = (r, key) => r.priplatky.find(x => x.key === key);
@@ -52,6 +71,8 @@ const priplatek = (r, key) => r.priplatky.find(x => x.key === key);
 const VNITRNI = 'LEŠENÍ - vnitřní';
 const VNEJSI  = 'LEŠENÍ - vnější';
 const HLAVA   = 'LEŠENÍ - dokončení hlavy šachty';
+
+vObouRezimech(() => {
 
 /* ============================================================
  * 1) Volitelná položka a příplatek dávají tutéž cenu
@@ -65,9 +86,9 @@ const HLAVA   = 'LEŠENÍ - dokončení hlavy šachty';
   const sVyp = spocti({ leseniVnitrni: false });
   const vol = volitelna(sZap, VNITRNI);
   const pri = priplatek(sVyp, 'leseniVnitrni');
-  test('vnitřní lešení je ve volitelných, když je zaškrtnuté', !!vol);
-  test('vnitřní lešení je v příplatcích, když zaškrtnuté není', !!pri);
-  test('vnitřní lešení stojí stejně ve volitelných i v příplatcích',
+  testR('vnitřní lešení je ve volitelných, když je zaškrtnuté', !!vol);
+  testR('vnitřní lešení je v příplatcích, když zaškrtnuté není', !!pri);
+  testR('vnitřní lešení stojí stejně ve volitelných i v příplatcích',
     vol && pri && blizko(vol.naklad, pri.naklad), vol && pri && [vol.naklad, pri.naklad]);
 }
 
@@ -78,7 +99,7 @@ const HLAVA   = 'LEŠENÍ - dokončení hlavy šachty';
   const sVyp = spocti({ leseniVnejsi: false });
   const vol = volitelna(sZap, VNEJSI);
   const pri = priplatek(sVyp, 'leseniVnejsi');
-  test('vnější lešení stojí stejně ve volitelných i v příplatcích',
+  testR('vnější lešení stojí stejně ve volitelných i v příplatcích',
     vol && pri && blizko(vol.naklad, pri.naklad), vol && pri && [vol.naklad, pri.naklad]);
 }
 
@@ -91,9 +112,9 @@ const HLAVA   = 'LEŠENÍ - dokončení hlavy šachty';
   const pri = priplatek(sVyp, 'leseniHlava');
   const c = cenik();
   const cekej = zadani().prejezd * c.priplatky.leseniHlavaKc;
-  test('hlava šachty se počítá jen z metrů přejezdu, bez fixní části',
+  testR('hlava šachty se počítá jen z metrů přejezdu, bez fixní části',
     vol && blizko(vol.naklad, cekej), vol && [vol.naklad, cekej]);
-  test('hlava šachty stojí stejně ve volitelných i v příplatcích',
+  testR('hlava šachty stojí stejně ve volitelných i v příplatcích',
     vol && pri && blizko(vol.naklad, pri.naklad), vol && pri && [vol.naklad, pri.naklad]);
 }
 
@@ -110,13 +131,13 @@ const HLAVA   = 'LEŠENÍ - dokončení hlavy šachty';
     c => { c.leseniFix += PRIDANO; });
   const dV = volitelna(zvyseno, VNITRNI).naklad - volitelna(zaklad, VNITRNI).naklad;
   const dE = volitelna(zvyseno, VNEJSI).naklad - volitelna(zaklad, VNEJSI).naklad;
-  test('zvýšení C.leseniFix se projeví u vnitřního lešení', blizko(dV, PRIDANO), dV);
-  test('zvýšení C.leseniFix se projeví u vnějšího lešení', blizko(dE, PRIDANO), dE);
+  testR('zvýšení C.leseniFix se projeví u vnitřního lešení', blizko(dV, PRIDANO), dV);
+  testR('zvýšení C.leseniFix se projeví u vnějšího lešení', blizko(dE, PRIDANO), dE);
 
   /* A u hlavy šachty se projevit NESMÍ – ta fixní část nemá. */
   const zakladH = spocti({ leseniHlava: true });
   const zvysenoH = spocti({ leseniHlava: true }, c => { c.leseniFix += PRIDANO; });
-  test('zvýšení C.leseniFix se u hlavy šachty neprojeví',
+  testR('zvýšení C.leseniFix se u hlavy šachty neprojeví',
     blizko(volitelna(zvysenoH, HLAVA).naklad, volitelna(zakladH, HLAVA).naklad));
 }
 
@@ -129,8 +150,8 @@ const HLAVA   = 'LEŠENÍ - dokončení hlavy šachty';
     c => { c.leseniFix += PRIDANO; });
   const dV = priplatek(zvyseno, 'leseniVnitrni').naklad - priplatek(zaklad, 'leseniVnitrni').naklad;
   const dE = priplatek(zvyseno, 'leseniVnejsi').naklad - priplatek(zaklad, 'leseniVnejsi').naklad;
-  test('zvýšení C.leseniFix se projeví i u příplatku za vnitřní lešení', blizko(dV, PRIDANO), dV);
-  test('zvýšení C.leseniFix se projeví i u příplatku za vnější lešení', blizko(dE, PRIDANO), dE);
+  testR('zvýšení C.leseniFix se projeví i u příplatku za vnitřní lešení', blizko(dV, PRIDANO), dV);
+  testR('zvýšení C.leseniFix se projeví i u příplatku za vnější lešení', blizko(dE, PRIDANO), dE);
 }
 
 /* Staré klíče v ceníku už nesmí nic ovlivňovat. Kdyby je jádro četlo dál,
@@ -141,7 +162,7 @@ const HLAVA   = 'LEŠENÍ - dokončení hlavy šachty';
     c.leseniVnitrniFix = 99999; c.leseniVnejsiFix = 99999;
     c.priplatky.leseniHlavaFix = 99999;
   });
-  test('staré fixní klíče lešení už jádro nečte',
+  testR('staré fixní klíče lešení už jádro nečte',
     blizko(volitelna(sPodvrhem, VNITRNI).naklad, volitelna(zaklad, VNITRNI).naklad) &&
     blizko(volitelna(sPodvrhem, VNEJSI).naklad, volitelna(zaklad, VNEJSI).naklad));
 }
@@ -152,9 +173,12 @@ const HLAVA   = 'LEŠENÍ - dokončení hlavy šachty';
 {
   const r = spocti({ leseniVnitrni: true, leseniVnejsi: true }, c => { c.leseniFix = 12345; });
   const vol = volitelna(r, VNITRNI);
-  test('poznámka u lešení hlásí částku, která se skutečně přičetla',
+  testR('poznámka u lešení hlásí částku, která se skutečně přičetla',
     vol && /12345/.test(vol.pozn || ''), vol && vol.pozn);
 }
+
+
+});
 
 /* ============================================================
  * 3) Migrace starých ceníků
@@ -237,14 +261,15 @@ const HLAVA   = 'LEŠENÍ - dokončení hlavy šachty';
   test('sekce DPZ má nenulový základ hodin', hodin(sekce('dpz')) > 0);
   test('sekce DPS má nenulový základ hodin', hodin(sekce('dps')) > 0);
 
-  /* Sekční přirážky se naopak do repozitáře nedostávají — nahrazují se
-   * hodnotou null, což v jádře znamená „vezmi globální přirážku z ceníku".
-   * Ve zdrojácích ale nastavené být musí, jinak by se ta náhrada neměla čím
-   * projevit a nikdo by si nevšiml, že zmizely. */
-  test('sekce ZAMĚŘENÍ má vlastní přirážku', sekce('zamereni').prirazkaPct != null);
-  test('sekce KOLAUDACE má vlastní přirážku', sekce('kolaudace').prirazkaPct != null);
-  test('sekce, které vlastní přirážku nemají, ji mají jako null (ne nulu)',
-    eng_proj_zadani().sekce.every(s => s.prirazkaPct === null || s.prirazkaPct > 0));
+  /* Sekční přirážky ve výchozím zadání ŽÁDNÉ nejsou (rozhodnutí 11. 8. 2026:
+   * „globální přirážka má být výchozí přirážkou sekcí"). Prázdno u sekce
+   * znamená „platí globální přirážka z ceníku"; nula by znamenala „u téhle
+   * sekce nepřirážíme nic", což je něco jiného a nesmí to tam spadnout samo.
+   * Vedlejší efekt, o který šlo taky: ve zveřejněném kódu není žádné procento
+   * přirážky, takže se nemá co ztratit ani unikat. */
+  test('žádná sekce nemá ve výchozím zadání vlastní přirážku',
+    eng_proj_zadani().sekce.every(s => s.prirazkaPct === null),
+    eng_proj_zadani().sekce.filter(s => s.prirazkaPct !== null).map(s => s.key));
 }
 
 /* Základ montáže je 24 hodin – tentýž nález, tatáž příčina (příprava dat pro
@@ -258,6 +283,53 @@ const HLAVA   = 'LEŠENÍ - dokončení hlavy šachty';
   test('montáž na stavbě počítá se čtyřmi lidmi nad základem 24 hodin',
     mont && mont.mnozstvi > 4 * 24, mont && mont.mnozstvi);
 }
+
+/* ============================================================
+ * 5) Montáž přechodových plechů má vlastní přepínač
+ * ============================================================ */
+
+/* V excelovém souboru zakázky CN-0327 čte montáž zapnutí z přepínače
+ * materiálu (vzorec sahá o řádek výš, protože vlastní buňka zůstala prázdná)
+ * a jako jediný řádek volitelných položek se tam zaokrouhluje na tisíce.
+ * Rozhodnutí uživatele z 11. 8. 2026: obojí je úprava toho JEDNOHO souboru,
+ * ne pravidlo původní šablony — nenapodobuje se to ani v kompatibilním režimu.
+ * U nás má proto montáž vlastní přepínač v obou režimech a nezaokrouhluje se
+ * nikde. Prázdný přepínač znamená „řídí se materiálem", takže se dosavadním
+ * zakázkám nemění cena ani o korunu. */
+
+const MONT = 'PŘECHODOVÉ PLECHY - NEREZ (MONTÁŽ)';
+const montaz = r => r.sekce.volitelne.find(x => x.origNazev === MONT);
+
+vObouRezimech(() => {
+  /* Žádná volitelná položka se nezaokrouhluje — zaokrouhlení nahoru na tisíce
+   * patří jen příplatkům. */
+  {
+    const r = spocti({ leseniVnitrni: true, leseniVnejsi: true, leseniHlava: true, haky: true });
+    const spatne = r.sekce.volitelne.filter(x => !blizko(x.sMarzi, x.naklad * (1 + cenik().marze)));
+    testR('žádná volitelná položka se nezaokrouhluje na tisíce',
+      spatne.length === 0, spatne.map(x => x.origNazev));
+  }
+
+  /* Vlastní přepínač montáže. */
+  {
+    const bezMontaze = { prechodove: true, prechMont: false };
+    testR('montáž jde vypnout samostatně', !montaz(spocti(bezMontaze)));
+    /* A opačně: materiál vypnutý, montáž zapnutá. */
+    testR('montáž jde zapnout i bez materiálu',
+      !!montaz(spocti({ prechodove: false, prechMont: true })));
+    /* Prázdný přepínač = „řídí se materiálem", tedy beze změny ceny proti
+     * dosavadnímu stavu. Kdyby prázdno znamenalo „vypnuto", zmizela by montáž
+     * ze všech starších zakázek. */
+    testR('prázdný přepínač montáže znamená „řídí se materiálem"',
+      !!montaz(spocti({ prechodove: true, prechMont: null })));
+    testR('prázdný přepínač montáže s vypnutým materiálem montáž nezapne',
+      !montaz(spocti({ prechodove: false, prechMont: null })));
+    /* Vypnutá montáž nezmizí, spadne mezi příplatky. Neúčtovaná práce je horší
+     * než práce v příplatcích — tam je aspoň vidět. */
+    testR('vypnutá montáž se objeví mezi příplatky',
+      !!spocti(bezMontaze).priplatky.find(x => x.key === 'prechMont'));
+  }
+});
 
 console.log(`\n${ok} OK, ${fail} FAIL`);
 if (fail) process.exit(1);

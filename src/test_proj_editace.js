@@ -260,42 +260,110 @@ t('1.2 žádná položka není ve výchozím stavu vyřazená',
 
 /* ---------- 10) sekční přirážka: nula je rozhodnutí, ne prázdno ----------
  * Stejné pravidlo jako u přepisu ceny a sazby (3.6, 4.6), jen o patro výš.
- * Prázdné pole (null) znamená „u téhle sekce platí globální sleva", kdežto
- * zadaná NULA znamená „u téhle sekce nepřirážíme ani neslevujeme nic".
+ * Prázdné pole (null) znamená „u téhle sekce platí globální přirážka
+ * z ceníku", kdežto zadaná NULA znamená „u téhle sekce nepřirážíme nic".
  * Kdyby se nula brala jako nevyplněno, vědomé rozhodnutí obchodníka by
- * globální sleva tiše přebila – a sekce, u které se slevit nemělo, by odešla
- * levnější. Sada dosud zkoušela jen přirážku zápornou a prázdnou, takže
- * zrovna tenhle případ nikdo nehlídal. */
+ * ceníková přirážka tiše přebila a sekce, kterou chtěl nechat bez přirážky,
+ * by odešla dražší.
+ *
+ * Sleva je zvlášť: přirážka říká, kolik si účtujeme, sleva kolik z toho
+ * zákazníkovi odpustíme. Sekce s nulovou přirážkou tedy slevu pořád dostane —
+ * to je rozdíl proti stavu do 11. 8. 2026, kdy sleva a přirážka sdílely jedno
+ * pole a nula znamenala „nesahat sem vůbec". */
 
 {
-  const GLOBALNI = -10;                 // globální sleva 10 %, ať je co přebít
+  const GLOBALNI = -10;                 // globální sleva 10 %
+  const MARZE = C.marze * 100;          // globální přirážka z ceníku, v %
   const z = zad();
   z.slevaPct = GLOBALNI;
-  const sNula = z.sekce.find(s => s.key === 'dpz');       // jinak by platila globální
+  const sNula = z.sekce.find(s => s.key === 'dpz');
   const sGlobal = z.sekce.find(s => s.key === 'dps');     // srovnávací sekce
   sNula.prirazkaPct = 0;
   sGlobal.prirazkaPct = null;
   const r = vypocetProj(z, C);
   const nula = sek(r, 'dpz'), global = sek(r, 'dps');
 
-  tc('10.1 sekce s nulovou přirážkou nedostane ani korunu slevy', nula.slevaKc, 0);
-  tc('10.2 celková cena sekce = cena s dopravou, beze změny', nula.celkem, nula.cenaSDopravou);
-  tc('10.3 použité procento je opravdu nula, ne globální sleva', nula.pouzitePct, 0);
-  t('10.4 nulová přirážka zůstane v datech jako zadaná (není z ní prázdno)',
+  tc('10.1 sekce s nulovou přirážkou žádnou přirážku nedostane, jen slevu',
+    nula.pouzitePct, GLOBALNI);
+  tc('10.2 sleva u sekce s nulovou přirážkou je z ceny včetně dopravy',
+    nula.slevaKc, nula.cenaSDopravou * (GLOBALNI / 100));
+  t('10.3 nulová přirážka zůstane v datech jako zadaná (není z ní prázdno)',
     nula.prirazkaPct === 0, String(nula.prirazkaPct));
-  /* Kontrolní vzorek: sousední sekce bez vlastní přirážky globální slevu
-   * dostat MUSÍ – jinak by test 10.1 prošel i tehdy, kdyby se sleva neuplatnila
-   * nikde a chyba by byla úplně jinde. */
-  tc('10.5 sousední sekce bez vlastní přirážky globální slevu dostane',
-    global.slevaKc, global.cenaSDopravou * (GLOBALNI / 100));
-  /* A totéž na jedné a téže sekci: s nulou musí vyjít dráž než s prázdnem,
-   * protože prázdno pustí ke slovu desetiprocentní globální slevu. */
+  /* Kontrolní vzorek: sousední sekce s prázdným polem dostane ceníkovou
+   * přirážku i slevu. Bez toho by 10.1 prošlo i tehdy, kdyby se nepočítalo
+   * nikde nic. */
+  tc('10.4 sekce s prázdným polem dostane ceníkovou přirážku i slevu',
+    global.pouzitePct, MARZE + GLOBALNI);
+  /* A totéž na jedné a téže sekci: s nulou musí vyjít LEVNĚJI než s prázdnem,
+   * protože prázdno pustí ke slovu ceníkovou přirážku. Do 11. 8. 2026 to bylo
+   * obráceně, protože prázdno tenkrát pouštělo ke slovu slevu. */
   const zProti = zad();
   zProti.slevaPct = GLOBALNI;
   zProti.sekce.find(s => s.key === 'dpz').prirazkaPct = null;
-  t('10.6 táž sekce s nulou vyjde dráž než s prázdným polem',
-    nula.celkem > sek(vypocetProj(zProti, C), 'dpz').celkem,
+  t('10.5 táž sekce s nulou vyjde levněji než s prázdným polem',
+    nula.celkem < sek(vypocetProj(zProti, C), 'dpz').celkem,
     nula.celkem + ' vs ' + sek(vypocetProj(zProti, C), 'dpz').celkem);
+}
+
+/* ============================================================
+ * 11) Globální přirážka z ceníku je výchozí přirážkou sekcí (#132)
+ * ============================================================
+ *
+ * Do 11. 8. 2026 seděla procenta natvrdo ve výchozím zadání: zaměření 30 %,
+ * kolaudace 20 %, ostatní prázdno. Mělo to dvě vady. Procento přirážky je
+ * obchodní údaj a ve zveřejněném kódu nemá co dělat; a hlavně se výchozí
+ * zadání nemá odkud obnovit, takže nasazená verze o ta procenta přišla
+ * a nikdo se to nedozvěděl (#130).
+ *
+ * Nové pravidlo je jednodušší: výchozí hodnotou každé sekce je globální
+ * přirážka z ceníku PROJ. Zvláštní ceníkové pole pro tohle není potřeba —
+ * jedno číslo, jedno místo. Obchodník smí procento u konkrétní sekce ručně
+ * přepsat; to je ta lokální úprava, kvůli které pole zůstává.
+ */
+{
+  const cenik = (marze) => Object.assign(kopie(C), { marze });
+  const bezVlastni = () => {
+    const z = zad();
+    z.sekce.forEach(sx => { sx.prirazkaPct = null; });
+    return z;
+  };
+
+  /* Základ celé věci: sekce bez vlastního procenta si vezme globální přirážku. */
+  const r30 = vypocetProj(bezVlastni(), cenik(0.30));
+  t('11.1 sekce bez vlastního procenta dostane globální přirážku z ceníku',
+    r30.sekce.every(sx => Math.abs(sx.pouzitePct - 30) < 1e-9),
+    r30.sekce.map(sx => sx.pouzitePct));
+
+  /* Změna globální přirážky se propíše všude. */
+  const r10 = vypocetProj(bezVlastni(), cenik(0.10));
+  t('11.2 změna globální přirážky se propíše do všech sekcí',
+    r10.sekce.every(sx => Math.abs(sx.pouzitePct - 10) < 1e-9),
+    r10.sekce.map(sx => sx.pouzitePct));
+  t('11.3 vyšší globální přirážka znamená vyšší celkovou cenu',
+    r30.souhrn.celkem > r10.souhrn.celkem,
+    r30.souhrn.celkem + ' vs ' + r10.souhrn.celkem);
+
+  /* Vlastní % sekce má přednost — to je ta ruční lokální úprava. */
+  const zVlastni = bezVlastni();
+  zVlastni.sekce.find(s => s.key === 'dpz').prirazkaPct = 5;
+  const rVlastni = vypocetProj(zVlastni, cenik(0.30));
+  tc('11.4 vlastní % sekce přebije globální přirážku', sek(rVlastni, 'dpz').pouzitePct, 5);
+  tc('11.5 ostatní sekce si globální přirážku podrží', sek(rVlastni, 'dps').pouzitePct, 30);
+
+  /* Nulová globální přirážka je platná: nabídka bez přirážky nad rámec marže
+   * u položek. Nesmí propadnout na nic jiného. */
+  const r0 = vypocetProj(bezVlastni(), cenik(0));
+  t('11.6 nulová globální přirážka znamená u sekcí nulu',
+    r0.sekce.every(sx => Math.abs(sx.pouzitePct) < 1e-9), r0.sekce.map(sx => sx.pouzitePct));
+
+  /* Sleva se k přirážce přičítá, takže dolehne i na sekce, které mají vlastní
+   * procento. Dřív je míjela a poskytnutá sleva nebyla celá poskytnutá. */
+  const zSleva = bezVlastni();
+  zSleva.slevaPct = -10;
+  zSleva.sekce.find(s => s.key === 'dpz').prirazkaPct = 30;
+  const rSleva = vypocetProj(zSleva, cenik(0.30));
+  tc('11.7 sleva dolehne i na sekci s vlastním procentem', sek(rSleva, 'dpz').pouzitePct, 20);
+  tc('11.8 sleva dolehne i na sekci bez vlastního procenta', sek(rSleva, 'dps').pouzitePct, 20);
 }
 
 console.log(fail ? '\n' + fail + ' TESTŮ SELHALO (' + ok + ' OK)'
