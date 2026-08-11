@@ -258,6 +258,46 @@ t('1.2 žádná položka není ve výchozím stavu vyřazená',
   })());
 }
 
+/* ---------- 10) sekční přirážka: nula je rozhodnutí, ne prázdno ----------
+ * Stejné pravidlo jako u přepisu ceny a sazby (3.6, 4.6), jen o patro výš.
+ * Prázdné pole (null) znamená „u téhle sekce platí globální sleva", kdežto
+ * zadaná NULA znamená „u téhle sekce nepřirážíme ani neslevujeme nic".
+ * Kdyby se nula brala jako nevyplněno, vědomé rozhodnutí obchodníka by
+ * globální sleva tiše přebila – a sekce, u které se slevit nemělo, by odešla
+ * levnější. Sada dosud zkoušela jen přirážku zápornou a prázdnou, takže
+ * zrovna tenhle případ nikdo nehlídal. */
+
+{
+  const GLOBALNI = -10;                 // globální sleva 10 %, ať je co přebít
+  const z = zad();
+  z.slevaPct = GLOBALNI;
+  const sNula = z.sekce.find(s => s.key === 'dpz');       // jinak by platila globální
+  const sGlobal = z.sekce.find(s => s.key === 'dps');     // srovnávací sekce
+  sNula.prirazkaPct = 0;
+  sGlobal.prirazkaPct = null;
+  const r = vypocetProj(z, C);
+  const nula = sek(r, 'dpz'), global = sek(r, 'dps');
+
+  tc('10.1 sekce s nulovou přirážkou nedostane ani korunu slevy', nula.slevaKc, 0);
+  tc('10.2 celková cena sekce = cena s dopravou, beze změny', nula.celkem, nula.cenaSDopravou);
+  tc('10.3 použité procento je opravdu nula, ne globální sleva', nula.pouzitePct, 0);
+  t('10.4 nulová přirážka zůstane v datech jako zadaná (není z ní prázdno)',
+    nula.prirazkaPct === 0, String(nula.prirazkaPct));
+  /* Kontrolní vzorek: sousední sekce bez vlastní přirážky globální slevu
+   * dostat MUSÍ – jinak by test 10.1 prošel i tehdy, kdyby se sleva neuplatnila
+   * nikde a chyba by byla úplně jinde. */
+  tc('10.5 sousední sekce bez vlastní přirážky globální slevu dostane',
+    global.slevaKc, global.cenaSDopravou * (GLOBALNI / 100));
+  /* A totéž na jedné a téže sekci: s nulou musí vyjít dráž než s prázdnem,
+   * protože prázdno pustí ke slovu desetiprocentní globální slevu. */
+  const zProti = zad();
+  zProti.slevaPct = GLOBALNI;
+  zProti.sekce.find(s => s.key === 'dpz').prirazkaPct = null;
+  t('10.6 táž sekce s nulou vyjde dráž než s prázdným polem',
+    nula.celkem > sek(vypocetProj(zProti, C), 'dpz').celkem,
+    nula.celkem + ' vs ' + sek(vypocetProj(zProti, C), 'dpz').celkem);
+}
+
 console.log(fail ? '\n' + fail + ' TESTŮ SELHALO (' + ok + ' OK)'
                  : '\nVŠECHNY TESTY PRJ-1 OK (' + ok + ')');
 process.exit(fail ? 1 : 0);

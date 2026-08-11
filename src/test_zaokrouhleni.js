@@ -111,6 +111,44 @@ const c0 = zo.cenaNabidkyOck(r, null, null);
 test('bez slevy a bez zaokrouhlení je koncová cena základní cena',
   c0.cena === r.souhrn.zakladCena && c0.zaokrKc === 0);
 
+/* ---------- 4b) jádro zaokrouhluje ZÁKLADNÍ cenu NAHORU na tisíce ----------
+ * Obchodní zaokrouhlení výše je až druhý krok; první dělá engine.js sám, když
+ * ze součtu sekcí udělá základní cenu. Dělá ho NAHORU, ne matematicky – jinak
+ * by u každé zakázky, které vyjde zbytek pod polovinou tisícovky, šla nabídka
+ * ven pod spočtenou cenou a nikdo by si toho nevšiml.
+ *
+ * Jediné zadání na to nestačí: u toho výchozího vychází zbytek zrovna nad
+ * polovinou kroku, takže matematické zaokrouhlení by dalo tentýž výsledek.
+ * Cena se proto posouvá vlastní položkou po stokorunách – tím se projde celý
+ * kruh zbytků a mezi nimi i ty pod polovinou. Tvrdí se vztah (zaokrouhlená
+ * cena je vždy ≥ spočtené a liší se míň než o krok), ne konkrétní částka. */
+{
+  const KROK = 1000;
+  let zbytkyPodPulkou = 0, chyby = [];
+  for (let i = 0; i < 10; i++) {
+    const z = JSON.parse(JSON.stringify(v.data.ock.zadani));
+    z.vlastniPolozky = Object.assign({ hrubaOck: [], atyp: [], oplasteni: [],
+                                       volitelne: [], rezie: [] }, z.vlastniPolozky);
+    z.vlastniPolozky.hrubaOck = (z.vlastniPolozky.hrubaOck || [])
+      .concat([{ nazev: 'Posun ceny pro test zaokrouhlení', mnozstvi: 1, cena: 100 * i }]);
+    const ri = eng.vypocet(z, v.data.cenik, JEKLY, true);
+    /* spočtená (nezaokrouhlená) cena = náklad + marže; souhrn ji nese rozložený */
+    const spoctena = ri.souhrn.zakladNaklad + ri.souhrn.zakladMarze;
+    const zaokr = ri.souhrn.zakladCena;
+    const rozdil = zaokr - spoctena;
+    if (zaokr % KROK !== 0) chyby.push('krok ' + zaokr);
+    if (rozdil < -1e-6) chyby.push('sníženo o ' + (-rozdil).toFixed(2));
+    if (rozdil >= KROK) chyby.push('přidáno ' + rozdil.toFixed(2));
+    if (rozdil > KROK / 2) zbytkyPodPulkou++;
+  }
+  test('základní cena je vždy násobek tisíce, nikdy nižší než spočtená a vyšší nejvýš o krok',
+    chyby.length === 0, chyby.join('; '));
+  /* Pojistka na samotný test: kdyby žádný z pokusů neměl zbytek pod polovinou
+   * kroku, prošel by tenhle test i matematickému zaokrouhlení a nehlídal by nic. */
+  test('mezi pokusy je i cena, u které se matematické zaokrouhlení liší od zaokrouhlení nahoru',
+    zbytkyPodPulkou > 0, zbytkyPodPulkou);
+}
+
 const slevaSchv = { procenta: 7, stav: 'schváleno' };
 const cS = zo.cenaNabidkyOck(r, slevaSchv, null);
 test('schválená sleva se propíše', Math.abs(cS.cena - r.souhrn.zakladCena * 0.93) < 1e-6, cS.cena);

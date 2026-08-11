@@ -48,6 +48,31 @@ test('číslo i text jsou přepis', f.prepisPlati(950) && f.prepisPlati('950'));
   zadNula.mnozstviPrepis = {};
   const r0 = eng.vypocet(zadNula, cen, JEKLY3, true);
   test('OCK: výpočet bez přepisů beze změny', Math.abs(r0.souhrn.zakladCena - cisty) < 1e-6);
+
+  /* Totéž pravidlo u MNOŽSTVÍ, a to v obou směrech. Ruční nula znamená „tuhle
+   * věc tady neděláme" – je to rozhodnutí obchodníka, ne prázdné pole. Kdyby
+   * se brala jako nevyplněno, položka by se vrátila ve spočteném množství a
+   * zákazník by dostal zaplaceno něco, co jsme z nabídky vědomě vyškrtli. */
+  const POLOZKA = 'INTERNÍ TRANSPORT';
+  const radek = (vysl) => vysl.sekce.hrubaOck.find(x => x.origNazev === POLOZKA);
+  const zadMnozNula = JSON.parse(JSON.stringify(zad));
+  zadMnozNula.mnozstviPrepis = { [POLOZKA]: 0 };
+  const rMnozNula = eng.vypocet(zadMnozNula, cen, JEKLY3, true);
+  test('OCK: ruční množství 0 platí (položka se nevrátí ve spočteném množství)',
+    radek(rMnozNula).mnozstvi === 0 && radek(rMnozNula).naklad === 0,
+    radek(rMnozNula).mnozstvi + ' / ' + radek(rMnozNula).naklad);
+  test('OCK: vynulovaná položka je označená jako přepsaná a zná spočtené množství',
+    radek(rMnozNula).prepsano === true && radek(rMnozNula).mnozstviAuto > 0,
+    radek(rMnozNula).mnozstviAuto);
+  test('OCK: vynulovaná položka sníží základní cenu',
+    rMnozNula.souhrn.zakladCena < cisty, rMnozNula.souhrn.zakladCena + ' vs ' + cisty);
+
+  const zadMnozPrazdno = JSON.parse(JSON.stringify(zad));
+  zadMnozPrazdno.mnozstviPrepis = { [POLOZKA]: '' };   // '' z importu, ne z formuláře
+  const rMnozPrazdno = eng.vypocet(zadMnozPrazdno, cen, JEKLY3, true);
+  test('OCK: prázdný přepis množství z importu nechává spočtené množství',
+    radek(rMnozPrazdno).mnozstvi === radek(r0).mnozstviAuto,
+    radek(rMnozPrazdno).mnozstvi + ' vs ' + radek(r0).mnozstviAuto);
 }
 
 console.log(`\n${ok} prošlo, ${fail} selhalo`);
