@@ -54,7 +54,8 @@ import pdPole from './functions/pd_pole.mjs';
 import pdDealy from './functions/pd_dealy.mjs';
 import pdDeal from './functions/pd_deal.mjs';
 import { config as configNocni } from './functions/zaloha_nocni.mjs';
-import { ADMIN_EMAIL, ROLE, POKUSY_MAX, zpozdeniMs, pokusyReset } from './lib/sdilene.mjs';
+import { ADMIN_EMAIL, ROLE, POKUSY_MAX, zpozdeniMs, pokusyReset,
+         uloziste, PODPIS_ULOZISTE } from './lib/sdilene.mjs';
 
 import { createHmac } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -111,6 +112,14 @@ for (const role of ROLE) {
  * role, vypnutí) — nikdy na účtech, kterými se matice sama přihlašuje. */
 await post(uzivatele, 'http://x/api/uzivatele',
   { akce: 'zaloz', email: 'terc@example.com', jmeno: 'Terč', role: 'Obchodník', heslo: 'TercHeslo1' }, cAdmin);
+
+/* Druhý obětní účet — jen pro řádek matice „smazání účtu". Mazání je nevratné,
+ * takže se nesmí dělat na tercovi, se kterým pracují ostatní řádky. Účet je
+ * bez zakázek: matice se ptá výhradně na to, KDO smí akci vyvolat, ne co
+ * všechno se přitom kontroluje (to hlídá oddíl MAZÁNÍ ÚČTŮ níž). */
+await post(uzivatele, 'http://x/api/uzivatele',
+  { akce: 'zaloz', email: 'smaz.terc@example.com', jmeno: 'Terč ke smazání',
+    role: 'Obchodník', heslo: 'SmazTercHeslo1' }, cAdmin);
 
 /* Skutečná firma (ne ukázková) a platný ceník, aby „povolená" políčka
  * matice opravdu něco udělala a nespadla na chybějících datech. */
@@ -209,6 +218,16 @@ const MATICE = [
     url: 'http://x/api/uzivatele',
     telo: () => ({ akce: 'aktivni', email: 'terc@example.com', aktivni: true }),
     proc: 'vypnutím cizího účtu by šlo vyřadit kolegu z práce',
+    prava: JEN_ADMIN },
+
+  /* Mazání účtu (11. 8. 2026). V matici je schválně vedle archivace a převodu:
+   * je to nejsilnější akce nad cizím účtem a jediná nevratná — kdyby ji směl
+   * kdokoli, dal by se kolega odstranit z firmy jedním požadavkem. Role se
+   * kontroluje dřív než existence účtu, takže první tři průchody účet nesmažou. */
+  { fn: uzivatele, nazev: 'uživatelé — smazání účtu (POST akce=smaz)', metoda: 'POST',
+    url: 'http://x/api/uzivatele',
+    telo: () => ({ akce: 'smaz', email: 'smaz.terc@example.com' }),
+    proc: 'nevratné odstranění kolegy z databáze patří jen administrátorovi',
     prava: JEN_ADMIN },
 
   { fn: uzivatele, nazev: 'moje heslo (POST akce=mojeheslo)', metoda: 'POST',
@@ -651,6 +670,320 @@ test('noční záloha proběhne i bez přihlášení (spouští ji Netlify, ne u
  * jedním požadavkem obejít matici zobrazení. Kdyby rejstřík vozil částky,
  * uviděl by cenu i ten, komu ji administrátor v zakázce nepřidělil.
  * ============================================================ */
+
+/* ============================================================
+ * ARCHIVACE ÚČTŮ A PŘEVOD ZAKÁZEK (11. 8. 2026)
+ *
+ * Účet po odchodu kolegy se dosud jen vypnul a zůstal v seznamu navždy.
+ * Smazat ho nejde — jeho jméno je podepsané pod odeslanými nabídkami.
+ * Archiv je proto odsunutí z očí, ne mazání; a protože práce po kolegovi
+ * musí mít nového hospodáře, jde k tomu převést autorství zakázek.
+ * ============================================================ */
+
+console.log('\n===== ARCHIVACE ÚČTŮ A PŘEVOD ZAKÁZEK =====\n');
+
+await post(uzivatele, 'http://x/api/uzivatele',
+  { akce: 'zaloz', email: 'odchazi@example.com', jmeno: 'Odcházející',
+    role: 'Obchodník', heslo: 'OdchaziHeslo1' }, cAdmin);
+const cOdchazi = await prihlas('odchazi@example.com', 'OdchaziHeslo1');
+
+/* Dvě zakázky založené odcházejícím kolegou — autor se razítkuje serverem. */
+for (const c of ['2026 - OPR - CN - 0930', '2026 - OPR - CN - 0931'])
+  await post(zakazky, 'http://x/api/zakazky', { zakazka: zakazkaCislo(c) }, cOdchazi);
+const rejPred = await (await get(zakazky, 'http://x/api/zakazky', cAdmin)).json();
+const mojeOdchazi = rejPred.rejstrik.zakazky.filter(z => z.autor === 'odchazi@example.com');
+test('server zapíše autora zakázky sám', mojeOdchazi.length === 2,
+  JSON.stringify(rejPred.rejstrik.zakazky.map(z => z.autor)));
+
+/* Autor se razítkuje jen jednou. Kdyby ho přepsal každý, kdo zakázku uloží,
+ * stal by se „autorem" ten, kdo si ji naposledy otevřel. */
+const znovu = await (await get(zakazky,
+  'http://x/api/zakazky?soubor=2026-OPR-CN-0930.json', cAdmin)).json();
+await post(zakazky, 'http://x/api/zakazky', { zakazka: znovu.zakazka }, cAdmin);
+const poUlozeni = await (await get(zakazky,
+  'http://x/api/zakazky?soubor=2026-OPR-CN-0930.json', cAdmin)).json();
+test('autor se uložením cizí rukou nepřepíše',
+  poUlozeni.zakazka.autor === 'odchazi@example.com', poUlozeni.zakazka.autor);
+test('kdo naposledy uložil, se ale zaznamená',
+  poUlozeni.zakazka.upravil === ADMIN_EMAIL, poUlozeni.zakazka.upravil);
+
+test('archivovat účet smí jen administrátor',
+  (await post(uzivatele, 'http://x/api/uzivatele',
+    { akce: 'archiv', email: 'odchazi@example.com', archiv: true }, cObch)).status === 403);
+const arch = await (await post(uzivatele, 'http://x/api/uzivatele',
+  { akce: 'archiv', email: 'odchazi@example.com', archiv: true }, cAdmin)).json();
+test('archivace projde', arch.ok === true, JSON.stringify(arch));
+test('archivovaný účet se nepřihlásí',
+  (await post(prihlaseni, 'http://x/api/prihlaseni',
+    { email: 'odchazi@example.com', heslo: 'OdchaziHeslo1' })).status === 401);
+const seznamA = await (await get(uzivatele, 'http://x/api/uzivatele', cAdmin)).json();
+const zaznamA = seznamA.uzivatele.find(x => x.email === 'odchazi@example.com');
+test('seznam účtů archiv přizná', zaznamA && zaznamA.archiv === true && zaznamA.aktivni === false);
+test('účet se archivací nesmazal', !!zaznamA);
+
+/* Hlavní administrátorský účet nejde archivovat — jinak by nezůstal nikdo,
+ * kdo archiv vrátí zpět. */
+test('hlavní administrátorský účet nejde archivovat',
+  (await post(uzivatele, 'http://x/api/uzivatele',
+    { akce: 'archiv', email: ADMIN_EMAIL, archiv: true }, cAdmin)).status === 400);
+
+test('převádět sám na sebe nedává smysl a neprojde',
+  (await post(uzivatele, 'http://x/api/uzivatele',
+    { akce: 'prevod', email: 'odchazi@example.com', na: 'odchazi@example.com' }, cAdmin)).status === 400);
+/* Cíl musí být ČINNÝ účet. Převod na další archivovaný by práci po kolegovi
+ * ztratil podruhé — a přišlo by se na to zase až za rok. */
+await post(uzivatele, 'http://x/api/uzivatele',
+  { akce: 'zaloz', email: 'odesel.driv@example.com', jmeno: 'Odešel dřív',
+    role: 'Obchodník', heslo: 'OdeselHeslo1' }, cAdmin);
+await post(uzivatele, 'http://x/api/uzivatele',
+  { akce: 'archiv', email: 'odesel.driv@example.com', archiv: true }, cAdmin);
+test('převádět na archivovaný účet nejde',
+  (await post(uzivatele, 'http://x/api/uzivatele',
+    { akce: 'prevod', email: 'odchazi@example.com', na: 'odesel.driv@example.com' }, cAdmin)).status === 400);
+test('převádět na neexistující účet nejde',
+  (await post(uzivatele, 'http://x/api/uzivatele',
+    { akce: 'prevod', email: 'odchazi@example.com', na: 'nikdo.takovy@example.com' }, cAdmin)).status === 404);
+const prev = await (await post(uzivatele, 'http://x/api/uzivatele',
+  { akce: 'prevod', email: 'odchazi@example.com', na: UCTY['Obchodník'].email }, cAdmin)).json();
+test('převod ohlásí, kolik zakázek přepsal', prev.ok && prev.prevedeno === 2,
+  JSON.stringify(prev));
+const rejPo = await (await get(zakazky, 'http://x/api/zakazky', cAdmin)).json();
+test('po převodu nemá odcházející v rejstříku žádnou zakázku',
+  rejPo.rejstrik.zakazky.every(z => z.autor !== 'odchazi@example.com'));
+/* „aspoň dvě" schválně: obchodník má v téhle sadě i vlastní zakázky
+ * z křížové matice, takže přesné číslo by test svazovalo s cizím oddílem. */
+test('a nový hospodář je má',
+  rejPo.rejstrik.zakazky.filter(z => z.autor === UCTY['Obchodník'].email).length >= 2,
+  rejPo.rejstrik.zakazky.filter(z => z.autor === UCTY['Obchodník'].email).length);
+const zakPo = await (await get(zakazky,
+  'http://x/api/zakazky?soubor=2026-OPR-CN-0931.json', cAdmin)).json();
+test('autor se přepsal i v samotné zakázce, nejen v rejstříku',
+  zakPo.zakazka.autor === UCTY['Obchodník'].email, zakPo.zakazka.autor);
+test('převod smí jen administrátor',
+  (await post(uzivatele, 'http://x/api/uzivatele',
+    { akce: 'prevod', email: 'odchazi@example.com', na: ADMIN_EMAIL }, cObch)).status === 403);
+
+/* Archiv jde vzít zpět — kolega se může vrátit. */
+await post(uzivatele, 'http://x/api/uzivatele',
+  { akce: 'archiv', email: 'odchazi@example.com', archiv: false }, cAdmin);
+await post(uzivatele, 'http://x/api/uzivatele',
+  { akce: 'aktivni', email: 'odchazi@example.com', aktivni: true }, cAdmin);
+test('vrácení z archivu účet zase pustí dovnitř',
+  (await post(prihlaseni, 'http://x/api/prihlaseni',
+    { email: 'odchazi@example.com', heslo: 'OdchaziHeslo1' })).status === 200);
+
+/* ============================================================
+ * MAZÁNÍ ÚČTŮ (11. 8. 2026)
+ *
+ * Zadání majitele: „Uživatele bych ještě potřeboval mít i možnost mazat."
+ * Mazání je jediná nevratná akce nad účtem, takže se tu neověřuje jen to,
+ * že se povedlo, ale hlavně čtyři věci, které se povést NESMÍ:
+ *   · smaže to někdo bez role Administrátor,
+ *   · zmizí hlavní administrátorský účet nebo ten, kdo zrovna maže,
+ *   · zmizí účet i s prací, která pak zůstane podepsaná duchem,
+ *   · účet sice zmizí ze seznamu, ale někudy jinudy pořád projde
+ *     (přihlášení, stará cookie, záloha) nebo po sobě nechá podpis.
+ *
+ * Poslední bod je jádro věci. Úložiště klíč odstranit neumí, takže se účet
+ * maže NÁHROBKEM — na jeho klíč se zapíše prázdno. Testy níž proto chodí
+ * na všechny cesty, kudy se účet čte, ne jen na seznam.
+ * ============================================================ */
+
+console.log('\n===== MAZÁNÍ ÚČTŮ =====\n');
+
+/* Nejmenší platný datový zápis PNG — obsah nikoho nezajímá, jde o to, že
+ * podpis v úložišti opravdu je a po smazání účtu tam být nesmí. */
+const PODPIS_PNG = 'data:image/png;base64,iVBORw0KGgo=';
+
+await post(uzivatele, 'http://x/api/uzivatele',
+  { akce: 'zaloz', email: 'mazany@example.com', jmeno: 'Ke smazání',
+    role: 'Obchodník', heslo: 'MazanyHeslo1' }, cAdmin);
+const cMazany = await prihlas('mazany@example.com', 'MazanyHeslo1');
+await post(uzivatele, 'http://x/api/uzivatele',
+  { akce: 'podpis', email: 'mazany@example.com', obrazek: PODPIS_PNG }, cAdmin);
+const podpisUloziste = await uloziste(PODPIS_ULOZISTE);
+test('příprava: mazaný účet má nahraný podpis',
+  !!(await podpisUloziste.cti('mazany@example.com')));
+
+/* Dvě zakázky, a na jedné z nich RAZÍTKA: zámek odeslané nabídky a podpis
+ * pod rozhodnutím o slevě. Obojí musí smazání účtu přežít beze změny —
+ * říkají, kdo co tehdy udělal, a to se nepřepisuje. */
+const razitkova = zakazkaCislo('2026 - OPR - CN - 0940');
+razitkova.varianty[0].data.sleva = { procenta: 12, role: 'Obchodník',
+  stav: 'schváleno', schvalil: 'mazany@example.com',
+  schvalilKdy: new Date().toISOString(), poznamka: '' };
+zam.zamkniVariantu(razitkova.varianty[0],
+  { typ: 'nabidka', kdy: new Date().toISOString(), kdo: 'mazany@example.com' });
+await post(zakazky, 'http://x/api/zakazky', { zakazka: razitkova }, cMazany);
+await post(zakazky, 'http://x/api/zakazky',
+  { zakazka: zakazkaCislo('2026 - OPR - CN - 0941') }, cMazany);
+
+test('smazat účet smí jen administrátor',
+  (await post(uzivatele, 'http://x/api/uzivatele',
+    { akce: 'smaz', email: 'mazany@example.com' }, cObch)).status === 403);
+test('a nepomůže ani role vedoucího',
+  (await post(uzivatele, 'http://x/api/uzivatele',
+    { akce: 'smaz', email: 'mazany@example.com' }, UCTY['Vedoucí'].cookie)).status === 403);
+
+/* Hlavní účet a vlastní účet — dvě pojistky proti omylu správce, ne proti
+ * útočníkovi. Obě končí tím, že by v aplikaci nezbyl nikdo, kdo ji spravuje. */
+/* Maže DRUHÝ administrátor, ne hlavní účet sám sebe. Kdyby se hlavní účet
+ * rušil vlastní rukou, zastavila by ho už zábrana „sám sebe smazat nelze"
+ * a o pojistce na ADMIN_EMAIL by test neřekl vůbec nic. (Přišlo se na to
+ * mutačním testem: vypnutá pojistka na hlavním účtu prošla zeleně.) */
+const smazHlavniho = await post(uzivatele, 'http://x/api/uzivatele',
+  { akce: 'smaz', email: ADMIN_EMAIL }, UCTY['Administrátor'].cookie);
+test('hlavní administrátorský účet nejde smazat ani jinému administrátorovi',
+  smazHlavniho.status === 400, smazHlavniho.status);
+test('a odmítnutí vysvětlí proč, ne jen „nelze"',
+  /dveře|zamkl/i.test((await smazHlavniho.json()).chyba || ''));
+test('hlavní administrátor po pokusu o smazání dál funguje',
+  (await get(zaloha, 'http://x/api/zaloha', cAdmin)).status === 200);
+
+const smazSebe = await post(uzivatele, 'http://x/api/uzivatele',
+  { akce: 'smaz', email: UCTY['Administrátor'].email }, UCTY['Administrátor'].cookie);
+test('sám sebe smazat nejde', smazSebe.status === 400);
+test('a správce, který to zkusil, pracuje dál',
+  (await get(ja, 'http://x/api/ja', UCTY['Administrátor'].cookie)).status === 200);
+
+test('smazat neexistující účet vrátí 404, ne tichý souhlas',
+  (await post(uzivatele, 'http://x/api/uzivatele',
+    { akce: 'smaz', email: 'nikdo.takovy@example.com' }, cAdmin)).status === 404);
+
+/* Účet s prací na sobě se nesmaže rovnou — jinak by zakázky zůstaly
+ * podepsané e-mailem, který už neexistuje. */
+const odmitnuto = await post(uzivatele, 'http://x/api/uzivatele',
+  { akce: 'smaz', email: 'mazany@example.com' }, cAdmin);
+const odmitnutoT = await odmitnuto.json();
+test('účet se zakázkami se bez převodu nesmaže', odmitnuto.status === 409,
+  odmitnuto.status);
+test('odmítnutí řekne, kolik zakázek na účtu visí',
+  odmitnutoT.zakazek === 2 && /2 zakázky/.test(odmitnutoT.chyba || ''),
+  JSON.stringify(odmitnutoT));
+test('odmítnutí poradí, že se má nejdřív převést',
+  /převe/i.test(odmitnutoT.chyba || ''), odmitnutoT.chyba);
+test('a odmítnutý účet se opravdu nesmazal — pořád se jím jde přihlásit',
+  (await post(prihlaseni, 'http://x/api/prihlaseni',
+    { email: 'mazany@example.com', heslo: 'MazanyHeslo1' })).status === 200);
+
+const prevodPredSmazanim = await (await post(uzivatele, 'http://x/api/uzivatele',
+  { akce: 'prevod', email: 'mazany@example.com', na: UCTY['Vedoucí'].email }, cAdmin)).json();
+test('převod před smazáním přepíše obě zakázky',
+  prevodPredSmazanim.ok === true && prevodPredSmazanim.prevedeno === 2,
+  JSON.stringify(prevodPredSmazanim));
+
+const smazano = await (await post(uzivatele, 'http://x/api/uzivatele',
+  { akce: 'smaz', email: 'mazany@example.com' }, cAdmin)).json();
+test('po převodu už smazání projde',
+  smazano.ok === true && smazano.smazano === true, JSON.stringify(smazano));
+
+/* --- a teď všechny cesty, kudy se účet čte --- */
+
+test('smazaný účet se nepřihlásí',
+  (await post(prihlaseni, 'http://x/api/prihlaseni',
+    { email: 'mazany@example.com', heslo: 'MazanyHeslo1' })).status === 401);
+const seznamPoSmazani = await (await get(uzivatele, 'http://x/api/uzivatele', cAdmin)).json();
+test('smazaný účet není v seznamu účtů',
+  seznamPoSmazani.uzivatele.every(x => x.email !== 'mazany@example.com'),
+  seznamPoSmazani.uzivatele.map(x => x.email).join(','));
+test('v seznamu nezůstal ani prázdný řádek po náhrobku',
+  seznamPoSmazani.uzivatele.every(x => !!x.email && !x.smazano));
+
+/* Relace žije 12 hodin, účet ne. Cookie cMazany byla vydaná PŘED smazáním —
+ * kdyby s ní šlo dál pracovat, znamenalo by smazání účtu půl dne nic. */
+test('smazaný účet neprojde ani s cookie vydanou před smazáním (/api/ja)',
+  (await get(ja, 'http://x/api/ja', cMazany)).status === 401);
+test('smazaný účet neprojde ani na zakázky',
+  (await get(zakazky, 'http://x/api/zakazky', cMazany)).status === 401);
+test('smazaný účet neuloží zakázku',
+  (await post(zakazky, 'http://x/api/zakazky',
+    { zakazka: zakazkaCislo('2026 - OPR - CN - 0949') }, cMazany)).status === 401);
+
+test('podpis se smazal spolu s účtem (nezůstal v úložišti podpisů)',
+  !(await podpisUloziste.cti('mazany@example.com')),
+  JSON.stringify(await podpisUloziste.cti('mazany@example.com')).slice(0, 80));
+
+/* Záloha čte úložiště účtů po klíčích. Kdyby si s náhrobkem neporadila,
+ * vrátila by se smazaný účet do databáze při první obnově ze zálohy. */
+const zalohaPoSmazani = await (await get(zaloha, 'http://x/api/zaloha', cAdmin)).json();
+test('smazaný účet neveze ani záloha ke stažení',
+  zalohaPoSmazani.zaloha.uzivatele.every(x => x && x.email !== 'mazany@example.com'),
+  zalohaPoSmazani.zaloha.uzivatele.map(x => x && x.email).join(','));
+test('a v seznamu účtů zálohy nezůstal prázdný záznam',
+  zalohaPoSmazani.zaloha.uzivatele.every(x => x && !!x.email));
+
+/* Náhrobek: úložiště klíč odstranit neumí, takže klíč zůstane — ale čte se
+ * jako prázdno. Kdyby na něm zůstal jakýkoli obsah, choval by se někde
+ * v aplikaci jako účet. */
+const uctyUloziste = await uloziste('uzivatele');
+test('klíč smazaného účtu v úložišti zůstal (mazat klíče API neumí)',
+  (await uctyUloziste.seznam()).includes('mazany@example.com'));
+test('ale čte se jako neexistující účet (náhrobek je prázdný)',
+  (await uctyUloziste.cti('mazany@example.com')) == null,
+  JSON.stringify(await uctyUloziste.cti('mazany@example.com')));
+const kniha = await (await uloziste('smazani')).cti('mazany@example.com');
+test('v knize smazaných účtů je zapsáno kdo a kdy',
+  !!kniha && kniha.smazano === true && kniha.kdo === ADMIN_EMAIL && !!kniha.kdy,
+  JSON.stringify(kniha));
+
+/* Razítka pod odeslanými nabídkami a podpisy pod rozhodnutími o slevách se
+ * NEPŘEPISUJÍ. Autor („kdo to má dnes na starost") se převodem změnil,
+ * razítko („kdo to tehdy udělal") zůstalo. */
+const razitkaPo = await (await get(zakazky,
+  'http://x/api/zakazky?soubor=2026-OPR-CN-0940.json', cAdmin)).json();
+test('zámek odeslané nabídky nese pořád jméno toho, kdo ji tehdy odeslal',
+  razitkaPo.zakazka.varianty[0].zamek.kdo === 'mazany@example.com',
+  JSON.stringify(razitkaPo.zakazka.varianty[0].zamek));
+test('podpis pod rozhodnutím o slevě zůstal taky beze změny',
+  razitkaPo.zakazka.varianty[0].data.sleva.schvalil === 'mazany@example.com',
+  razitkaPo.zakazka.varianty[0].data.sleva.schvalil);
+test('autor zakázky je ale nový hospodář, ne smazaný účet',
+  razitkaPo.zakazka.autor === UCTY['Vedoucí'].email, razitkaPo.zakazka.autor);
+
+/* E-mail se po smazání dá použít znovu — a nový člověk NESMÍ zdědit
+ * podpis po tom předchozím. */
+const znovuZalozen = await (await post(uzivatele, 'http://x/api/uzivatele',
+  { akce: 'zaloz', email: 'mazany@example.com', jmeno: 'Někdo jiný',
+    role: 'Obchodník', heslo: 'ZnovuHeslo1' }, cAdmin)).json();
+test('smazaný e-mail jde použít pro nový účet', znovuZalozen.ok === true,
+  JSON.stringify(znovuZalozen));
+const znovuPrihlasen = await (await post(prihlaseni, 'http://x/api/prihlaseni',
+  { email: 'mazany@example.com', heslo: 'ZnovuHeslo1' })).json();
+test('nový účet se stejným e-mailem nedostane podpis po předchůdci',
+  znovuPrihlasen.ok === true && !znovuPrihlasen.podpis,
+  String(znovuPrihlasen.podpis || '').slice(0, 40));
+
+/* --- přebití přepínačem: smazat i se zakázkami --- */
+
+await post(uzivatele, 'http://x/api/uzivatele',
+  { akce: 'zaloz', email: 'mazany2@example.com', jmeno: 'Ke smazání i s prací',
+    role: 'Obchodník', heslo: 'Mazany2Heslo1' }, cAdmin);
+const cMazany2 = await prihlas('mazany2@example.com', 'Mazany2Heslo1');
+await post(zakazky, 'http://x/api/zakazky',
+  { zakazka: zakazkaCislo('2026 - OPR - CN - 0942') }, cMazany2);
+
+test('i tady platí, že se účet se zakázkami bez převodu nesmaže',
+  (await post(uzivatele, 'http://x/api/uzivatele',
+    { akce: 'smaz', email: 'mazany2@example.com' }, cAdmin)).status === 409);
+const smazSeZakazkami = await (await post(uzivatele, 'http://x/api/uzivatele',
+  { akce: 'smaz', email: 'mazany2@example.com', i_se_zakazkami: true }, cAdmin)).json();
+test('přepínač „i se zakázkami" smazání povolí a řekne, kolik jich odepsal',
+  smazSeZakazkami.ok === true && smazSeZakazkami.odepsano === 1,
+  JSON.stringify(smazSeZakazkami));
+const zakBezAutora = await (await get(zakazky,
+  'http://x/api/zakazky?soubor=2026-OPR-CN-0942.json', cAdmin)).json();
+test('zakázka po smazaném účtu nezmizela', !!zakBezAutora.zakazka);
+test('ale autor je prázdný, ne odkaz na neexistující účet',
+  zakBezAutora.zakazka.autor === '', JSON.stringify(zakBezAutora.zakazka.autor));
+const rejPoSmazani = await (await get(zakazky, 'http://x/api/zakazky', cAdmin)).json();
+test('ani rejstřík nenese odkaz na smazaný účet',
+  rejPoSmazani.rejstrik.zakazky.every(z => z.autor !== 'mazany2@example.com'),
+  rejPoSmazani.rejstrik.zakazky.map(z => z.autor).join(','));
+test('smazaný účet i s prací se nepřihlásí',
+  (await post(prihlaseni, 'http://x/api/prihlaseni',
+    { email: 'mazany2@example.com', heslo: 'Mazany2Heslo1' })).status === 401);
+test('a neprojde ani se svou původní cookie',
+  (await get(ja, 'http://x/api/ja', cMazany2)).status === 401);
 
 console.log('\n===== SDÍLENÝ REJSTŘÍK ŽÁDOSTÍ O SLEVU =====\n');
 

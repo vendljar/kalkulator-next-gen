@@ -10,6 +10,9 @@
  *                                              — údaje pod nabídku (svoje každý,
  *                                                cizí jen Administrátor)
  *   'podpis'    { obrazek [, email] }          — sken podpisu s razítkem (dtto)
+ *   'archiv'    { email, archiv }              — odsunout účet do archivu (jen Administrátor)
+ *   'prevod'    { email, na }                  — převést zakázky po kolegovi (jen Administrátor)
+ *   'smaz'      { email [, i_se_zakazkami] }   — nevratné smazání účtu (jen Administrátor)
  *
  * Proč 'mojeheslo' vyžaduje staré heslo: relace je cookie. Kdyby stačila
  * cookie sama, kdokoli u odemčeného počítače by tiše změnil heslo a účet
@@ -28,6 +31,32 @@ import { uloziste, otiskHesla, hesloSedi, vyzadujRoli, json, ROLE, ADMIN_EMAIL,
  * jinak NEUPRAVUJE — každý si ho píše po svém („+420 602 590 945",
  * „602590945", klidně i s linkou — a do nabídky patří tak, jak ho zadal. */
 const text = (v, max = 120) => String(v == null ? '' : v).trim().slice(0, max);
+
+/* Kniha smazaných účtů (akce 'smaz', 11. 8. 2026). Samostatné úložiště, ne
+ * klíč v „uzivatele": seznam účtů i obě zálohy procházejí VŠECHNY klíče
+ * úložiště účtů a co v nich najdou, považují za účet. Záznam o smazání
+ * uložený mezi nimi by se tak vozil v zálohách jako podivný poloúčet bez
+ * hesla a role. Takhle je stranou a nikomu nepřekáží. */
+const SMAZANI_ULOZISTE = 'smazani';
+
+/* Počet zakázek česky. „1 zakázku", „3 zakázky", „7 zakázek" — hláška, kterou
+ * si správce přečte v okamžiku, kdy mu server smazání odmítne, má znít jako
+ * věta, ne jako výpis z databáze. */
+const zakazekSlovem = (n) => n + (n === 1 ? ' zakázku' : (n >= 2 && n <= 4 ? ' zakázky' : ' zakázek'));
+
+/* Klíče zakázek, u kterých je daný účet podepsaný jako AUTOR (tj. „kdo to má
+ * dnes na starost"). Poškozená zakázka se přeskočí — jedna vadná položka
+ * nesmí zastavit celou akci, stejně jako u převodu. */
+async function zakazkyAutora(sz, email) {
+  const klice = (await sz.seznam('z/')) || [];
+  const moje = [];
+  for (const k of klice) {
+    let zak = null;
+    try { zak = await sz.cti(k); } catch (e) { zak = null; }
+    if (zak && String(zak.autor || '').toLowerCase() === email) moje.push(k);
+  }
+  return moje;
+}
 
 export default async (req) => {
   const prihlaseni = await vyzadujRoli(req);            // nejdřív jen: kdo jsi?
@@ -118,6 +147,150 @@ export default async (req) => {
       if (email === ADMIN_EMAIL && t.aktivni === false)
         return json({ ok: false, chyba: 'Hlavní administrátorský účet nejde vypnout.' }, 400);
       ucet.aktivni = !!t.aktivni;
+    } else if (t.akce === 'archiv') {
+      /* Archivace (11. 8. 2026) — třetí stav vedle „zapnutý" a „vypnutý".
+       *
+       * Účet po odchodu kolegy se dnes vypne, ale zůstane v seznamu navždy.
+       * Po roce je v něm víc bývalých než současných a správce v něm hledá.
+       * Smazat ho přitom nejde: jeho jméno je podepsané pod odeslanými
+       * nabídkami a pod rozhodnutími o slevách, a ta razítka musí zůstat
+       * čitelná. Archiv je proto jen odsunutí z očí — účet se nemaže,
+       * jen se nezobrazuje v běžném seznamu a nedá se jím přihlásit. */
+      if (email === ADMIN_EMAIL && t.archiv)
+        return json({ ok: false, chyba: 'Hlavní administrátorský účet nejde archivovat.' }, 400);
+      ucet.archiv = !!t.archiv;
+      if (ucet.archiv) {
+        ucet.aktivni = false;          // archivovaný účet se nikdy nepřihlásí
+        ucet.archivKdy = new Date().toISOString();
+        ucet.archivKdo = relace.email;
+      } else {
+        delete ucet.archivKdy; delete ucet.archivKdo;
+      }
+    } else if (t.akce === 'prevod') {
+      /* Převod zakázek po odcházejícím kolegovi (11. 8. 2026).
+       *
+       * Archivovat účet nestačí — práce po něm zůstane podepsaná jménem,
+       * které už ve firmě není, a nikdo neví, na koho se s ní obrátit.
+       * Tahle akce přepíše AUTORA zakázek na jiného, činného kolegu.
+       *
+       * Co se NEPŘEPISUJE: razítka na odeslaných nabídkách a podpisy pod
+       * rozhodnutími o slevách. Ta říkají, kdo co tehdy udělal, a přepsat
+       * je by znamenalo přepsat historii. Autor je „kdo to má dnes na
+       * starost", ne „kdo to tehdy počítal". */
+      const na = String(t.na || '').trim().toLowerCase();
+      if (!na) return json({ ok: false, chyba: 'Chybí e-mail kolegy, na kterého se má převést.' }, 400);
+      if (na === email) return json({ ok: false, chyba: 'Převádět na tentýž účet nedává smysl.' }, 400);
+      const cil = await u.cti(na);
+      if (!cil) return json({ ok: false, chyba: 'Cílový účet neexistuje.' }, 404);
+      if (cil.aktivni === false || cil.archiv)
+        return json({ ok: false, chyba: 'Převádět jde jen na činný účet — '
+          + 'na vypnutý nebo archivovaný by se práce ztratila podruhé.' }, 400);
+
+      const sz = await uloziste('zakazky');
+      const klice = (await sz.seznam('z/')) || [];
+      let prevedeno = 0, preskoceno = 0;
+      for (const k of klice) {
+        let zak = null;
+        /* Jedna poškozená zakázka nesmí zastavit převod zbytku — správce by
+         * netušil, kde skončil, a spustil by to znovu. */
+        try { zak = await sz.cti(k); } catch (e) { zak = null; }
+        if (!zak) { preskoceno++; continue; }
+        if (String(zak.autor || '').toLowerCase() !== email) continue;
+        zak.autor = na;
+        try { await sz.zapis(k, zak); prevedeno++; } catch (e) { preskoceno++; }
+      }
+      /* Rejstřík se přestavuje ze zakázek, ne obráceně — aby v něm zůstal
+       * jediný zdroj pravdy, přepíše se autor i v něm. */
+      const rej = await sz.cti('_rejstrik');
+      if (rej && Array.isArray(rej.zakazky)) {
+        rej.zakazky.forEach((z) => {
+          if (z && String(z.autor || '').toLowerCase() === email) z.autor = na;
+        });
+        await sz.zapis('_rejstrik', rej);
+      }
+      await u.zapis(email, ucet);
+      return json({ ok: true, email, na, prevedeno, preskoceno });
+    } else if (t.akce === 'smaz') {
+      /* Smazání účtu (11. 8. 2026) — třetí akce v rodině vedle 'archiv'
+       * a 'prevod', a jediná NEVRATNÁ. Archiv účet jen odsune z očí, převod
+       * mu odebere práci; tohle ho odstraní z databáze nadobro.
+       *
+       * JAK SE MAŽE, KDYŽ ÚLOŽIŠTĚ MAZAT NEUMÍ
+       * Naše obálka nad Netlify Blobs (lib/sdilene.mjs) nabízí jen `cti`,
+       * `zapis` a `seznam` — odstranit klíč nejde. Účet se proto přepíše
+       * NÁHROBKEM: na jeho klíč se zapíše prázdno (JSON null). Klíč v úložišti
+       * zůstane, ale `cti` nad ním vrátí totéž co nad klíčem, který nikdy
+       * neexistoval — a přesně o to jde. Všechna místa, kudy se účet čte,
+       * se tím chovají správně bez jediné úpravy:
+       *   · vyzadujRoli (lib/sdilene.mjs)  → `if (!ucet)` → 401, i s platnou
+       *     cookie vydanou PŘED smazáním (relace žije 12 hodin, účet ne);
+       *   · přihlášení (functions/prihlaseni.mjs) → `!!ucet` neprojde;
+       *   · seznam účtů níž v tomhle souboru → `if (!x)` záznam přeskočí;
+       *   · záloha ke stažení i noční otisk (functions/zaloha.mjs,
+       *     lib/zalohovani.mjs) → obě mají `if (x)`, takže smazaný účet
+       *     neputuje ani do zálohy a nevrátí se obnovou.
+       * Kdo, kdy a kolik zakázek — to se zapíše do knihy smazaných účtů
+       * (SMAZANI_ULOZISTE) stranou. Do samotného náhrobku to jít nemůže:
+       * jakýkoli obsah by z něj udělal záznam, který někde projde jako účet.
+       *
+       * CO SE NEMAŽE A NEPŘEPISUJE
+       * Razítka pod odeslanými nabídkami (`zamek.kdo`) a podpisy pod
+       * rozhodnutími o slevách (`sleva.schvalil`, `sleva.zamitl`). Ta říkají,
+       * kdo co TEHDY udělal, a přepsat je by znamenalo přepsat historii —
+       * nabídka, kterou zákazník drží v ruce, by najednou byla ničí.
+       * Až sem někdo za půl roku přijde „uklidit i tohle": nedělej to. */
+      if (email === ADMIN_EMAIL)
+        return json({ ok: false, chyba: 'Hlavní administrátorský účet smazat nejde — '
+          + 'zamkli byste si tím dveře od vlastní databáze.' }, 400);
+      if (email === relace.email)
+        return json({ ok: false, chyba: 'Sám sebe smazat nemůžete. Ať vás smaže jiný '
+          + 'administrátor — jinak byste se odřízli uprostřed práce.' }, 400);
+
+      /* Zakázky napřed. Účet podepsaný pod prací se nesmí ztratit dřív, než
+       * práce dostane nového hospodáře: jinak by zakázky zůstaly podepsané
+       * e-mailem, který už neexistuje, a nikdo by nevěděl, čí jsou. */
+      const sz = await uloziste('zakazky');
+      const moje = await zakazkyAutora(sz, email);
+      const iSeZakazkami = t.i_se_zakazkami === true;
+      if (moje.length && !iSeZakazkami)
+        return json({ ok: false, zakazek: moje.length,
+          chyba: 'Účet ' + email + ' má na sobě ' + zakazekSlovem(moje.length)
+            + '. Nejdřív je převeďte na jiného kolegu (akce „Převést zakázky"), '
+            + 'jinak by zůstaly podepsané e-mailem, který už neexistuje.' }, 409);
+
+      /* Přebití přepínačem `i_se_zakazkami`: účet zmizí, ale odkaz na sebe
+       * po sobě nechat nesmí — autor se přepíše na PRÁZDNO, tedy „nikdo",
+       * ne na adresu, která už nikomu nepatří. Tlačítko v prohlížeči na to
+       * schválně není: kdo přepínač použije, musí ho poslat vědomě. */
+      let odepsano = 0, preskoceno = 0;
+      for (const k of moje) {
+        let zak = null;
+        try { zak = await sz.cti(k); } catch (e) { zak = null; }
+        if (!zak) { preskoceno++; continue; }
+        zak.autor = '';
+        try { await sz.zapis(k, zak); odepsano++; } catch (e) { preskoceno++; }
+      }
+      if (odepsano) {
+        const rej = await sz.cti('_rejstrik');
+        if (rej && Array.isArray(rej.zakazky)) {
+          rej.zakazky.forEach((z) => {
+            if (z && String(z.autor || '').toLowerCase() === email) z.autor = '';
+          });
+          await sz.zapis('_rejstrik', rej);
+        }
+      }
+
+      /* Podpis leží v samostatném úložišti (PODPIS_ULOZISTE), takže by
+       * smazání účtu přežil. Sken podpisu s razítkem člověka, který
+       * v aplikaci není, nemá na serveru co dělat — a kdyby se e-mail
+       * jednou použil znovu, podepisoval by se jím někdo cizí. */
+      try { await (await uloziste(PODPIS_ULOZISTE)).zapis(email, null); } catch (e) { /* podpis tam být nemusel */ }
+
+      const kdy = new Date().toISOString();
+      await (await uloziste(SMAZANI_ULOZISTE)).zapis(email,
+        { email, smazano: true, kdy, kdo: relace.email, zakazek: odepsano });
+      await u.zapis(email, null);          // náhrobek: klíč zůstane, účet ne
+      return json({ ok: true, email, smazano: true, kdy, odepsano, preskoceno });
     } else {
       return json({ ok: false, chyba: 'Neznámá akce.' }, 400);
     }
@@ -142,9 +315,14 @@ export default async (req) => {
      * porovnával e-mail s adresou napsanou v `online_ui.js` — takže adresa
      * hlavního administrátora byla ve zdrojácích dvakrát a při změně na
      * serveru by se aplikace začala chovat jinak než server. */
-    if (x) out.push({ email: x.email, jmeno: x.jmeno, titul: x.titul || '',
+    /* Smazaný účet do seznamu nepatří vůbec. `!x` chytí náhrobek (na klíči
+     * smazaného účtu leží prázdno — viz akce 'smaz'); `x.smazano` je tu
+     * navíc pro případ, že by někdo někdy zapsal náhrobek s obsahem. Lepší
+     * dvě podmínky navíc než smazaný kolega zpátky v tabulce. */
+    if (x && !x.smazano) out.push({ email: x.email, jmeno: x.jmeno, titul: x.titul || '',
       funkce: x.funkce || '', telefon: x.telefon || '',
-      role: x.role, aktivni: x.aktivni !== false, hlavni: x.email === ADMIN_EMAIL });
+      role: x.role, aktivni: x.aktivni !== false, hlavni: x.email === ADMIN_EMAIL,
+      archiv: !!x.archiv, archivKdy: String(x.archivKdy || '') });
   }
   return json({ ok: true, uzivatele: out });
 };

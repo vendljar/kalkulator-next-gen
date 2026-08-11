@@ -64,6 +64,17 @@ export default async (req) => {
     }
   }
 
+  /* Autor zakázky (11. 8. 2026). Doteď se nikde nepsalo, kdo zakázku založil —
+   * rejstřík věděl jen, kdo do něj naposledy sáhl. Bez autora se ale nedá
+   * převést práce po odcházejícím kolegovi na někoho jiného, což je přesně
+   * to, kvůli čemu archivace účtů vznikla.
+   *
+   * Autor se zapisuje jen jednou, při prvním uložení. Kdyby se přepisoval
+   * pokaždé, „autorem" by se stal ten, kdo si zakázku naposledy otevřel
+   * a uložil — a razítko by ztratilo smysl. Kdo naposledy sáhl, je `upravil`. */
+  if (!zak.autor) zak.autor = relace.email;
+  zak.upravil = relace.email;
+
   const razitko = ULO.uloRazitkoNove();
   zak.uloRazitko = razitko;
   await s.zapis('z/' + jmeno, zak);

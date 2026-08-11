@@ -127,6 +127,48 @@ const MUTACE = [
     nahrad: '  const sedi = (ucet && ucet.heslo) ? hesloSedi(heslo, ucet.heslo) : false;',
     proc: 'z času odpovědi by šlo přečíst, které e-maily v databázi jsou' },
 
+  /* ---------- archivace účtů a převod zakázek (11. 8. 2026) ---------- */
+  { nazev: 'archivovaný účet se pořád přihlásí', soubor: 'functions/uzivatele.mjs',
+    hledej: '        ucet.aktivni = false;          // archivovaný účet se nikdy nepřihlásí',
+    nahrad: '        ;',
+    proc: 'účet po odcházejícím kolegovi by zmizel ze seznamu, ale dveře by mu zůstaly otevřené' },
+
+  { nazev: 'autor zakázky se přepíše každým uložením', soubor: 'functions/zakazky.mjs',
+    hledej: '  if (!zak.autor) zak.autor = relace.email;',
+    nahrad: '  zak.autor = relace.email;',
+    proc: 'autorem by se stal ten, kdo si zakázku naposledy otevřel — razítko by ztratilo smysl' },
+
+  { nazev: 'zakázky jde převést i na archivovaný účet', soubor: 'functions/uzivatele.mjs',
+    hledej: '      if (cil.aktivni === false || cil.archiv)',
+    nahrad: '      if (false)',
+    proc: 'práce po odcházejícím kolegovi by se ztratila podruhé — u dalšího neexistujícího účtu' },
+
+  /* ---------- mazání účtů (11. 8. 2026) ----------
+   *
+   * Mazání je jediná nevratná akce nad účtem, takže se rozbíjí přesně to,
+   * co by v praxi nikdo nepoznal dřív než pozdě: účet, který „zmizel", ale
+   * dveře mu zůstaly otevřené; pojistka na hlavním účtu; a odmítnutí, které
+   * účet chrání, dokud po něm nepřevezme práci někdo jiný. */
+  { nazev: 'smazaný účet se pořád přihlásí', soubor: 'functions/uzivatele.mjs',
+    hledej: '      await u.zapis(email, null);          // náhrobek: klíč zůstane, účet ne',
+    nahrad: '      ;',
+    proc: 'účet by zmizel ze seznamu, ale přihlásil by se i dál — mazání by bylo jen naoko' },
+
+  { nazev: 'hlavní účet jde smazat', soubor: 'functions/uzivatele.mjs',
+    hledej: '      if (email === ADMIN_EMAIL)\n',
+    nahrad: '      if (false)\n',
+    proc: 'jedním kliknutím by zmizel účet, kterým se aplikace spravuje — a zpátky ho nikdo nevrátí' },
+
+  { nazev: 'účet se zakázkami se smaže bez převodu', soubor: 'functions/uzivatele.mjs',
+    hledej: '      if (moje.length && !iSeZakazkami)',
+    nahrad: '      if (false)',
+    proc: 'zakázky by zůstaly podepsané e-mailem, který už neexistuje, a nikdo by nevěděl, čí jsou' },
+
+  { nazev: 'podpis smazaného účtu zůstane na serveru', soubor: 'functions/uzivatele.mjs',
+    hledej: '      try { await (await uloziste(PODPIS_ULOZISTE)).zapis(email, null); }',
+    nahrad: '      try { if (false) await (await uloziste(PODPIS_ULOZISTE)).zapis(email, null); }',
+    proc: 'na serveru by ležel sken podpisu člověka, který v aplikaci není — a zdědil by ho ten, kdo dostane stejný e-mail' },
+
   /* ---------- sdílený rejstřík žádostí o slevu (#102) ---------- */
   { nazev: 'rejstřík žádostí je veřejný', soubor: 'functions/schvalovani.mjs',
     hledej: '  const { chyba } = await vyzadujRoli(req);      // stačí být přihlášen',
@@ -140,8 +182,8 @@ const MUTACE = [
 
   /* ---------- hlavní účet pozná server, ne prohlížeč (#95) ---------- */
   { nazev: 'seznam účtů neřekne, který je hlavní', soubor: 'functions/uzivatele.mjs',
-    hledej: 'aktivni: x.aktivni !== false, hlavni: x.email === ADMIN_EMAIL });',
-    nahrad: 'aktivni: x.aktivni !== false });',
+    hledej: 'aktivni: x.aktivni !== false, hlavni: x.email === ADMIN_EMAIL,',
+    nahrad: 'aktivni: x.aktivni !== false,',
     proc: 'prohlížeč by musel adresu znát sám — a měl by ji ve zdrojácích podruhé' },
 
   { nazev: 'zaváděcí heslo administrátora se nekontroluje', soubor: 'functions/prihlaseni.mjs',
@@ -186,7 +228,7 @@ const MUTACE = [
     proc: 'kdokoli by si vytáhl seznam zaměstnanců i s rolemi' },
 
   { nazev: 'seznam účtů vydá i otisky hesel', soubor: 'functions/uzivatele.mjs',
-    hledej: '    if (x) out.push({ email: x.email, jmeno: x.jmeno, titul: x.titul || \'\',',
+    hledej: '    if (x && !x.smazano) out.push({ email: x.email, jmeno: x.jmeno, titul: x.titul || \'\',',
     nahrad: '    if (x) out.push(x); if (false) out.push({ email: x.email, jmeno: x.jmeno, titul: x.titul || \'\',',
     proc: 'otisky hesel by se daly lámat mimo server' },
 
