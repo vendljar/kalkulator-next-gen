@@ -39,6 +39,26 @@ function klOdkaz(val) {
 let KL_SKUPINA_N = 0;
 function klSkupina(predpona, id) { return predpona + '_' + id + '_' + (++KL_SKUPINA_N); }
 
+/* Které řádky mají rozbalené „jiné znění". Schválně jen v paměti obrazovky:
+ * je to stav ovládacího prvku, ne údaj zakázky, a do uloženého souboru
+ * nepatří. Po načtení zakázky se pozná z hodnoty (není v číselníku). */
+const KL_JINA = {};
+const KL_JINE_ZNENI = '__jine__';
+
+function klVyber(id, v) {
+  if (v === KL_JINE_ZNENI) {
+    /* Rozbalí textové pole a hodnotu smaže — dokud člověk nic nenapíše,
+     * platí prefill. Nastavit sem rovnou prázdný řetězec by znamenalo
+     * tvářit se, že si vybral prázdno. */
+    KL_JINA[id] = true;
+    if (KL.hodnoty) delete KL.hodnoty[id];
+    render();
+    return;
+  }
+  delete KL_JINA[id];
+  klSet(id, v);
+}
+
 /* KL-7 (hlášení 5. 8. 2026): „Sazba DPH nemůže být přepisovatelná, ale musí
  * být volitelná 12/21 % a navázaná na hlavičku kalkulace."
  *
@@ -86,6 +106,26 @@ function klRow(id, label, opts = {}) {
     field = `<div class="kl-radio">${opts.o.map(x =>
       `<label><input type="radio" name="${klSkupina('kl', id)}" ${String(val) === String(x) ? 'checked' : ''}
         onchange="klSet('${id}', this.value)" value="${esc(x)}">${esc(x)}</label>`).join('')}</div>`;
+  else if (opts.type === 'vyber' && Array.isArray(opts.o)) {
+    /* Výběr z číselníku s možností vlastního znění (10. 8. 2026, smluvní pokuty).
+     *
+     * Volné pole u pokuty svádělo k překlepu, který se propsal do nabídky
+     * i do krycího listu — a pokuta je jediný údaj v podmínkách, který se
+     * v případě sporu čte doslova. Zároveň se nesmělo zavřít docela: zákazník
+     * si občas prosadí jinou sazbu a nabídka na to musí umět odpovědět.
+     *
+     * Že si člověk vybral „jiné znění", se nikam neukládá. Poznat to jde
+     * z hodnoty samotné (není v číselníku), a dokud je pole prázdné, drží se
+     * to jen v paměti obrazovky (KL_JINA) — do zakázky se ukládá jenom to,
+     * co je opravdu napsané. Uložený soubor tak nenese stav rozbalovátka. */
+    const jina = KL_JINA[id] || (klManual(id) && opts.o.indexOf(String(val)) < 0);
+    const volby = opts.o.map(x =>
+      `<option value="${esc(x)}" ${!jina && String(val) === String(x) ? 'selected' : ''}>${esc(x)}</option>`).join('');
+    field = `<select onchange="klVyber('${id}', this.value)">${volby}`
+      + `<option value="${KL_JINE_ZNENI}" ${jina ? 'selected' : ''}>jiné znění…</option></select>`
+      + (jina ? ` <input type="text" value="${esc(klManual(id) ? val : '')}"
+           onchange="klSet('${id}', this.value)" placeholder="${esc(opts.ph || 'např. 0,2 % / den')}">` : '');
+  }
   else if (opts.type === 'link')
     field = `<input type="url" value="${esc(val)}" onchange="klSet('${id}', this.value)" placeholder="${esc(opts.ph || 'https://…')}">${klOdkaz(val)}`;
   else

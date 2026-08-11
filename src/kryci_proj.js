@@ -15,6 +15,13 @@
  * s nulou ani s odhadem.
  * ============================================================ */
 
+/* Číselník sazeb smluvní pokuty je definovaný v kryci.js — v sestavené
+ * aplikaci jsou oba moduly v jednom scope. V Node testech, kde bývá načtený
+ * jen tenhle modul, se použije stejná trojice jako záloha. Že se ty dva
+ * seznamy nerozešly, hlídá test_standardy.js. */
+const KRYCI_POKUTY_SAZBY = (typeof KRYCI_POKUTY !== 'undefined')
+  ? KRYCI_POKUTY : ['0', '0,05 % / den', '0,1 % / den'];
+
 /* devět činností v pořadí VZORu (klíče sekcí engine_proj.js) */
 /* Kdo nabídku vypracoval (#146) – u projekce platí totéž co u OCK; funkce
  * z kryci.js se v sestavené aplikaci sdílejí, v Node testech (kde je načtený
@@ -126,14 +133,26 @@ const KRYCI_PROJ_SEKCE = [
   ]) },
   { sekce: 'Platební podmínky', pole: [
     { id: 'splatnostDni', label: 'Splatnost faktur (dní)', verze: ['bo'], prefill: c => String(c.sazby.splatnostDni), src: 'z cenové nabídky PROJ' },
-    { id: 'platnostNabidky', label: 'Platnost nabídky', verze: ['bo'], prefill: c => c.sazby.platnostMesicu + ' měsíce', src: 'z cenové nabídky PROJ' },
-    { id: 'zpusobFakturace', label: 'Způsob fakturace', verze: ['bo'], prefill: () => 'po dokončení jednotlivých stupňů dokumentace', src: 'výchozí' },
+    /* Firemní standardy (10. 8. 2026) — stejně jako u OCK. Platnost nabídky
+     * měla dosud dva zdroje: krycí list ji bral z ceníku PROJ, ale v nabídce
+     * OCK stála natvrdo jiná hodnota. Teď je zdroj jeden pro obojí a hodnota
+     * z ceníku slouží už jen jako náhrada, kdyby firemní pole bylo prázdné. */
+    { id: 'platnostNabidky', label: 'Platnost nabídky', verze: ['bo'],
+      prefill: c => firmaHodnota(c.firma, 'platnostNabidky') || (c.sazby.platnostMesicu + ' měsíce'),
+      src: 'Nastavení → Firma' },
+    { id: 'zpusobFakturace', label: 'Způsob fakturace', verze: ['bo'],
+      prefill: c => firmaHodnota(c.firma, 'zpusobFakturaceProj') || 'po dokončení jednotlivých stupňů dokumentace',
+      src: 'Nastavení → Firma' },
     { id: 'faktZamereni', label: 'Fakturace – zaměření a studie', verze: ['bo'], prefill: () => '100 % po předání výstupů', src: 'výchozí' },
     { id: 'faktDpz', label: 'Fakturace – DPZ a inženýrská činnost', verze: ['bo'], prefill: () => '100 % po odevzdání dokumentace', src: 'výchozí' },
     { id: 'faktDps', label: 'Fakturace – DPS a EZC', verze: ['bo'], prefill: () => '100 % po odevzdání dokumentace', src: 'výchozí' },
     { id: 'zaloha', label: 'Záloha', verze: ['bo'], typ: 'radio', o: ['Bez zálohy', 'Záloha 30 %', 'Záloha 50 %'], prefill: () => 'Bez zálohy', src: 'výchozí' },
-    { id: 'pokutaTermin', label: 'Smluvní pokuta – prodlení s odevzdáním', verze: ['bo', 'techdata'], prefill: () => '0,05 % / den', src: 'výchozí' },
-    { id: 'pokutaSplatnost', label: 'Smluvní pokuta – prodlení splatnosti', verze: ['bo', 'techdata'], prefill: () => '0,05 % / den', src: 'výchozí' },
+    /* Výběr sazby pokuty — tentýž číselník jako u OCK (KRYCI_POKUTY v kryci.js),
+     * aby se dvě verze seznamu nerozešly. Předvyplněná je nula, tedy bez pokuty. */
+    { id: 'pokutaTermin', label: 'Smluvní pokuta – prodlení s odevzdáním', verze: ['bo', 'techdata'],
+      typ: 'vyber', o: KRYCI_POKUTY_SAZBY, prefill: () => KRYCI_POKUTY_SAZBY[0], src: 'výchozí' },
+    { id: 'pokutaSplatnost', label: 'Smluvní pokuta – prodlení splatnosti', verze: ['bo', 'techdata'],
+      typ: 'vyber', o: KRYCI_POKUTY_SAZBY, prefill: () => KRYCI_POKUTY_SAZBY[0], src: 'výchozí' },
     { id: 'pokutaLimit', label: 'Limit smluvních pokut', verze: ['bo', 'techdata'], prefill: () => 'NEUPLATNĚN limit 10 %', src: 'výchozí' },
     { id: 'pokutyJine', label: 'Jiné', verze: ['bo'], typ: 'textarea' },
     { id: 'platceDph', label: 'Plátce DPH', verze: ['bo'], typ: 'radio', o: ['Ano', 'Ne'], prefill: () => 'Ano', src: 'výchozí' },
@@ -288,5 +307,5 @@ function kryciProjPodminkoveSymboly(zak, varianta, P) {
 }
 
 if (typeof module !== 'undefined')
-  module.exports = { KRYCI_PROJ_SEKCE, KRYCI_PROJ_NABIDKA_SEKCE, KRYCI_PROJ_CINNOSTI, kryciProjCtx,
+  module.exports = { KRYCI_PROJ_SEKCE, KRYCI_POKUTY_SAZBY, KRYCI_PROJ_NABIDKA_SEKCE, KRYCI_PROJ_CINNOSTI, kryciProjCtx,
     kryciProjHodnota, kryciProjData, kryciProjMigraceSazbaDph, kryciProjPodminkoveSymboly };

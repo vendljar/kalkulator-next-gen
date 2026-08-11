@@ -58,6 +58,17 @@ for f in test_*.js; do
   spust "$f"
 done
 
+# Serverové sady (netlify/test_*.mjs) běží proti náhradnímu úložišti v paměti
+# a náhradnímu `fetch`, takže nepotřebují ani Netlify, ani síť. Do 9. 8. 2026
+# se pouštěly ručně — a nová sada se tím pádem mohla klidně měsíc nespustit.
+# Mutační testování (netlify/mutace.mjs) tu schválně NENÍ: trvá přes minutu
+# a pouští tyhle sady znovu, takže patří do samostatného běhu.
+echo "Serverové sady (online databáze a napojení na CRM):"
+for f in ../netlify/test_*.mjs; do
+  [ -e "$f" ] || continue
+  spust "$f"
+done
+
 if [ "${1:-}" = "--smoke" ]; then
   echo "Kouřový test v prohlížeči:"
   if [ ! -f ../dist/kalkulacka.html ]; then

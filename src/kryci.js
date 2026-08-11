@@ -22,6 +22,10 @@ function kryciObchodnikKontakt(f) {
        firmaHodnota(f, 'zpracovalEmail')].filter(Boolean).join(', ');
 }
 
+/* Nabídka sazeb smluvní pokuty (10. 8. 2026). První hodnota je předvyplněná.
+ * Sdílí ji krycí list OCK i PROJ, aby se sazby nerozešly mezi dvěma seznamy. */
+const KRYCI_POKUTY = ['0', '0,05 % / den', '0,1 % / den'];
+
 const KRYCI_SEKCE = [
   { sekce: 'Základní údaje', pole: [
     /* KL-4: obchodníka aplikace zná – od 5. 8. 2026 je to přihlášený uživatel
@@ -74,8 +78,16 @@ const KRYCI_SEKCE = [
      * celé sousloví včetně jednotky, ne jen číslo — čeština skloňuje
      * („1 měsíc / 2 měsíce / 5 měsíců") a dopočítávat tvar by znamenalo hádat.
      * Krycí list PROJ má totéž pole už od začátku. */
-    { id: 'platnostNabidky', label: 'Platnost nabídky', verze: ['bo'], prefill: () => '2 měsíce', src: 'výchozí' },
-    { id: 'zpusobFakturace', label: 'Způsob fakturace', verze: ['bo'], prefill: () => 'Náš standard / měsíční', src: 'výchozí' },
+    /* Firemní standardy (10. 8. 2026). Do té doby tu stála věta natvrdo v kódu
+     * a obchodník ji v každé zakázce viděl jako pole k přepsání. Mění se ale
+     * jednou za rok a pro celou firmu — proto se berou z Nastavení → Firma.
+     * Náhradní hodnota zůstává pro starší konfigurace, kde to pole ještě není. */
+    { id: 'platnostNabidky', label: 'Platnost nabídky', verze: ['bo'],
+      prefill: c => firmaHodnota(c.firma, 'platnostNabidky') || '2 měsíce',
+      src: 'Nastavení → Firma' },
+    { id: 'zpusobFakturace', label: 'Způsob fakturace', verze: ['bo'],
+      prefill: c => firmaHodnota(c.firma, 'zpusobFakturaceOck') || 'Náš standard / měsíční',
+      src: 'Nastavení → Firma' },
     { id: 'zaloha1', label: 'Záloha / dílčí faktura č. 1', verze: ['bo'], prefill: () => '50 % – po podpisu smlouvy', src: 'výchozí' },
     { id: 'faktura2', label: 'Dílčí faktura č. 2', verze: ['bo'], prefill: () => '40 % – po zahájení montáže', src: 'výchozí' },
     { id: 'fakturaKonc', label: 'Konečná faktura', verze: ['bo'], prefill: () => '10 % – po předání', src: 'výchozí' },
@@ -87,8 +99,17 @@ const KRYCI_SEKCE = [
     { id: 'zadrzneProc', label: 'Zádržné do odstranění VaN – %', verze: ['bo'], ph: 'např. 10' },
     { id: 'zadrzneZaruka', label: 'Zádržné – po dobu záruky', verze: ['bo'], typ: 'radio', o: ['Ano', 'Ne'], prefill: () => 'Ne', src: 'výchozí' },
     { id: 'zadrzneZarukaProc', label: 'Zádržné po dobu záruky – %', verze: ['bo'], ph: 'např. 5' },
-    { id: 'pokutaDodavka', label: 'Smluvní pokuta – prodlení dodávky', verze: ['bo', 'techdata'], prefill: () => '0,05 % / den', src: 'výchozí' },
-    { id: 'pokutaSplatnost', label: 'Smluvní pokuta – prodlení splatnosti', verze: ['bo', 'techdata'], prefill: () => '0,05 % / den', src: 'výchozí' },
+    /* Smluvní pokuty: od 10. 8. 2026 výběr, ne volné pole (rozhodnutí J. V.).
+     * Volné pole svádělo k překlepu, který se propsal do nabídky i do krycího
+     * listu — a pokuta je jediný údaj v podmínkách, který se v případě sporu
+     * čte doslova. Předvyplněná je nula, tedy BEZ pokuty: dřív tu stálo
+     * 0,05 % / den a sjednávalo se to i tam, kde to nikdo nechtěl.
+     * Poslední volba nechá zapsat vlastní znění, ať jde vyhovět zákazníkovi,
+     * který si prosadí jinou sazbu. */
+    { id: 'pokutaDodavka', label: 'Smluvní pokuta – prodlení dodávky', verze: ['bo', 'techdata'],
+      typ: 'vyber', o: KRYCI_POKUTY, prefill: () => KRYCI_POKUTY[0], src: 'výchozí' },
+    { id: 'pokutaSplatnost', label: 'Smluvní pokuta – prodlení splatnosti', verze: ['bo', 'techdata'],
+      typ: 'vyber', o: KRYCI_POKUTY, prefill: () => KRYCI_POKUTY[0], src: 'výchozí' },
     { id: 'pokutaLimit', label: 'Limit smluvních pokut', verze: ['bo', 'techdata'], prefill: () => 'NEUPLATNĚN limit 10 %', src: 'výchozí' },
     { id: 'pokutyJine', label: 'Jiné', verze: ['bo'], typ: 'textarea' },
     { id: 'platceDph', label: 'Plátce DPH', verze: ['bo'], typ: 'radio', o: ['Ano', 'Ne'], prefill: () => 'Ano', src: 'výchozí' },
@@ -116,7 +137,9 @@ const KRYCI_SEKCE = [
     { id: 'zamereniStrojovna', label: 'Zaměření strojovna', verze: ['bo', 'techdata'], typ: 'radio', o: ['Ano', 'Ne'], prefill: c => c.sken3d, src: 'z technické specifikace (3D zaměření)' },
     { id: 'situacniFoto', label: 'Situační fotografie', verze: ['bo', 'techdata'], prefill: () => 'Ve složce', src: 'výchozí' },
     { id: 'cenaNezahrnuje', label: 'Cena nezahrnuje', verze: ['bo'], prefill: () => 'dle CN', src: 'výchozí' },
-    { id: 'rozsah', label: 'Rozsah', verze: ['bo'], prefill: () => 'je definován přílohou ke smlouvě (specifikace)', src: 'výchozí' },
+    { id: 'rozsah', label: 'Rozsah', verze: ['bo'],
+      prefill: c => firmaHodnota(c.firma, 'rozsahDefinice') || 'je definován přílohou ke smlouvě (specifikace)',
+      src: 'Nastavení → Firma' },
     { id: 'typProjektu', label: 'Typ projektu', verze: ['bo', 'techdata'], typ: 'radio', o: ['Nový projekt (novostavba)', 'Rekonstrukce objektu'], prefill: () => 'Nový projekt (novostavba)', src: 'výchozí' },
     /* KL-4: obojí je oceněná sekce kalkulace PROJ – prováděcí dokumentace je
      * DPS, DSP odpovídá dokumentaci pro povolení záměru (DPZ). Oceněná sekce
@@ -368,7 +391,7 @@ function kryciPodminkoveSymboly(zak, varianta, jekly, P) {
 }
 
 if (typeof module !== 'undefined')
-  module.exports = { KRYCI_SEKCE, KRYCI_NABIDKA_SEKCE, KRYCI_DPH_SAZBY, kryciCtx, kryciHodnota,
+  module.exports = { KRYCI_SEKCE, KRYCI_NABIDKA_SEKCE, KRYCI_DPH_SAZBY, KRYCI_POKUTY, kryciCtx, kryciHodnota,
     kryciData, kryciMigraceZadrzne, kryciMigraceSazbaDph,
     PODM_PREFIX, kryciSymbolId, kryciCisloZTextu, kryciProcentoZTextu,
     kryciSymbolyZeSekci, kryciPodminkoveSymboly };

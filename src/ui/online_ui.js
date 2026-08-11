@@ -1264,7 +1264,10 @@ function onlinePanelZakazky() {
 }
 
 function onlineRadekUzivatele(u) {
-  const hlavni = u.email === 'vendl.jaroslav@engineers-cz.cz';
+  /* Kdo je hlavní účet, rozhoduje server (#95, 9. 8. 2026) — posílá to
+   * v seznamu jako `hlavni`. Prohlížeč adresu neluští; kdyby ji znal,
+   * byla by ve zdrojácích podruhé a při změně na serveru by se rozešly. */
+  const hlavni = !!u.hlavni;
   const roleSel = `<select class="mini" onchange="onlineUzRoleZmen('${escJs(u.email)}', this.value)" ${hlavni ? 'disabled' : ''}>
     ${['Obchodník', 'Vedoucí', 'Administrátor'].map(r => `<option ${r === u.role ? 'selected' : ''}>${r}</option>`).join('')}
   </select>`;

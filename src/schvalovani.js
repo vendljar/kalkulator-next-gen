@@ -242,6 +242,82 @@ function schvalovaniSeznam(zak, vypocty, nast, role) {
     });
 }
 
+/* ---------- žádosti z ostatních zakázek (#102, 10. 8. 2026) ----------
+ *
+ * Sdílený rejstřík ze serveru (/api/schvalovani) záměrně NENESE žádné částky —
+ * ani cenu, ani slevu v korunách, ani marži. Tenhle převod z toho udělá záznam
+ * ve stejném tvaru, jaký zná záložka, jen s prázdnými čísly. Díky tomu se
+ * seznam vykresluje jedním kódem a nemůže se stát, že by se v přehledu napříč
+ * zakázkami objevila částka, kterou by v otevřené zakázce daná role neviděla.
+ *
+ * `spocteno: false` je tu podstatné: říká rozhraní, že čísla nechybí omylem,
+ * ale že se v tomhle pohledu nepočítala. Kdo chce vidět peníze, otevře zakázku. */
+function schvalovaniZaznamRejstrik(polozka) {
+  const p = polozka || {};
+  const sl = p.sleva || {};
+  const kat = schvalovaniKategorie(sl);
+  return {
+    id: p.variantaId,
+    nazev: String(p.variantaNazev || ''),
+    ridici: !!p.ridici,
+    zamceno: !!p.zamceno,
+    procenta: Math.max(0, +sl.procenta || 0),
+    role: String(sl.role || ''),
+    schema: String(sl.schema || ''),
+    poznamka: String(sl.poznamka || ''),
+    stav: String(sl.stav || ''),
+    kategorie: kat,
+    popis: SCHV_POPIS[kat] || '',
+    spocteno: false,
+    strop: null, minMarze: null, slevaKc: null,
+    cenaPredSlevou: null, cenaPoSleve: null, marzePoSleve: null,
+    podMarzi: kat === 'podMarzi',
+    nadStrop: kat === 'ceka',
+    schvalil: String(sl.schvalil || ''),
+    schvalilKdy: String(sl.schvalilKdy || ''),
+    zamitl: String(sl.zamitl || ''),
+    zamitlKdy: String(sl.zamitlKdy || ''),
+    zamitnutoDuvod: String(sl.zamitnutoDuvod || ''),
+    /* navíc oproti záznamu z otevřené zakázky */
+    cizi: true,
+    klic: String(p.klic || ''),
+    cislo: String(p.cislo || ''),
+    nazevAkce: String(p.nazevAkce || ''),
+  };
+}
+
+/* Seřadí rejstřík stejně jako seznam z otevřené zakázky: nahoru to,
+ * co čeká na člověka, uvnitř kategorie vyšší sleva první. */
+function schvalovaniSeznamRejstrik(zadosti) {
+  return (Array.isArray(zadosti) ? zadosti : [])
+    .map(schvalovaniZaznamRejstrik)
+    .sort((a, b) => {
+      const pa = SCHV_PORADI[a.kategorie], pb = SCHV_PORADI[b.kategorie];
+      if (pa !== pb) return pa - pb;
+      return (b.procenta || 0) - (a.procenta || 0);
+    });
+}
+
+/* Pojistka pro rejstřík: v odpovědi serveru nesmí být nic, co vypadá jako
+ * částka. Kontroluje se tvar dat, ne jejich obsah — nová položka s cenou by
+ * se sem musela doslova propašovat pod jménem, které neznáme. */
+const SCHV_REJSTRIK_POVOLENO = ['klic', 'cislo', 'nazevAkce', 'variantaId', 'variantaNazev',
+  'ridici', 'zamceno', 'upraveno', 'sleva'];
+const SCHV_REJSTRIK_SLEVA_POVOLENO = ['procenta', 'role', 'schema', 'poznamka', 'stav',
+  'schvalil', 'schvalilKdy', 'schvalenoProc', 'zamitl', 'zamitlKdy', 'zamitnutoProc',
+  'zamitnutoDuvod'];
+
+function schvalovaniRejstrikNeznameKlice(zadosti) {
+  const spatne = [];
+  (Array.isArray(zadosti) ? zadosti : []).forEach((z) => {
+    Object.keys(z || {}).forEach(k => { if (!SCHV_REJSTRIK_POVOLENO.includes(k)) spatne.push(k); });
+    Object.keys((z && z.sleva) || {}).forEach(k => {
+      if (!SCHV_REJSTRIK_SLEVA_POVOLENO.includes(k)) spatne.push('sleva.' + k);
+    });
+  });
+  return [...new Set(spatne)];
+}
+
 function schvalovaniSouhrn(seznam) {
   const out = { celkem: 0, ceka: 0, schvaleno: 0, auto: 0, zamitnuto: 0, podMarzi: 0 };
   (Array.isArray(seznam) ? seznam : []).forEach(z => {
@@ -257,4 +333,7 @@ if (typeof module !== 'undefined')
                      schvalovaniKategorie, schvalovaniStrop, schvalovaniSmiRozhodnout,
                      schvalovaniKdoMuze, schvalovaniPrepocti,
                      schvalovaniSchval, schvalovaniZamitni, schvalovaniVrat,
-                     schvalovaniZaznam, schvalovaniSeznam, schvalovaniSouhrn };
+                     schvalovaniZaznam, schvalovaniSeznam, schvalovaniSouhrn,
+                     schvalovaniZaznamRejstrik, schvalovaniSeznamRejstrik,
+                     schvalovaniRejstrikNeznameKlice,
+                     SCHV_REJSTRIK_POVOLENO, SCHV_REJSTRIK_SLEVA_POVOLENO };

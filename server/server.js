@@ -17,7 +17,7 @@
  * Kostra slouží k ověření, že nasazení z GitHubu funguje.
  *
  * První uživatel (rozhodnutí 3. 8. 2026): Jaroslav Vendl,
- * vendl.jaroslav@engineers-cz.cz, role Administrátor — založí se při
+ * adresa z ADMIN_EMAIL (netlify/lib/sdilene.mjs), role Administrátor — založí se při
  * zavedení přihlašování; heslo si nastaví při prvním spuštění, do
  * repozitáře žádné heslo nepatří.
  *

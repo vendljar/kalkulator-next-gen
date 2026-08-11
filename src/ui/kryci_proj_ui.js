@@ -12,6 +12,18 @@ function klpSet(id, v) {
   render();
 }
 function klpReset(id) { if (KLP.hodnoty) delete KLP.hodnoty[id]; render(); }
+/* Rozbalené „jiné znění" u projekčního krycího listu — viz KL_JINA v kryci_ui.js. */
+const KLP_JINA = {};
+function klpVyber(id, v) {
+  if (v === KL_JINE_ZNENI) {
+    KLP_JINA[id] = true;
+    if (KLP.hodnoty) delete KLP.hodnoty[id];
+    render();
+    return;
+  }
+  delete KLP_JINA[id];
+  klpSet(id, v);
+}
 function klpManual(id) { const h = KLP.hodnoty || {}; return h[id] !== undefined && h[id] !== ''; }
 function klpVal(id, prefill) {
   const h = KLP.hodnoty || {};
@@ -37,6 +49,18 @@ function klpRow(id, label, opts = {}) {
     field = `<div class="kl-radio">${opts.o.map(x =>
       `<label><input type="radio" name="${klSkupina('klp', id)}" ${String(val) === String(x) ? 'checked' : ''}
         onchange="klpSet('${id}', this.value)" value="${esc(x)}">${esc(x)}</label>`).join('')}</div>`;
+  else if (opts.type === 'vyber' && Array.isArray(opts.o)) {
+    /* Výběr z číselníku s možností vlastního znění — zrcadlo klRow() z OCK
+     * verze (10. 8. 2026, smluvní pokuty). Stav rozbalovátka drží KLP_JINA,
+     * do zakázky se ukládá jen napsaná hodnota. */
+    const jina = KLP_JINA[id] || (klpManual(id) && opts.o.indexOf(String(val)) < 0);
+    const volby = opts.o.map(x =>
+      `<option value="${esc(x)}" ${!jina && String(val) === String(x) ? 'selected' : ''}>${esc(x)}</option>`).join('');
+    field = `<select onchange="klpVyber('${id}', this.value)">${volby}`
+      + `<option value="${KL_JINE_ZNENI}" ${jina ? 'selected' : ''}>jiné znění…</option></select>`
+      + (jina ? ` <input type="text" value="${esc(klpManual(id) ? val : '')}"
+           onchange="klpSet('${id}', this.value)" placeholder="${esc(opts.ph || 'např. 0,2 % / den')}">` : '');
+  }
   else if (opts.type === 'link')   // KL-6: scoring je odkaz (klOdkaz je sdílený s OCK verzí)
     field = `<input type="url" value="${esc(val)}" onchange="klpSet('${id}', this.value)" placeholder="${esc(opts.ph || 'https://…')}">${klOdkaz(val)}`;
   else

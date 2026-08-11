@@ -206,7 +206,7 @@ function schvalovaniKarta() {
       nabídky ani do krycího listu nepropíše.</div>`;
 
   if (!seznam.length)
-    return card('Schvalování slev', uvod
+    return card('Schvalování slev', schvPrepinacRozsahu() + uvod
       + '<div class="note" style="margin-top:8px">V žádné variantě této zakázky není zadaná sleva – '
       + 'není o čem rozhodovat. Sleva se zadává v kartě „Sleva na nabídku" pod výpočtem '
       + 'v záložce Kalkulace OCK.</div>', false, 'schv-seznam');
@@ -239,11 +239,137 @@ function schvalovaniKarta() {
   const kdoJsem = `<div class="note" style="margin-top:8px">Rozhodnutí se podepisuje jako
       <b>${esc(schvKdoJsem())}</b>.</div>`;
 
-  return card('Schvalování slev', uvod + '<div style="margin-top:6px">' + stat + '</div>'
+  return card('Schvalování slev', schvPrepinacRozsahu() + uvod
+    + '<div style="margin-top:6px">' + stat + '</div>'
     + tab + bezMarze + (schvSmiRozhodovat() ? kdoJsem : ''), false, 'schv-seznam');
+}
+
+/* ---------- žádosti z ostatních zakázek (#102, 10. 8. 2026) ----------
+ *
+ * Rozhodnutí J. V. z 10. 8. 2026: „ano, ale prvně by měly být vidět otevřené
+ * a pak mít možnost přepnout i na ostatní, bude-li třeba." Výchozí pohled tedy
+ * zůstává otevřená zakázka; ostatní se dotahují až na vyžádání.
+ *
+ * Dotahují se až na kliknutí schválně. Rejstřík se skládá čtením všech zakázek
+ * na serveru — u tří set zakázek je to tři sta čtení a spouštět je pokaždé,
+ * když si někdo otevře záložku, by byl provoz zadarmo. */
+const SCHV_CIZI = { rozsah: 'zakazka', stav: 'nic', zadosti: [], chyba: '', vse: false };
+
+function schvPrepniRozsah(rozsah) {
+  SCHV_CIZI.rozsah = rozsah;
+  if (rozsah === 'vse' && SCHV_CIZI.stav === 'nic') { schvNactiCizi(); return; }
+  render();
+}
+
+function schvZobrazitRozhodnute(zapnout) {
+  SCHV_CIZI.vse = !!zapnout;
+  schvNactiCizi();
+}
+
+function schvNactiCizi() {
+  if (typeof onlineApi !== 'function') {
+    SCHV_CIZI.stav = 'chyba';
+    SCHV_CIZI.chyba = 'Přehled napříč zakázkami potřebuje online databázi.';
+    render();
+    return;
+  }
+  SCHV_CIZI.stav = 'nacitam'; SCHV_CIZI.chyba = ''; render();
+  onlineApi('/api/schvalovani' + (SCHV_CIZI.vse ? '?vse=1' : ''))
+    .then((d) => {
+      /* Pojistka proti tomu, aby se do sdíleného přehledu časem propašovala
+       * částka: kdyby server začal posílat pole, které neznáme, radši to
+       * řekneme nahlas, než abychom to mlčky vykreslili. */
+      const cizi = schvalovaniRejstrikNeznameKlice(d.zadosti);
+      if (cizi.length) {
+        SCHV_CIZI.stav = 'chyba';
+        SCHV_CIZI.chyba = 'Server poslal v rejstříku neznámé údaje (' + cizi.join(', ')
+          + '). Přehled se nezobrazí, dokud se to nevysvětlí.';
+      } else {
+        SCHV_CIZI.stav = 'hotovo';
+        SCHV_CIZI.zadosti = d.zadosti || [];
+        SCHV_CIZI.pocetCeka = d.pocetCeka;
+        SCHV_CIZI.neuplny = !!d.neuplny;
+        SCHV_CIZI.prohledano = d.prohledano;
+      }
+      render();
+    })
+    .catch((e) => {
+      SCHV_CIZI.stav = 'chyba';
+      SCHV_CIZI.chyba = 'Seznam se nepodařilo načíst: ' + e.message;
+      render();
+    });
+}
+
+function schvPrepinacRozsahu() {
+  const tl = (id, popis) => `<button class="mini ${SCHV_CIZI.rozsah === id ? 'primary' : ''}"
+      onclick="schvPrepniRozsah('${escJs(id)}')">${esc(popis)}</button>`;
+  return `<div style="margin-top:6px">${tl('zakazka', 'Tato zakázka')} ${tl('vse', 'Všechny zakázky')}</div>`;
+}
+
+function schvCiziKarta() {
+  const prepinac = schvPrepinacRozsahu();
+  if (SCHV_CIZI.stav === 'nacitam')
+    return card('Schvalování slev', prepinac + '<div class="note" style="margin-top:8px">Načítám žádosti ze všech zakázek…</div>',
+      false, 'schv-seznam');
+  if (SCHV_CIZI.stav === 'chyba')
+    return card('Schvalování slev', prepinac
+      + `<div class="warn" style="margin-top:8px">${esc(SCHV_CIZI.chyba)}</div>`
+      + `<div style="margin-top:6px"><button class="mini" onclick="schvNactiCizi()">Zkusit znovu</button></div>`,
+      false, 'schv-seznam');
+
+  const seznam = schvalovaniSeznamRejstrik(SCHV_CIZI.zadosti);
+  const uvod = `<div class="note">Žádosti ze <b>všech zakázek v databázi</b>${SCHV_CIZI.vse ? '' : ' , které čekají na rozhodnutí'}.
+      <b>Částky se tu nezobrazují</b> — sdílený přehled nese jen číslo zakázky, procento slevy a stav.
+      Cenu a marži uvidíte po otevření zakázky, kde platí obvyklá pravidla zobrazení.</div>`;
+  const volba = `<div style="margin-top:6px">
+      <label><input type="checkbox" ${SCHV_CIZI.vse ? 'checked' : ''}
+        onchange="schvZobrazitRozhodnute(this.checked)"> zobrazit i už rozhodnuté žádosti</label>
+      <button class="mini" style="margin-left:8px" onclick="schvNactiCizi()">Obnovit</button></div>`;
+  const strop = SCHV_CIZI.neuplny
+    ? `<div class="warn" style="margin-top:8px">Prošlo se prvních ${SCHV_CIZI.prohledano} zakázek —
+        v databázi jich je víc. Zbytek se v tomhle přehledu neukáže.</div>` : '';
+
+  if (!seznam.length)
+    return card('Schvalování slev', prepinac + uvod + volba
+      + '<div class="note" style="margin-top:8px">Žádná žádost'
+      + (SCHV_CIZI.vse ? '' : ' nečeká na rozhodnutí') + '. Prošlo se '
+      + (SCHV_CIZI.prohledano || 0) + ' zakázek.</div>' + strop, false, 'schv-seznam');
+
+  const radky = seznam.map((z) => {
+    const [pillCls, pillTxt] = SCHV_PILL[z.kategorie] || ['mut', z.kategorie];
+    return `<tr>
+      <td><b>${esc(z.cislo || '—')}</b><div class="note">${esc(z.nazevAkce || '')}</div></td>
+      <td>${esc(z.nazev)}${z.ridici ? ' <span class="pill">řídicí</span>' : ''}</td>
+      <td style="text-align:right">${schvPct(z.procenta / 100)}</td>
+      <td><span class="pill ${pillCls}">${pillTxt}</span>
+        ${z.zamceno ? ' <span class="pill mut">uzamčeno</span>' : ''}</td>
+      <td class="note">${esc(z.schvalil || z.zamitl || '')}${(z.schvalilKdy || z.zamitlKdy)
+        ? ' · ' + esc(String(z.schvalilKdy || z.zamitlKdy).slice(0, 10)) : ''}</td>
+      <td><button class="mini" onclick="schvOtevriZakazku('${escJs(z.klic)}')">Otevřít zakázku</button></td>
+    </tr>`;
+  }).join('');
+
+  const tab = `<table class="sd-tbl" style="margin-top:8px">
+      <tr><th>Zakázka</th><th>Varianta</th><th style="text-align:right">Sleva</th>
+        <th>Stav</th><th>Rozhodl</th><th></th></tr>${radky}</table>`;
+
+  return card('Schvalování slev', prepinac + uvod + volba + tab + strop, false, 'schv-seznam');
+}
+
+/* Rozhodovat se dá až v otevřené zakázce. Je to schválně: rozhodnutí se
+ * zapisuje do zakázky a ta se musí uložit — odklepnout slevu z přehledu,
+ * aniž by se zakázka načetla, by znamenalo psát do souboru, který nemám
+ * před sebou. Navíc rozhodující člověk má vidět, o čem rozhoduje. */
+function schvOtevriZakazku(klic) {
+  if (typeof onlineOtevri !== 'function') return;
+  onlineOtevri(klic).then((otevreno) => {
+    /* Po otevření zakázky přepneme zpátky na její vlastní seznam — tam už
+     * jsou částky i tlačítka a je nad čím rozhodovat. */
+    if (otevreno) { SCHV_CIZI.rozsah = 'zakazka'; render(); }
+  });
 }
 
 function renderSchvalovani() {
   const el = document.getElementById('page-schvalovani');
-  if (el) el.innerHTML = schvalovaniKarta();
+  if (el) el.innerHTML = (SCHV_CIZI.rozsah === 'vse') ? schvCiziKarta() : schvalovaniKarta();
 }

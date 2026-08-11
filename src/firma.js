@@ -48,6 +48,22 @@ const FIRMA_POLE = [
   { id: 'email', sekce: 'Kontakty', label: 'E-mail', symbol: 'FIRMA_EMAIL' },
   { id: 'web', sekce: 'Kontakty', label: 'Web', symbol: 'FIRMA_WEB' },
 
+  /* --- smluvní standardy (10. 8. 2026) ---
+   *
+   * Tři věty, které stály natvrdo v kódu jako výchozí hodnota krycího listu
+   * a obchodník je v každé zakázce viděl jako pole k přepsání. Přitom to
+   * nejsou údaje zakázky, ale firemní standard: mění se jednou za rok a pro
+   * všechny naráz. Odtud je berou krycí listy OCK i PROJ.
+   *
+   * Způsob fakturace je záměrně dvakrát: u ocelové konstrukce se fakturuje
+   * po měsících podle postupu montáže, u projekce po odevzdaných stupních
+   * dokumentace. Jedno pole na obojí by nutilo psát obecnou větu, která by
+   * neseděla ani na jedno. */
+  { id: 'platnostNabidky', sekce: 'Smluvní standardy', label: 'Platnost nabídky', symbol: 'FIRMA_PLATNOST_NABIDKY' },
+  { id: 'zpusobFakturaceOck', sekce: 'Smluvní standardy', label: 'Způsob fakturace — OCK', symbol: 'FIRMA_FAKTURACE_OCK' },
+  { id: 'zpusobFakturaceProj', sekce: 'Smluvní standardy', label: 'Způsob fakturace — projekce', symbol: 'FIRMA_FAKTURACE_PROJ' },
+  { id: 'rozsahDefinice', sekce: 'Smluvní standardy', label: 'Rozsah díla — čím je definován', symbol: 'FIRMA_ROZSAH' },
+
   /* --- zpracovatel nabídky (podepsaná osoba v patičce dokumentu) --- */
   { id: 'zpracoval', sekce: 'Zpracovatel nabídky', label: 'Vypracoval', symbol: 'FIRMA_ZPRACOVAL' },
   { id: 'zpracovalTelefon', sekce: 'Zpracovatel nabídky', label: 'Telefon zpracovatele', symbol: 'FIRMA_ZPRACOVAL_TEL' },
@@ -56,7 +72,7 @@ const FIRMA_POLE = [
 
 /* Pořadí sekcí ve formuláři i v náhledech. */
 const FIRMA_SEKCE = ['Identifikace', 'Sídlo', 'Korespondenční adresa', 'Bankovní spojení',
-  'Kontakty', 'Zpracovatel nabídky'];
+  'Kontakty', 'Smluvní standardy', 'Zpracovatel nabídky'];
 
 /* UKÁZKOVÉ ÚDAJE, NE SKUTEČNÉ.
  *
@@ -92,6 +108,14 @@ const DEFAULT_FIRMA = {
   telefon: '+420 000 000 000',
   email: '',
   web: 'www.priklad.cz',
+
+  /* Smluvní standardy — výchozí znění je to, které do 10. 8. 2026 stálo
+   * natvrdo v kryci.js a kryci_proj.js. Kdo si je v Nastavení → Firma
+   * přepíše, změní je jednou pro celou firmu. */
+  platnostNabidky: '2 měsíce',
+  zpusobFakturaceOck: 'Náš standard / měsíční',
+  zpusobFakturaceProj: 'po dokončení jednotlivých stupňů dokumentace',
+  rozsahDefinice: 'je definován přílohou ke smlouvě (specifikace)',
 
   zpracoval: 'Jan Vzorový',
   zpracovalTelefon: '+420 000 000 000',
