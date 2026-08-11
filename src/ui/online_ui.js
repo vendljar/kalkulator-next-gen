@@ -116,8 +116,14 @@ function onlineApi(cesta, telo) {
       ONLINE_STAV.ja = null; ONLINE_STAV.db = null; ONLINE_STAV.cenikPouzit = false;
       onlineZprava('Přihlášení vypršelo – přihlaste se prosím znovu.', 'varovani');
     }
-    if (!r.ok || d.ok === false)
-      throw new Error(d.chyba || ('server odpověděl ' + r.status));
+    if (!r.ok || d.ok === false) {
+      const e = new Error(d.chyba || ('server odpověděl ' + r.status));
+      /* Celá odpověď jde s chybou dál (`e.data`). Odmítnutí občas nese vedle
+       * hlášky i údaj, se kterým se dá pracovat — třeba počet zakázek, kvůli
+       * kterým nešlo smazat účet. Bez toho by ho volající musel luštit z textu. */
+      e.data = d; e.stav = r.status;
+      throw e;
+    }
     return d;
   }));
 }
@@ -644,7 +650,13 @@ function onlineUzAkce(telo, hotovo, opts) {
       onlineZprava(hotovo);
       return onlineUzivateleNacti();
     })
-    .catch(e => { onlineZprava(e.message, 'varovani'); return false; })
+    .catch(e => {
+      /* opts.priChybe(e) dostane celou chybu i s odpovědí serveru (e.data) —
+       * použije se tam, kde odmítnutí není konec, ale rozcestí (mazání účtu
+       * se zakázkami nabídne převod). Kdo ho nezadá, dostane hlášku jako dřív. */
+      if (opts.priChybe) opts.priChybe(e); else onlineZprava(e.message, 'varovani');
+      return false;
+    })
     .then(v => { ONLINE_STAV.pracuje = false; onlineUzivateleObnov(); return v; });
 }
 
@@ -695,6 +707,88 @@ function onlineUzHesloUloz(email) {
 
 function onlineUzRoleZmen(email, role) {
   onlineUzAkce({ akce: 'role', email, role }, 'Účet ' + email + ' má roli ' + role + '.');
+}
+
+/* ---------- archivace účtu a převod zakázek (11. 8. 2026) ----------
+ *
+ * Účet po odchodu kolegy se dosud jen vypnul a zůstal v seznamu navždy.
+ * Smazat ho nejde: jeho jméno je podepsané pod odeslanými nabídkami a pod
+ * rozhodnutími o slevách. Archiv je proto odsunutí z očí — a protože práce
+ * po kolegovi musí mít nového hospodáře, nabídne se rovnou převod zakázek.
+ *
+ * Ptáme se ve dvou krocích schválně: archivace je vratná jedním kliknutím,
+ * ale převod autorství se sám nevrátí. Sloučit obojí do jediného „ano" by
+ * znamenalo, že si správce nevšimne, co vlastně odklepl. */
+function onlineUzArchiv(email, archiv) {
+  if (!archiv) {
+    onlineApi('/api/uzivatele', { akce: 'archiv', email, archiv: false })
+      .then(() => { onlineZprava('Účet ' + email + ' je zpátky v seznamu. '
+        + 'Přihlásit se jím půjde, až ho zapnete.'); onlineUzivateleNacti(); })
+      .catch(e => onlineZprava('Nepodařilo se vrátit z archivu: ' + e.message, 'varovani'));
+    return;
+  }
+  if (!confirm('Archivovat účet ' + email + '?\n\n'
+    + 'Účet se nesmaže — jen zmizí z běžného seznamu a nepůjde se jím přihlásit. '
+    + 'Razítka pod odeslanými nabídkami zůstanou beze změny.')) return;
+  onlineApi('/api/uzivatele', { akce: 'archiv', email, archiv: true })
+    .then(() => {
+      onlineZprava('Účet ' + email + ' je v archivu.');
+      onlineUzivateleNacti();
+      onlineUzPrevodNabidni(email);
+    })
+    .catch(e => onlineZprava('Archivace se nepovedla: ' + e.message, 'varovani'));
+}
+
+/* Nabídka převodu hned po archivaci — je to jediná chvíle, kdy správce ví,
+ * proč to dělá. Když ji odmítne, zakázky zůstanou podepsané odcházejícím
+ * a dá se to udělat kdykoli později. */
+function onlineUzPrevodNabidni(email) {
+  const cinni = (ONLINE_STAV.uzivatele || [])
+    .filter(u => u.email !== email && !u.archiv && u.aktivni);
+  if (!cinni.length) return;
+  const seznam = cinni.map((u, i) => (i + 1) + ') ' + u.email).join('\n');
+  const volba = prompt('Převést zakázky po ' + email + ' na jiného kolegu?\n\n'
+    + seznam + '\n\nNapište číslo kolegy, nebo nechte prázdné a nic se nestane.');
+  const n = Number(String(volba || '').trim());
+  if (!n || !cinni[n - 1]) return;
+  const na = cinni[n - 1].email;
+  onlineApi('/api/uzivatele', { akce: 'prevod', email, na })
+    .then(o => onlineZprava('Převedeno: ' + o.prevedeno + ' zakázek má nově na starost ' + na
+      + '. Razítka pod odeslanými nabídkami zůstala beze změny.'))
+    .catch(e => onlineZprava('Převod se nepovedl: ' + e.message, 'varovani'));
+}
+
+/* ---------- smazání účtu (11. 8. 2026) ----------
+ *
+ * Zadání majitele: „Uživatele bych ještě potřeboval mít i možnost mazat."
+ *
+ * Na rozdíl od archivace je tohle NEVRATNÉ, takže se ptáme jinak: dotaz
+ * vypisuje zvlášť, co zmizí, a zvlášť, co zůstane. Správce se u mazání
+ * kolegy bojí hlavně toho, že přijde o odeslané nabídky — a to se nestane;
+ * kdyby to ale v dotazu nestálo, netroufne si a bude mít v seznamu bývalé
+ * kolegy dál. Zároveň se rovnou nabízí archiv jako mírnější varianta.
+ *
+ * Když server odmítne kvůli zakázkám (409 a `zakazek` v odpovědi), není to
+ * konec, ale rozcestí: ukáže se serverová hláška s počtem a hned nato
+ * nabídka převodu na jiného kolegu — přesně ta, kterou zná archivace. */
+function onlineUzSmaz(email) {
+  if (!confirm('Opravdu SMAZAT účet ' + email + '?\n\n'
+    + 'CO ZMIZÍ: účet z databáze i ze seznamu, přihlášení (i s už otevřeným '
+    + 'oknem) a jeho sken podpisu s razítkem. Vrátit to nejde.\n\n'
+    + 'CO ZŮSTANE: razítka pod odeslanými nabídkami a podpisy pod rozhodnutími '
+    + 'o slevách — ta říkají, kdo co tehdy udělal, a nepřepisují se. Zakázky '
+    + 'zůstanou taky; server smazání odmítne, dokud je nepřevedete na kolegu.\n\n'
+    + 'Jde-li jen o odchod kolegy, zvolte raději „Archivovat…" — to je vratné.')) return;
+  onlineUzAkce({ akce: 'smaz', email },
+    'Účet ' + email + ' je smazaný i s podpisem. Razítka pod odeslanými nabídkami '
+    + 'a pod rozhodnutími o slevách zůstala beze změny.',
+    { priChybe: (e) => {
+      onlineZprava(e.message, 'varovani');
+      /* Nabídka převodu se odkládá o tik: prompt() by jinak zakryl obrazovku
+       * dřív, než se stihne vykreslit hláška serveru — a správce by se
+       * rozhodoval, aniž by věděl, proč se ho aplikace ptá. */
+      if (e.data && e.data.zakazek) setTimeout(() => onlineUzPrevodNabidni(email), 0);
+    } });
 }
 
 function onlineUzAktivni(email, aktivni) {
@@ -1293,7 +1387,14 @@ function onlineRadekUzivatele(u) {
     <td>${roleSel}</td>
     <td><input type="checkbox" ${u.aktivni ? 'checked' : ''} ${hlavni ? 'disabled' : ''}
         onchange="onlineUzAktivni('${escJs(u.email)}', this.checked)"></td>
-    <td><button class="mini" onclick="onlineUzHesloPanel('${escJs(u.email)}')">Nové heslo…</button></td>
+    <td><button class="mini" onclick="onlineUzHesloPanel('${escJs(u.email)}')">Nové heslo…</button>
+      ${hlavni ? '' : (u.archiv
+        ? `<button class="mini" onclick="onlineUzArchiv('${escJs(u.email)}', false)">Vrátit z archivu</button>`
+        : `<button class="mini" onclick="onlineUzArchiv('${escJs(u.email)}', true)">Archivovat…</button>`)}
+      ${/* Mazat nejde hlavní účet ani sám sebe — hlídá to server, ale tlačítko,
+            které vždycky skončí odmítnutím, do tabulky nepatří. */ ''}
+      ${(hlavni || (ONLINE_STAV.ja && ONLINE_STAV.ja.email === u.email)) ? ''
+        : `<button class="mini" onclick="onlineUzSmaz('${escJs(u.email)}')">Smazat…</button>`}</td>
   </tr>${resetRadek}`;
 }
 
@@ -1339,6 +1440,11 @@ function onlineUzivateleHtml() {
       server odmítne a účet nevznikne.</div>
     <div class="btns" style="margin-top:8px"><button class="primary" onclick="onlineUzZaloz()"
       ${ONLINE_STAV.pracuje ? 'disabled' : ''}>Založit účet</button></div>
+    <div class="note"><b>Archivovat…</b> účet odsune z očí a je to vratné; <b>Smazat…</b> ho
+      odstraní z databáze i s podpisem a vratné to není. Účet, který má na sobě zakázky,
+      server smazat nedá – nejdřív nabídne převod na jiného kolegu, aby práce po odcházejícím
+      nezůstala podepsaná adresou, která už neexistuje. Razítka pod odeslanými nabídkami
+      a podpisy pod rozhodnutími o slevách zůstávají v obou případech beze změny.</div>
     <div class="note">Hlavnímu administrátorskému účtu nejde snížit role ani ho vypnout – hlídá to
       server, aby si správce omylem nezamkl dveře. Reset hesla dělá vždy administrátor tady;
       žádná obnova e-mailem není. Každý uživatel si navíc může změnit vlastní heslo sám

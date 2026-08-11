@@ -47,9 +47,9 @@ const CENIK_DEF = [
   ['VOLITELNÉ POLOŽKY', [
     ['C.prechodoveKgKc', 'Přechodové plechy – nerez', 'Kč/kg', ''],
     ['C.leseniVnitrniKc', 'Lešení vnitřní', 'Kč/m výšky', ''],
-    ['C.leseniVnitrniFix', 'Lešení vnitřní – fixní část', 'Kč', ''],
+    ['C.leseniFix', 'Lešení – fixní část (společná pro všechna lešení)', 'Kč',
+     'Jedno číslo pro vnitřní i vnější lešení, stejné ve volitelných položkách i v příplatcích.'],
     ['C.leseniVnejsiKc', 'Lešení vnější', 'Kč/m²', ''],
-    ['C.leseniVnejsiFix', 'Lešení vnější – fixní část', 'Kč', ''],
     ['C.hakyKc', 'Háky na mytí šachty (ext)', 'Kč/ks', ''],
     ['C.zabradliKc', 'Úpravy/napojení zábradlí (int)', 'Kč/nástupiště', ''],
     ['C.soklBmKc', 'Oplechování soklu prohlubně (ext)', 'Kč/bm', ''],
@@ -99,8 +99,8 @@ const CENIK_DEF = [
     ['C.priplatky.madlaBmKc', 'Madla – tvrdé dřevo, čirý lak', 'Kč/bm', ''],
     ['C.priplatky.montazDveriKc', 'Montáž šachetních dveří', 'Kč/ks', ''],
     ['C.priplatky.prechMontKc', 'Přechodové plechy – montáž', 'Kč/ks', ''],
-    ['C.priplatky.leseniHlavaKc', 'Lešení – dokončení hlavy šachty', 'Kč/m', ''],
-    ['C.priplatky.leseniHlavaFix', 'Lešení – hlava šachty, fixní část', 'Kč', ''],
+    ['C.priplatky.leseniHlavaKc', 'Lešení – dokončení hlavy šachty', 'Kč/m',
+     'Nástavba už postaveného lešení – fixní část se u ní neúčtuje.'],
   ]],
 ];
 

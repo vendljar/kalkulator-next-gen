@@ -257,6 +257,11 @@ function importZakazka(obj) {
         d.proj.cenik.fixy = JSON.parse(JSON.stringify(DEFAULT_CENIK_PROJ.fixy));
       if (d.proj.cenik.dph == null)   // migrace: PROJ má vlastní sazbu DPH; převezme dosud platnou z ceníku OCK
         d.proj.cenik.dph = (d.cenik && d.cenik.dph != null) ? d.cenik.dph : DEFAULT_CENIK_PROJ.dph;
+      /* Migrace 11. 8. 2026: tři fixní částky lešení se slučují do jedné
+       * (C.leseniFix). Bez převzetí staré hodnoty by fixní část spadla na
+       * nulu a cena zakázky by se po otevření tiše propadla. Guard kvůli
+       * Node testům, které zakazka.js načítají bez engine.js. */
+      if (typeof cenikMigraceLeseni === 'function') cenikMigraceLeseni(d.cenik);
       if (!d.techspec) d.techspec = JSON.parse(JSON.stringify(DEFAULT_TECHSPEC));
       if (!d.kryci) d.kryci = { hodnoty: {} };
       if (!d.kryci.hodnoty) d.kryci.hodnoty = {};

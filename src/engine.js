@@ -74,8 +74,13 @@ const DEFAULT_CENIK = {  // HODNOTY VYNULOVÁNY pro GitHub (pripravit_github.py)
   skloCelniKc: 0, skloCelniNazev: '',
   praceOplasteniKc: 0, plastKotvyKc: 0, tmeleniKc: 0,
   striskaDvurKc: 0, cestovniKc: 0, cisteniKc: 0,
-  prechodoveKgKc: 0, leseniVnitrniKc: 0, leseniVnitrniFix: 0,
-  leseniVnejsiKc: 0, leseniVnejsiFix: 0, hakyKc: 0, zabradliKc: 0, soklBmKc: 0,
+  /* leseniFix (11. 8. 2026) — JEDINÝ zdroj fixní části lešení. Do té doby
+   * měla každá varianta lešení vlastní fixní klíč (vnitřní / vnější / hlava
+   * šachty) a v předloze se tytéž řádky lišily: vnitřní 18 000 ve volitelných,
+   * ale 15 000 v příplatcích, hlava šachty 0 a 5 000. Rozhodnutí uživatele:
+   * jedna cena (18 000 Kč) a jedno místo, kde se mění. */
+  prechodoveKgKc: 0, leseniVnitrniKc: 0, leseniFix: 0,
+  leseniVnejsiKc: 0, hakyKc: 0, zabradliKc: 0, soklBmKc: 0,
   sken3dKc: 0, vystupZamereniKc: 0, engineeringKc: 0,
   projekceHodKc: 0, statikaKc: 0, statikaHod: 0, rezieKancelareKc: 0,
   stavbyvedouciHod: 0, stavbyvedouciKc: 0,
@@ -89,7 +94,7 @@ const DEFAULT_CENIK = {  // HODNOTY VYNULOVÁNY pro GitHub (pripravit_github.py)
          tomasProfilM2: 0, tomasListaBm: 0, tomasPlechKs: 0, tomasOplechM2: 0, tomasTercKs: 0 },
   priplatky: { vsgFolieM2: 0, sknM2: 0, zabranyPadKc: 0, medStrechaM2: 0,
                ventilatorKc: 0, zabranyDvereKc: 0, madlaBmKc: 0,
-               leseniHlavaKc: 0, leseniHlavaFix: 0, montazDveriKc: 0, prechMontKc: 0 },
+               leseniHlavaKc: 0, montazDveriKc: 0, prechMontKc: 0 },
 };
 
 const DEFAULT_ZADANI = {
@@ -109,7 +114,7 @@ const DEFAULT_ZADANI = {
     lemovani:      { dim: '60x30', tl: 2 },
   },
   rezervaProfilyPct: 0, rezervaPlechyPct: 0,
-  montazZakladHod: 0, montazAtypHod: 0, projekceZakladHod: 0, projekceAtypHod: 0,
+  montazZakladHod: 24, montazAtypHod: 0, projekceZakladHod: 50, projekceAtypHod: 0,
   /* zamecnikAtypKc = přepis sazby atypické zámečnické práce JEN pro tuhle zakázku.
    * Výchozí je prázdno (null), ne nula: prázdno znamená „platí ceník", kdežto
    * nula je platná dohoda („tohle uděláme zdarma"). Kdyby tu stála nula, ceníková
@@ -117,6 +122,7 @@ const DEFAULT_ZADANI = {
   zamecnikAtypKs: 0, zamecnikAtypKc: null, oplechOstatniKg: 10, oplechOstatniHod: 5,
   engineeringKs: 0, rezervaZakladPct: 0, rezervaPriplatkyPct: 0,
   volitelne: { prechodove: null /* null = dle zadání */, leseniVnitrni: true, leseniVnejsi: false,
+               leseniHlava: false,
                haky: true, zabradli: true, sokl: false },
   priplatkyVyber: null, // null = všechny (jako Excel); jinak pole klíčů
   mnozstviPrepis: {},   // ruční přepis množství položek kalkulace { název: množství }
@@ -442,12 +448,29 @@ function vypocet(zadani, cenik, jekly, fixes = true) {
     ...vlastniProSekci('oplasteni'),
   ].filter(Boolean);
 
+  /* Příplatkové sazby. Deklarované až tady nahoře proto, že od 11. 8. 2026
+   * je potřebují i dvě volitelné položky (montáž přechodových plechů a lešení
+   * pro dokončení hlavy) — sazba je pro obě varianty táž a nemá být dvakrát. */
+  const pp = c.priplatky;
+
   // ---------- VOLITELNÉ: katalog všech dostupných položek + příznak „zahrnuto“ (checkbox v tabulce) ----------
   const v = z.volitelne;
   const volKatalogDef = [
     { key: 'prechodove', mk: () => mkItem('PŘECHODOVÉ PLECHY - NEREZ', prechKg, c.prechodoveKgKc, { cenaPath: 'C.prechodoveKgKc' }), zahrnuto: prechodoveAno, dostupne: true },
-    { key: 'leseniVnitrni', mk: () => mkItem('LEŠENÍ - vnitřní', leseniVez, c.leseniVnitrniKc, { cenaPath: 'C.leseniVnitrniKc', fix: c.leseniVnitrniFix, pozn: `+ fix ${c.leseniVnitrniFix} Kč` }), zahrnuto: v.leseniVnitrni, dostupne: true },
-    { key: 'leseniVnejsi', mk: () => mkItem('LEŠENÍ - vnější', leseniU, c.leseniVnejsiKc, { cenaPath: 'C.leseniVnejsiKc', fix: c.leseniVnejsiFix, pozn: `+ fix ${c.leseniVnejsiFix} Kč` }), zahrnuto: v.leseniVnejsi, dostupne: true },
+    { key: 'leseniVnitrni', mk: () => mkItem('LEŠENÍ - vnitřní', leseniVez, c.leseniVnitrniKc, { cenaPath: 'C.leseniVnitrniKc', fix: c.leseniFix, pozn: `+ fix ${c.leseniFix} Kč` }), zahrnuto: v.leseniVnitrni, dostupne: true },
+    { key: 'leseniVnejsi', mk: () => mkItem('LEŠENÍ - vnější', leseniU, c.leseniVnejsiKc, { cenaPath: 'C.leseniVnejsiKc', fix: c.leseniFix, pozn: `+ fix ${c.leseniFix} Kč` }), zahrnuto: v.leseniVnejsi, dostupne: true },
+    /* Montáž přechodových plechů (11. 8. 2026). Předloha ji má ve volitelných
+     * hned pod materiálem — u nás byla jen jako příplatek, takže když se plechy
+     * daly do základní ceny, jejich montáž se neúčtovala vůbec. Množství je
+     * počet nástupišť, sazba je táž jako u příplatkové varianty (jeden zdroj). */
+    { key: 'prechMont', mk: () => mkItem('PŘECHODOVÉ PLECHY - NEREZ (MONTÁŽ)', prechKs, pp.prechMontKc,
+      { cenaPath: 'C.priplatky.prechMontKc' }), zahrnuto: prechodoveAno, dostupne: true },
+    /* Lešení pro dokončení hlavy šachty (11. 8. 2026). Fixní část NEMÁ, a to
+     * ani ve volitelných, ani v příplatcích: je to nástavba už postaveného
+     * lešení, ne samostatná stavba. Předloha tu měla dvě různá čísla (0 a
+     * 5 000) — obojí padlo spolu se zavedením jediného klíče leseniFix. */
+    { key: 'leseniHlava', mk: () => mkItem('LEŠENÍ - dokončení hlavy šachty', z.prejezd, pp.leseniHlavaKc,
+      { cenaPath: 'C.priplatky.leseniHlavaKc' }), zahrnuto: v.leseniHlava, dostupne: true },
     { key: 'haky', mk: () => mkItem('HÁKY NA MYTÍ ŠACHTY (EXT)', 3, c.hakyKc, { cenaPath: 'C.hakyKc' }), zahrnuto: v.haky, dostupne: ext },
     { key: 'zabradli', mk: () => mkItem('ÚPRAVY/NAPOJENÍ ZÁBRADLÍ (INT)', z.nastupiste, c.zabradliKc, { cenaPath: 'C.zabradliKc' }), zahrnuto: v.zabradli, dostupne: !ext },
     { key: 'sokl', mk: () => mkItem('OPLECHOVÁNÍ SOKLU PROHLUBNĚ (EXT)', z.sirka + 2 * z.hloubka, c.soklBmKc, { cenaPath: 'C.soklBmKc' }), zahrnuto: v.sokl, dostupne: ext },
@@ -519,7 +542,6 @@ function vypocet(zadani, cenik, jekly, fixes = true) {
   const zakladCenaZaokr = CEIL(zakladCena, 1000);
 
   /* ---------- příplatkové položky (ceník variant) ---------- */
-  const pp = c.priplatky;
   const mkPrip = (key, nazev, mnozstvi, cena, opts = {}) => {
     zapisNazev(nazev);
     const cenaPrepis = (opts.cenaPath == null && z.cenyPrepis && z.cenyPrepis[nazev] != null) ? +z.cenyPrepis[nazev] : null;
@@ -534,6 +556,8 @@ function vypocet(zadani, cenik, jekly, fixes = true) {
     mkPrip('vsgFolie', 'Sklo VSG s mléčnou fólií', skloCelkemM2, pp.vsgFolieM2, { cenaPath: 'C.priplatky.vsgFolieM2' }),
     ext ? mkPrip('skn', 'Sklo SKN 176 (Ug=1,1) (EXT)', skloBokyZadniM2, pp.sknM2, { cenaPath: 'C.priplatky.sknM2' }) : null,
     prechodoveAno ? null : mkPrip('prechMat', 'PŘECHODOVÉ PLECHY - NEREZ (MATERIÁL)', prechKg1 * z.nastupiste, c.prechodoveKgKc, { cenaPath: 'C.prechodoveKgKc' }),
+    /* Příplatková varianta jen tehdy, když montáž není už ve volitelných —
+     * jinak by se táž práce naúčtovala dvakrát. */
     prechodoveAno ? null : mkPrip('prechMont', 'PŘECHODOVÉ PLECHY - NEREZ (MONTÁŽ)', z.nastupiste, pp.prechMontKc, { cenaPath: 'C.priplatky.prechMontKc' }),
     mkPrip('madlaBoky', 'MADLA NA BOČNÍCH STĚNÁCH (dřevo, lak)', (z.nastupiste - 1) * ((z.hloubka + 0.16) * 1.2) * 2, pp.madlaBmKc, { cenaPath: 'C.priplatky.madlaBmKc' }),
     mkPrip('madlaZadni', 'MADLA NA ZADNÍ STĚNĚ (dřevo, lak)', (z.nastupiste - 1) * ((z.sirka + 0.16) * 1.2), pp.madlaBmKc, { cenaPath: 'C.priplatky.madlaBmKc' }),
@@ -541,12 +565,15 @@ function vypocet(zadani, cenik, jekly, fixes = true) {
     ext ? mkPrip('ventilator', 'VENTILÁTOR (EXT)', 1, pp.ventilatorKc, { cenaPath: 'C.priplatky.ventilatorKc' }) : null,
     mkPrip('zabranyDvere', 'ZÁBRANY DO DVEŘNÍCH VSTUPŮ', z.nastupiste, pp.zabranyDvereKc, { cenaPath: 'C.priplatky.zabranyDvereKc' }),
     mkPrip('montazDveri', 'MONTÁŽ ŠACHETNÍCH DVEŘÍ', z.nastupiste, pp.montazDveriKc, { cenaPath: 'C.priplatky.montazDveriKc' }),
+    /* Fixní část lešení je v příplatcích táž jako ve volitelných — jeden klíč
+     * c.leseniFix. Dokud měla každá větev vlastní číslo, znamenalo přesunutí
+     * lešení ze základní ceny do příplatků tichou změnu ceny o tisíce korun. */
     v.leseniVnitrni ? null : mkPrip('leseniVnitrni', 'LEŠENÍ - vnitřní', leseniVez, c.leseniVnitrniKc,
-      { cenaPath: 'C.leseniVnitrniKc', naklad: leseniVez * c.leseniVnitrniKc + c.leseniVnitrniFix }),
-    mkPrip('leseniHlava', 'LEŠENÍ - dokončení hlavy šachty', z.prejezd, pp.leseniHlavaKc,
-      { cenaPath: 'C.priplatky.leseniHlavaKc', naklad: z.prejezd * pp.leseniHlavaKc + pp.leseniHlavaFix }),
+      { cenaPath: 'C.leseniVnitrniKc', naklad: leseniVez * c.leseniVnitrniKc + c.leseniFix }),
+    v.leseniHlava ? null : mkPrip('leseniHlava', 'LEŠENÍ - dokončení hlavy šachty', z.prejezd, pp.leseniHlavaKc,
+      { cenaPath: 'C.priplatky.leseniHlavaKc' }),
     v.leseniVnejsi ? null : mkPrip('leseniVnejsi', 'LEŠENÍ - vnější', leseniU, c.leseniVnejsiKc,
-      { cenaPath: 'C.leseniVnejsiKc', naklad: leseniU * c.leseniVnejsiKc + c.leseniVnejsiFix }),
+      { cenaPath: 'C.leseniVnejsiKc', naklad: leseniU * c.leseniVnejsiKc + c.leseniFix }),
     ...(Array.isArray(z.priplatkyVlastni) ? z.priplatkyVlastni : []).map((vl, i) =>
       ({ ...mkPrip('vlastni:' + i, vl.nazev, +vl.mnozstvi || 0, +vl.cena || 0,
         { vlastni: true, pozn: vl.kid ? 'trvalá položka z ceníku' : 'ruční položka' }), kid: vl.kid || null })),
@@ -587,4 +614,27 @@ function vypocet(zadani, cenik, jekly, fixes = true) {
   };
 }
 
-if (typeof module !== 'undefined') module.exports = { vypocet, DEFAULT_ZADANI, DEFAULT_CENIK, CEIL };
+/* MIGRACE 11. 8. 2026 — tři fixní částky lešení se slučují do jedné.
+ *
+ * Do této verze měl ceník `leseniVnitrniFix`, `leseniVnejsiFix` a
+ * `priplatky.leseniHlavaFix`. Uložené zakázky i zveřejněný ceník je pořád
+ * nesou; kdyby se jen přestaly číst, spadla by fixní část lešení na nulu a
+ * cena by se tiše propadla o desítky tisíc. Proto se hodnota převezme —
+ * a to z VNITŘNÍHO lešení, protože to je ta cena, kterou uživatel označil
+ * za platnou (18 000 Kč). Staré klíče se zahazují, aby v datech nezůstal
+ * druhý zdroj, ke kterému by se dalo omylem vrátit.
+ *
+ * Funkce je bez návratové hodnoty a mění ceník na místě; volá se z migrace
+ * zakázky (zakazka.js) i při načtení ceníku programu (program_ui.js). */
+function cenikMigraceLeseni(cenik) {
+  if (!cenik || typeof cenik !== 'object') return;
+  if (cenik.leseniFix == null) {
+    const stary = [cenik.leseniVnitrniFix, cenik.leseniVnejsiFix].find(x => x != null);
+    if (stary != null) cenik.leseniFix = +stary || 0;
+  }
+  delete cenik.leseniVnitrniFix;
+  delete cenik.leseniVnejsiFix;
+  if (cenik.priplatky && typeof cenik.priplatky === 'object') delete cenik.priplatky.leseniHlavaFix;
+}
+
+if (typeof module !== 'undefined') module.exports = { vypocet, DEFAULT_ZADANI, DEFAULT_CENIK, CEIL, cenikMigraceLeseni };

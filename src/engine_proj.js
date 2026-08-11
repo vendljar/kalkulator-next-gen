@@ -35,13 +35,13 @@ const DEFAULT_CENIK_PROJ = {  // HODNOTY VYNULOVÁNY pro GitHub (pripravit_githu
 };
 
 // Definice sekcí a položek (hodnoty hodin/fixů = výchozí z předlohy, vše editovatelné)
-const DEFAULT_ZADANI_PROJ = {
+const DEFAULT_ZADANI_PROJ = {  // SEKČNÍ PŘIRÁŽKY NAHRAZENY hodnotou null pro GitHub (pripravit_github.py) – berou se z globální přirážky ceníku
   slevaPct: 0,                       // globální sleva(−)/přirážka(+) v % (L2)
   sekce: [
-    { key: 'zamereni', nazev: 'ZAMĚŘENÍ', doprava: { km: 0, pausal: 0 }, prirazkaPct: 0,
+    { key: 'zamereni', nazev: 'ZAMĚŘENÍ', doprava: { km: 0, pausal: 0 }, prirazkaPct: null,
       polozky: [
-        { nazev: 'Zaměření', typ: 'hod', sazba: 'zamereni', hodiny: 0, rezerva: 0 },
-        { nazev: 'Výstup', typ: 'hod', sazba: 'projektant', hodiny: 0, rezerva: 0 },
+        { nazev: 'Zaměření', typ: 'hod', sazba: 'zamereni', hodiny: 5, rezerva: 0 },
+        { nazev: 'Výstup', typ: 'hod', sazba: 'projektant', hodiny: 10, rezerva: 0 },
       ] },
     { key: 'studie', nazev: 'ST – STUDIE', prirazkaPct: null,
       polozky: [
@@ -55,9 +55,9 @@ const DEFAULT_ZADANI_PROJ = {
       ] },
     { key: 'dpz', nazev: 'DPZ – DOKUMENTACE PRO POVOLENÍ ZÁMĚRU', doprava: { km: 0, pausal: 0 }, prirazkaPct: null,
       polozky: [
-        { nazev: 'Projektová dokumentace pro DOSS', typ: 'hod', sazba: 'projektant', hodiny: 0, rezerva: 0 },
-        { nazev: 'Projektová dokumentace pro SÚ', typ: 'hod', sazba: 'projektant', hodiny: 0, rezerva: 0 },
-        { nazev: 'Statika', typ: 'hod', sazba: 'statik', hodiny: 0, rezerva: 0 },
+        { nazev: 'Projektová dokumentace pro DOSS', typ: 'hod', sazba: 'projektant', hodiny: 52, rezerva: 0 },
+        { nazev: 'Projektová dokumentace pro SÚ', typ: 'hod', sazba: 'projektant', hodiny: 6, rezerva: 0 },
+        { nazev: 'Statika', typ: 'hod', sazba: 'statik', hodiny: 6, rezerva: 0 },
         { nazev: 'PBŘ', typ: 'fix', fixKey: 'pbr' },
         { nazev: 'Studie osvitu (Praha 4 a 6)', typ: 'fix', fixKey: 'studieOsvitu' },
         { nazev: 'Elektro projekt', typ: 'fix', fixKey: 'elektroDpz' },
@@ -66,13 +66,13 @@ const DEFAULT_ZADANI_PROJ = {
       polozky: [{ nazev: 'Inženýrská činnost', typ: 'fix', fixKey: 'ic' }] },
     { key: 'dps', nazev: 'DPS – DOKUMENTACE PRO PROVEDENÍ STAVBY', prirazkaPct: null,
       polozky: [
-        { nazev: 'Projekt pro DPS – stavební část', typ: 'hod', sazba: 'projektant', hodiny: 0, rezerva: 0 },
-        { nazev: 'Statika', typ: 'hod', sazba: 'statik', hodiny: 0, rezerva: 0 },
+        { nazev: 'Projekt pro DPS – stavební část', typ: 'hod', sazba: 'projektant', hodiny: 48, rezerva: 0 },
+        { nazev: 'Statika', typ: 'hod', sazba: 'statik', hodiny: 6, rezerva: 0 },
         { nazev: 'Elektro projekt', typ: 'fix', fixKey: 'elektroDps' },
       ] },
     { key: 'ezc', nazev: 'EZC – EKONOMICKÁ ZADÁVACÍ ČÁST (celý projekt)', prirazkaPct: null,
       polozky: [{ nazev: 'Ekonomická zadávací část', typ: 'fix', fixKey: 'ezc' }] },
-    { key: 'kolaudace', nazev: 'KOLAUDACE (pro 1 ks výtahu)', doprava: { km: 0, pausal: 0 }, prirazkaPct: 0,
+    { key: 'kolaudace', nazev: 'KOLAUDACE (pro 1 ks výtahu)', doprava: { km: 0, pausal: 0 }, prirazkaPct: null,
       polozky: [{ nazev: 'Kolaudace', typ: 'fix', fixKey: 'kolaudace' }] },
     { key: 'geodet', nazev: 'GEODETICKÉ ZAMĚŘENÍ', prirazkaPct: null,
       polozky: [{ nazev: 'Geodetické zaměření', typ: 'fix', fixKey: 'geodet' }] },
@@ -96,7 +96,7 @@ function _prepisPlati(v) {
 }
 
 /* ---- přesun položky v rámci sekce (přetahování v kalkulaci PROJ) ----
- * V PROJ drží pořadí samo pole `polozky`: vypocetProj mapuje položky 1:0,
+ * V PROJ drží pořadí samo pole `polozky`: vypocetProj mapuje položky 1:1,
  * takže index v zadání a index ve výpočtu jsou tentýž řádek. (V OCK to takhle
  * nejde – tam se sekce skládá z ceníku a pořadí se vede zvlášť v Z.poradi.)
  * Sémantika je stejná jako u presunRadek v OCK: tažený řádek se vloží PŘED

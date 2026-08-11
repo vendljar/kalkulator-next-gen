@@ -285,6 +285,10 @@ function uloRejstrikZaznam(zak, opts) {
     });
   return {
     soubor: String(opts.soubor || uloJmenoSouboru(zak)),
+    /* Autor (11. 8. 2026) — v rejstříku proto, aby šlo vypsat „zakázky po
+     * kolegovi" bez čtení všech souborů zvlášť. Prázdno u starších zakázek
+     * je v pořádku: znamená to jen „vzniklo dřív, než se autor zapisoval". */
+    autor: String((zak && zak.autor) || ''),
     cislo: uloCisloVyplneno(zak && zak.cislo) ? String(zak.cislo).trim() : '',
     nazevAkce: String((zak && zak.nazevAkce) || ''),
     objednatel: String((zak && zak.objednatel) || ''),
@@ -307,6 +311,7 @@ function uloRejstrikNormalizuj(x) {
     .filter(z => z && typeof z === 'object' && typeof z.soubor === 'string' && z.soubor)
     .map(z => ({
       soubor: z.soubor,
+      autor: String(z.autor || ''),
       cislo: String(z.cislo || ''),
       nazevAkce: String(z.nazevAkce || ''),
       objednatel: String(z.objednatel || ''),

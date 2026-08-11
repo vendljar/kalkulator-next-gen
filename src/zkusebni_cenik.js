@@ -43,8 +43,8 @@ const ZKUSEBNI_CENIK = {
    (zkontroluj_pred_gitem.py, kontrola 7) to po právu hlásil. */
   praceOplasteniKc: 530, plastKotvyKc: 5000, tmeleniKc: 500,
   striskaDvurKc: 10000, cestovniKc: 10000, cisteniKc: 10000,
-  prechodoveKgKc: 500, leseniVnitrniKc: 1000, leseniVnitrniFix: 10000,
-  leseniVnejsiKc: 500, leseniVnejsiFix: 10000, hakyKc: 530, zabradliKc: 5000, soklBmKc: 5000,
+  prechodoveKgKc: 500, leseniVnitrniKc: 1000, leseniFix: 10000,
+  leseniVnejsiKc: 500, hakyKc: 530, zabradliKc: 5000, soklBmKc: 5000,
   sken3dKc: 5000, vystupZamereniKc: 10000, engineeringKc: 10000,
   projekceHodKc: 1000, statikaKc: 1000, statikaHod: 10, rezieKancelareKc: 50000,
   stavbyvedouciHod: 40, stavbyvedouciKc: 1000,
@@ -57,7 +57,7 @@ const ZKUSEBNI_CENIK = {
          tomasProfilM2: 500, tomasListaBm: 50, tomasPlechKs: 50, tomasOplechM2: 500, tomasTercKs: 20 },
   priplatky: { vsgFolieM2: 500, sknM2: 500, zabranyPadKc: 0, medStrechaM2: 5000,
                ventilatorKc: 20000, zabranyDvereKc: 2000, madlaBmKc: 2000,
-               leseniHlavaKc: 1000, leseniHlavaFix: 5000, montazDveriKc: 2000, prechMontKc: 1000 },
+               leseniHlavaKc: 1000, montazDveriKc: 2000, prechMontKc: 1000 },
 };
 
 const ZKUSEBNI_CENIK_PROJ = {

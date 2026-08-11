@@ -96,6 +96,10 @@ function progPouzij(zaznam) {
   if (!zaznam) return;
   konfigNahradVMiste(DEFAULT_CENIK, zaznam.cenik || {});
   konfigNahradVMiste(DEFAULT_CENIK_PROJ, zaznam.cenikProj || {});
+  /* Zveřejněný ceník je zmrazená kopie – ceník zveřejněný před 11. 8. 2026
+   * nese tři fixní částky lešení místo jedné. Převedeme je hned po načtení,
+   * jinak by fixní část lešení v celé aplikaci byla nula (viz engine.js). */
+  if (typeof cenikMigraceLeseni === 'function') cenikMigraceLeseni(DEFAULT_CENIK);
   if (zaznam.katalog && typeof katalogImport === 'function') katalogImport(KATALOG, zaznam.katalog);
   if (zaznam.slevy && typeof NAST !== 'undefined' && NAST.slevy) {
     konfigNahradVMiste(NAST.slevy, zaznam.slevy);
