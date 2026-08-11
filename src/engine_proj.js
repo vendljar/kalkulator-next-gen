@@ -35,7 +35,7 @@ const DEFAULT_CENIK_PROJ = {  // HODNOTY VYNULOVÁNY pro GitHub (pripravit_githu
 };
 
 // Definice sekcí a položek (hodnoty hodin/fixů = výchozí z předlohy, vše editovatelné)
-const DEFAULT_ZADANI_PROJ = {  // SEKČNÍ PŘIRÁŽKY NAHRAZENY hodnotou null pro GitHub (pripravit_github.py) – berou se z globální přirážky ceníku
+const DEFAULT_ZADANI_PROJ = {
   slevaPct: 0,                       // globální sleva(−)/přirážka(+) v % (L2)
   sekce: [
     { key: 'zamereni', nazev: 'ZAMĚŘENÍ', doprava: { km: 0, pausal: 0 }, prirazkaPct: null,
@@ -157,7 +157,25 @@ function vypocetProj(zadani, cenik) {
         + (+s.doprava.pausal || 0)
       : 0;
     const cenaSDopravou = cena + dopravaKc;
-    const pct = s.prirazkaPct == null ? globalPct : s.prirazkaPct / 100;
+    /* PROCENTO SEKCE (#132, přepracováno 11. 8. 2026 podle zadání „globální
+     * přirážka by měla být výchozí přirážkou pro sekce; pokud je globální
+     * přirážka 30 %, má být u všech sekcí 30 %").
+     *
+     * Výchozí hodnota je GLOBÁLNÍ PŘIRÁŽKA Z CENÍKU (PC.marze). Sekce ji tedy
+     * nemusí nikde mít napsanou — vezme si ji sama a obchodník ji může u jedné
+     * konkrétní sekce ručně přepsat. Zvláštní ceníkové pole pro tohle není
+     * potřeba a nemá ho ani ceník: jedno číslo, jedno místo.
+     *
+     * Globální SLEVA nabídky (zadani.slevaPct, v datech záporně) se přičítá.
+     * Přirážka a sleva jsou dvě oddělené veličiny — přirážka říká, kolik si
+     * účtujeme, sleva kolik z toho zákazníkovi odpustíme. Dřív sleva doléhala
+     * jen na sekce bez vlastního procenta, takže zaměření ji celé ignorovalo;
+     * teď doléhá na všechny stejně. Protože se procento násobí základem každé
+     * sekce, je to totéž, jako by se sleva odečetla z celé nabídky najednou.
+     *
+     * „Prázdno není nula" i tady: nula u sekce znamená „nepřirážíme nic"
+     * a přebije ceník, kdežto prázdno znamená „platí globální přirážka". */
+    const pct = (s.prirazkaPct != null ? s.prirazkaPct / 100 : (+c.marze || 0)) + globalPct;
     const slevaKc = cenaSDopravou * pct;              // T – sleva/přirážka v Kč
     const celkem = cenaSDopravou + slevaKc;           // V – celková cena sekce
     return { key: s.key, nazev: s.nazev, polozky, naklad, marze, cena, dopravaKc,

@@ -138,6 +138,13 @@ const CENIK_DEF_PROJ = [
   ]],
 ];
 
+/* Ceníkové klíče, u kterých je prázdno platná hodnota („nenastaveno").
+ * Dnes je množina prázdná: každá položka ceníku musí mít číslo, protože nula
+ * v ceníku znamená položku zdarma a to se nemá stát omylem při importu
+ * z tabulky. Mechanismus tu zůstává, aby se u prvního takového klíče nemusel
+ * vymýšlet znovu. */
+const CENIK_SMI_BYT_PRAZDNY = new Set();
+
 /* přístup do konkrétního ceníkového objektu podle cesty „C.a.b" / „PC.a.b" */
 function cenikGet(obj, cesta) {
   const ks = cesta.split('.').slice(1);   // zahodit prefix C/PC
@@ -198,11 +205,25 @@ function cenikDiffZeSheets(sheets, C, PC) {
       const typ = klic === 'C.marze' || klic === 'C.dph' || klic === 'PC.marze'
         ? 'num' : cenikTyp(t.def, klic);
       if (typ === 'num') {
-        if (typeof nova === 'string') nova = parseFloat(nova.replace(/\s/g, '').replace(',', '.'));
-        if (typeof nova !== 'number' || !isFinite(nova)) { chyby.push('Neplatné číslo u ' + klic + ': „' + r[vi] + '"'); continue; }
+        /* Prázdná buňka u klíče, který smí být nenastavený, není chyba —
+         * je to platná hodnota „nenastaveno" (#132: výchozí přirážka sekce).
+         * U ostatních čísel prázdno chyba je: tichá nula v ceníku znamená
+         * položku zdarma. „Prázdno není nula" platí oběma směry. */
+        const prazdno = nova == null || String(nova).trim() === '';
+        if (prazdno && CENIK_SMI_BYT_PRAZDNY.has(klic)) { nova = null; }
+        else {
+          if (typeof nova === 'string') nova = parseFloat(nova.replace(/\s/g, '').replace(',', '.'));
+          if (typeof nova !== 'number' || !isFinite(nova)) { chyby.push('Neplatné číslo u ' + klic + ': „' + r[vi] + '"'); continue; }
+        }
       } else { nova = String(nova == null ? '' : nova).trim(); }
       const stara = klic === 'C.marze' ? C.marze : klic === 'C.dph' ? C.dph : klic === 'PC.marze' ? PC.marze : cenikGet(t.obj, klic);
-      if (String(stara) !== String(nova))
+      /* Nenastaveno se dá zapsat třemi způsoby (chybí klíč, null, prázdná
+       * buňka) a všechny znamenají totéž. Bez tohohle srovnání by import
+       * hlásil změnu tam, kde se nic nezměnilo, a administrátor by odklikával
+       * prázdné rozdíly. */
+      const prazdneObe = CENIK_SMI_BYT_PRAZDNY.has(klic)
+        && (stara == null || stara === '') && (nova == null || nova === '');
+      if (!prazdneObe && String(stara) !== String(nova))
         zmeny.push({ cesta: klic, popis: String(r[2] == null ? '' : r[2]), stara, nova });
     }
   });

@@ -228,7 +228,17 @@ function kryciSken3d(d, rOck) {
  * takže sčítat obě části by znamenalo mít stejné peníze ve dvou smlouvách.
  * Příplatky se do hodnoty nezapočítávají – nabízejí se zvlášť. */
 function kryciCtx(zak, varianta, jekly) {
-  const d = varianta.data, Zv = d.ock.zadani, Cv = d.cenik;
+  /* #122: výpočet je schválně obalený v try/catch, aby rozbitá kalkulace
+   * neshodila celý krycí list — jenže zadání a ceník se dřív četly MIMO ten
+   * blok. Varianta bez ceníku (poškozený import, ručně sestavená zakázka)
+   * proto neshodila jeden řádek, ale celou stránku, a obchodník neviděl ani
+   * ta pole, která se z kalkulace vůbec neberou.
+   *
+   * Náhrady jsou prázdné objekty, ne vymyšlená čísla: chybějící ceník znamená
+   * „nevíme", a to se v krycím listu projeví pomlčkou u hodnoty, ne nulou. */
+  const d = (varianta && varianta.data) || {};
+  const Zv = (d.ock && d.ock.zadani) || {};
+  const Cv = d.cenik || {};
   let priplatky = '—', ockKc = null, projKc = null, rOck = null;
   const projSekce = {};
   try {

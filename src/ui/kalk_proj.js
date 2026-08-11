@@ -256,18 +256,20 @@ function renderProj() {
            <button class="mini" onclick="pjPolozkaAdd(${i}, 'fix')">+ přidat fixní položku do sekce</button></td></tr>`
       : '';
 
-    /* Vlastní % sekce (v předloze +30 % u Zaměření, +20 % u Kolaudace) už nemá
-     * vlastní pruh přes celou šířku – ten uživatel vyškrtl. Zůstává jako malé
-     * pole vpravo v pruhu s názvem sekce, aby se hodnota dala pořád měnit
-     * a hlavně aby nebyla neviditelná: prázdné pole znamená „platí globální". */
-    const prirGlob = num(PJ.slevaPct || 0);
-    const prirPopis = (PJ.slevaPct || 0) < 0 ? `globální sleva ${num(-PJ.slevaPct)} %`
-      : (PJ.slevaPct || 0) > 0 ? `globální přirážka ${prirGlob} %` : 'nic, globální sleva je nulová';
+    /* Vlastní % sekce nemá vlastní pruh přes celou šířku – ten uživatel
+     * vyškrtl. Zůstává jako malé pole vpravo v pruhu s názvem sekce, aby se
+     * hodnota dala pořád měnit a hlavně aby nebyla neviditelná: prázdné pole
+     * znamená „platí globální přirážka z ceníku" a rovnou ji ukazuje. */
+    /* Co se ukáže v prázdném poli (#132): globální přirážka z ceníku PROJ.
+     * Je to táž hodnota, se kterou počítá jádro — kdyby se rozešly, pole by
+     * slibovalo jedno procento a počítalo se druhé. */
+    const prirGlob = num(Math.round((PC.marze || 0) * 10000) / 100);
+    const prirPopis = `globální přirážka ${prirGlob} % z ceníku PROJ`;
     const vlastniPct = col.admin
       ? `<span class="note" style="font-weight:400;white-space:nowrap">vlastní % sekce
            <input type="number" step="1" style="width:64px" value="${zdroj.prirazkaPct == null ? '' : zdroj.prirazkaPct}"
              placeholder="${prirGlob}" onchange="pjSet(${i}, 'prirazkaPct', this.value === '' ? null : +this.value)"
-             title="vlastní % jen pro tuhle sekci: kladné číslo přirazí, záporné slevu (prázdné = ${prirPopis})"> %</span>`
+             title="vlastní % jen pro tuhle sekci: kladné číslo přirazí, záporné slevu (prázdné = ${prirPopis}). Nula znamená „u téhle sekce nepřirážíme nic“."> %</span>`
       : '';
 
     // id řádku s názvem sekce = cíl kotvy v klouzající liště (kalkLista)

@@ -1405,11 +1405,11 @@ function onlineUzivateleHtml() {
   /* Hláška (úspěch i odmítnutí serverem) se ukazuje PŘÍMO TADY — dřív šla
    * jen do karty na jiné záložce a založení účtu vypadalo, že nic nedělá. */
   return `${ONLINE_STAV.hlaska ? `<div class="${zapisTridaHlasky(ONLINE_STAV.hlaskaTyp)}">${esc(ONLINE_STAV.hlaska)}</div>` : ''}
-    <table class="vartbl archtbl">
+    <div class="tab-scroll"><table class="vartbl archtbl">
       <tr><th style="text-align:left">E-mail</th><th style="text-align:left">Titul</th>
           <th style="text-align:left">Jméno / funkce</th><th style="text-align:left">Telefon</th>
           <th>Role</th><th>Aktivní</th><th></th></tr>
-      ${ONLINE_STAV.uzivatele.map(onlineRadekUzivatele).join('')}</table>
+      ${ONLINE_STAV.uzivatele.map(onlineRadekUzivatele).join('')}</table></div>
     <div class="note" style="margin-top:12px"><b>Založit nový účet</b> – heslo je počáteční
       (min. 8 znaků), předejte ho osobně (e-mailem se nic neposílá):</div>
     <div class="row"><label>E-mail</label><input type="email" id="onlineUzEmail" value="${esc(f.email)}"

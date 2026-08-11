@@ -122,6 +122,7 @@ const DEFAULT_ZADANI = {
   zamecnikAtypKs: 0, zamecnikAtypKc: null, oplechOstatniKg: 10, oplechOstatniHod: 5,
   engineeringKs: 0, rezervaZakladPct: 0, rezervaPriplatkyPct: 0,
   volitelne: { prechodove: null /* null = dle zadání */, leseniVnitrni: true, leseniVnejsi: false,
+               prechMont: null /* null = řídí se materiálem (jen opravený režim) */,
                leseniHlava: false,
                haky: true, zabradli: true, sokl: false },
   priplatkyVyber: null, // null = všechny (jako Excel); jinak pole klíčů
@@ -268,6 +269,9 @@ function vypocet(zadani, cenik, jekly, fixes = true) {
   const podestKs = podestKs0 * D16, podestKg = podKg1 * podestKs0 * D16, podestM2 = podM21 * podestKs0 * D16;
 
   const prechodoveAno = z.volitelne.prechodove == null ? z.prechodovePlechy : z.volitelne.prechodove;
+  /* Montáž přechodových plechů má vlastní přepínač v OBOU režimech; prázdno
+   * znamená „řídí se materiálem", tedy beze změny ceny proti dosavadnímu stavu. */
+  const prechMontAno = (z.volitelne.prechMont != null) ? z.volitelne.prechMont : prechodoveAno;
   const prechKs = z.prechodovePlechy ? z.nastupiste : 0;
   const prechKg1 = 8500 * (0.1 * sirkaDveri * 0.002);
   const prechKg = prechKg1 * prechKs;
@@ -372,7 +376,16 @@ function vypocet(zadani, cenik, jekly, fixes = true) {
              mnozstvi: mn, mnozstviAuto: mnozstvi, prepsano: prepis != null,
              cena: cenaEff, cenaAuto: cena, cenaPrepsana: cenaPrepis != null, cenaPath: opts.cenaPath || null,
              fix: opts.fix != null ? opts.fix : null,
-             naklad, marze: naklad * m, sMarzi: naklad * (1 + m), pozn: opts.pozn || '', vlastni: !!opts.vlastni };
+             /* Řádky volitelných položek se NEZAOKROUHLUJÍ. Zaokrouhlení nahoru
+              * na tisíce patří jen příplatkům (mkPrip). V jednom konkrétním
+              * excelovém souboru (zakázka CN-0327) mělo zaokrouhlení i jedno
+              * volitelné — montáž přechodových plechů. Rozhodnutí uživatele
+              * z 11. 8. 2026: byla to úprava toho jednoho souboru, ne pravidlo
+              * původní šablony, a nenapodobuje se ani v kompatibilním režimu.
+              * Kdyby se totéž objevilo i u dalších zakázek, je to naopak signál,
+              * že se změnila předloha — a pak se to sem vrátí vědomě. */
+             naklad, marze: naklad * m, sMarzi: naklad * (1 + m),
+             pozn: opts.pozn || '', vlastni: !!opts.vlastni };
   };
   // vlastní ruční položky dané sekce (z.vlastniPolozky[sek]); starší soubory: volitelneVlastni → volitelne
   const vlastniProSekci = (sek) => {
@@ -462,9 +475,17 @@ function vypocet(zadani, cenik, jekly, fixes = true) {
     /* Montáž přechodových plechů (11. 8. 2026). Předloha ji má ve volitelných
      * hned pod materiálem — u nás byla jen jako příplatek, takže když se plechy
      * daly do základní ceny, jejich montáž se neúčtovala vůbec. Množství je
-     * počet nástupišť, sazba je táž jako u příplatkové varianty (jeden zdroj). */
+     * počet nástupišť, sazba je táž jako u příplatkové varianty (jeden zdroj).
+     *
+     * Vlastní přepínač (11. 8. 2026): v excelovém souboru zakázky CN-0327 čte
+     * montáž zapnutí z přepínače MATERIÁLU — vzorec `=H64*G64*F63` sahá na
+     * buňku o řádek výš, protože jeho vlastní F64 zůstala prázdná. U nás má
+     * montáž vlastní přepínač `volitelne.prechMont`. Prázdno znamená „řídí se
+     * materiálem", takže se nic nezmění, dokud to obchodník nepřepne — a kdo
+     * potřebuje montáž bez materiálu (nebo naopak), má to konečně jak zadat. */
     { key: 'prechMont', mk: () => mkItem('PŘECHODOVÉ PLECHY - NEREZ (MONTÁŽ)', prechKs, pp.prechMontKc,
-      { cenaPath: 'C.priplatky.prechMontKc' }), zahrnuto: prechodoveAno, dostupne: true },
+      { cenaPath: 'C.priplatky.prechMontKc' }),
+      zahrnuto: prechMontAno, dostupne: true },
     /* Lešení pro dokončení hlavy šachty (11. 8. 2026). Fixní část NEMÁ, a to
      * ani ve volitelných, ani v příplatcích: je to nástavba už postaveného
      * lešení, ne samostatná stavba. Předloha tu měla dvě různá čísla (0 a
@@ -558,7 +579,7 @@ function vypocet(zadani, cenik, jekly, fixes = true) {
     prechodoveAno ? null : mkPrip('prechMat', 'PŘECHODOVÉ PLECHY - NEREZ (MATERIÁL)', prechKg1 * z.nastupiste, c.prechodoveKgKc, { cenaPath: 'C.prechodoveKgKc' }),
     /* Příplatková varianta jen tehdy, když montáž není už ve volitelných —
      * jinak by se táž práce naúčtovala dvakrát. */
-    prechodoveAno ? null : mkPrip('prechMont', 'PŘECHODOVÉ PLECHY - NEREZ (MONTÁŽ)', z.nastupiste, pp.prechMontKc, { cenaPath: 'C.priplatky.prechMontKc' }),
+    prechMontAno ? null : mkPrip('prechMont', 'PŘECHODOVÉ PLECHY - NEREZ (MONTÁŽ)', z.nastupiste, pp.prechMontKc, { cenaPath: 'C.priplatky.prechMontKc' }),
     mkPrip('madlaBoky', 'MADLA NA BOČNÍCH STĚNÁCH (dřevo, lak)', (z.nastupiste - 1) * ((z.hloubka + 0.16) * 1.2) * 2, pp.madlaBmKc, { cenaPath: 'C.priplatky.madlaBmKc' }),
     mkPrip('madlaZadni', 'MADLA NA ZADNÍ STĚNĚ (dřevo, lak)', (z.nastupiste - 1) * ((z.sirka + 0.16) * 1.2), pp.madlaBmKc, { cenaPath: 'C.priplatky.madlaBmKc' }),
     ext ? mkPrip('medStrecha', 'PŘÍPLATEK ZA STŘECHU V MĚDI (EXT)', (z.sirka + 0.2) * (z.hloubka + 0.1), pp.medStrechaM2, { cenaPath: 'C.priplatky.medStrechaM2' }) : null,
