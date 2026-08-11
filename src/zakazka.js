@@ -88,6 +88,31 @@ function novaZakazka() {
 /* ---------- hlavička OCK vs. hlavička PROJ: dvě nezávislé sady ----------
  * Obě sady mají stejná pole. OCK sedí přímo na zakázce (zak.cislo, …) kvůli
  * zpětné kompatibilitě uložených souborů, PROJ v zak.projHlavicka. */
+/* ---------- úvodní fotka do dokumentu (11. 8. 2026) ----------
+ *
+ * Fotka se do zakázky nahrává už dřív a v online náhledu nabídky se ukazuje.
+ * Do Wordu se ale nedostala — šablona měla na titulní straně natvrdo vloženou
+ * fotografii jednoho konkrétního domu, takže KAŽDÁ nabídka odcházela s cizí
+ * stavbou na první straně.
+ *
+ * Tohle je jediné místo, kde se skládá, co z fotky jde do dokumentu:
+ * obrázek pod symbolem {{UVODNI_FOTO}} (vymění se za tvar v šabloně stejně
+ * jako podpis) a k němu dva textové symboly, které si jde do šablony dopsat
+ * kamkoli. Když fotka není nahraná, vrací se prázdno — a docxgen tvar ze
+ * šablony odstraní. To je schválně: nabídka bez fotky je lepší než nabídka
+ * s fotkou cizího objektu. */
+function uvodniFotoObrazky(zak) {
+  const f = (zak && zak.uvodniFoto) || '';
+  return f ? { UVODNI_FOTO: f } : {};
+}
+function uvodniFotoSymboly(zak) {
+  const z = zak || {};
+  return {
+    UVODNI_FOTO_NAZEV: String(z.uvodniFotoNazev || ''),
+    UVODNI_FOTO_POPIS: String(z.uvodniFotoPopis || ''),
+  };
+}
+
 const ZAK_HLAVICKA_POLE = ['cislo', 'nazevAkce', 'adresa', 'adresaObjednatele',
   'objednatel', 'kontakt', 'ico', 'datum'];
 
@@ -638,7 +663,7 @@ const StorageAdapter = {
 };
 
 if (typeof module !== 'undefined')
-  module.exports = { ZAKAZKA_SCHEMA, novaZakazka, novaVarianta, novaVariantaData,
+  module.exports = { uvodniFotoObrazky, uvodniFotoSymboly, ZAKAZKA_SCHEMA, novaZakazka, novaVarianta, novaVariantaData,
                      nastavRidici, ridiciVarianta, aktivniVarianta, importZakazka, StorageAdapter,
                      ZAK_HLAVICKA_POLE, zajistiProjHlavicku, projHlavicka,
                      projHlavickaEfektivni, projHlavickaZOck, projCisloNabidky,

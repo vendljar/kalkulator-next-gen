@@ -155,9 +155,17 @@ function nabidkaData(zak, varianta, jekly, lang) {
     + (varianta.zakaznik ? '_' + varianta.zakaznik : '')
     + (varianta.ridici ? '' : '_' + varianta.nazev)
     + (L !== 'cz' ? '_' + L.toUpperCase() : '');
+  /* Úvodní fotka stavby (11. 8. 2026): obrázek do tvaru {{UVODNI_FOTO}}
+   * a k němu název a popisek jako textové symboly, ať si je jde do šablony
+   * dopsat pod obrázek. Do 11. 8. byla fotka jen v online náhledu a titulní
+   * strana Wordu vozila fotografii cizí stavby ze šablony. */
+  Object.assign(placeholders,
+    typeof uvodniFotoSymboly === 'function' ? uvodniFotoSymboly(zak) : {});
   return { placeholders, priplatky: priplatkyList, jazyk: L,
-           /* sken podpisu s razítkem – vymění se za obrázek v šabloně (#146) */
-           obrazky: typeof zpracovatelObrazky === 'function' ? zpracovatelObrazky() : {},
+           /* sken podpisu s razítkem (#146) + úvodní fotka stavby */
+           obrazky: Object.assign({},
+             typeof zpracovatelObrazky === 'function' ? zpracovatelObrazky() : {},
+             typeof uvodniFotoObrazky === 'function' ? uvodniFotoObrazky(zak) : {}),
            nazevSouboru: nazevSouboru.replace(/[\\/:*?"<>|]+/g, '-') };
 }
 

@@ -382,12 +382,22 @@ function nabidkaProjData(zak, varianta, lang) {
   if (typeof kryciProjPodminkoveSymboly === 'function')
     Object.assign(placeholders, kryciProjPodminkoveSymboly(zak, varianta, P));
 
+  /* Název a popisek úvodní fotky jako textové symboly — obrázek jde zvlášť
+   * (viz `obrazky` níž), tohle je popisek pod něj. */
+  if (typeof uvodniFotoSymboly === 'function')
+    Object.assign(placeholders, uvodniFotoSymboly(zak));
+
   const nazevSouboru = ('NABÍDKA_PROJ_' + (placeholders.CISLO_NABIDKY || 'OVP-CN')
     + (varianta && varianta.zakaznik ? '_' + varianta.zakaznik : '')
     + (L !== 'cz' ? '_' + L.toUpperCase() : '')).replace(/[\\/:*?"<>|]+/g, '-');
 
   return { placeholders, bloky, rekapitulace, jazyk: L, nazevSouboru,
-    obrazky: typeof zpracovatelObrazky === 'function' ? zpracovatelObrazky() : {},
+    /* Úvodní fotka je vlastnost zakázky, ne kalkulace — projekční nabídka
+     * ji dostane stejně jako nabídka OCK. Když ji šablona PROJ nemá kam dát,
+     * nic se nestane: obrázek se vymění jen tam, kde je pro něj tvar. */
+    obrazky: Object.assign({},
+      typeof zpracovatelObrazky === 'function' ? zpracovatelObrazky() : {},
+      typeof uvodniFotoObrazky === 'function' ? uvodniFotoObrazky(zak) : {}),
     souhrn: { bezDph: celkemBezDph, bezDphPred: celkemPred, zaokrKc: zaokrKcNum,
               dphPct: dphPct, dphKc: dphKc, sDph: celkemBezDph + dphKc } };
 }

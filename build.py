@@ -74,9 +74,17 @@ html = (root / 'src/app_template.html').read_text()
 # __SESTAVENO__ = den sestavení v ISO tvaru. Aplikace z něj počítá vlastní stáří
 # (#40) a razítko přepočtu ceníku (#35). V Node testech se značka nenahrazuje,
 # proto ji build_info.js vydává jen po kontrole tvaru.
+# Ikona aplikace (11. 8. 2026): SVG ze složky ikona/ se zapeče do html jako
+# datová adresa. Drží se tím pravidlo jednoho souboru — favicon jako externí
+# soubor by u aplikace otevřené z disku nebo z přílohy vedl do prázdna.
+import base64
+ikona_svg = (root / 'src' / 'ikona.svg')
+ikona_b64 = base64.b64encode(ikona_svg.read_bytes()).decode('ascii') if ikona_svg.exists() else ''
+
 html = (html.replace('/*__CORE__*/', core).replace('/*__JEKLY__*/', jekly)
             .replace('/*__UI__*/', ui).replace('__VERZE__', 'v' + ver)
-            .replace('__SESTAVENO__', datetime.date.today().isoformat()))
+            .replace('__SESTAVENO__', datetime.date.today().isoformat())
+            .replace('__IKONA_B64__', ikona_b64))
 
 (root / 'dist').mkdir(exist_ok=True)
 (root / 'dist/kalkulacka.html').write_text(html)

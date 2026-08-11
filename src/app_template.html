@@ -4,6 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kalkulátor OCK + PROJ</title>
+<!-- Ikona aplikace (11. 8. 2026). Je vložená jako datová adresa, ne jako
+     samostatný soubor: celá aplikace je JEDEN html soubor, který se otevírá
+     i z disku a z přílohy e-mailu — odkaz na favicon.ico by v takovém případě
+     vedl do prázdna. SVG proto, že jedna kresba pokryje 16 px v liště záložek
+     i 512 px na ploše telefonu.
+     Motiv: vlevo ocelová konstrukce výtahové šachty s kabinou, vpravo tři
+     klesající sloupce = spočítaná cena. Barvy jsou z firemního loga. -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,__IKONA_B64__">
+<link rel="apple-touch-icon" href="data:image/svg+xml;base64,__IKONA_B64__">
+<meta name="theme-color" content="#3A3F45">
 <style>
   :root { --ink:#1a2332; --mut:#6b7686; --line:#dde3ea; --bg:#f4f6f9; --card:#fff;
           --acc:#1f5eff; --ok:#0a7d4f; --warn:#b45309; --sec:#eef2f8; }
@@ -600,6 +610,8 @@
 </head>
 <body>
 <header>
+  <img src="data:image/svg+xml;base64,__IKONA_B64__" alt="" width="28" height="28"
+       style="display:block;border-radius:6px;flex:0 0 auto">
   <h1>Kalkulačka __VERZE__</h1>
   <span class="ver">OCK dle šablony VZOR v1.00 / v22.7.1 · PROJ dle interního vzoru · <span id="rezimPill" class="pill warn">výpočet: 1:1 jako Excel (vč. jeho chyb)</span></span>
   <span class="sp"></span>
