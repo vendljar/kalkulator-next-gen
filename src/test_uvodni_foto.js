@@ -56,5 +56,44 @@ test('patička začíná názvem firmy',
   firmaPaticka(firmaDefault()).indexOf(firmaDefault().nazev) === 0,
   firmaPaticka(firmaDefault()));
 
+
+/* ============================================================
+ * ÚVODNÍ FOTKA DO WORDU (11. 8. 2026)
+ *
+ * Do 11. 8. 2026 se fotka ukazovala jen v online náhledu nabídky. Ve Wordu
+ * byla na titulní straně natvrdo vložená fotografie JEDNÉ KONKRÉTNÍ STAVBY
+ * ze šablony — takže každá nabídka odcházela zákazníkovi s cizím objektem.
+ *
+ * Nově jde fotka do dokumentu jako obrázek pod symbolem {{UVODNI_FOTO}}
+ * (stejným způsobem jako sken podpisu) a k němu dva textové symboly.
+ * ============================================================ */
+
+const zakF = novaZakazka();
+test('bez nahrané fotky se do dokumentu nepošle žádný obrázek',
+  Object.keys(uvodniFotoObrazky(zakF)).length === 0);
+/* Prázdno je tu podstatné: docxgen podle něj tvar ze šablony ODSTRANÍ.
+ * Nabídka bez fotky je lepší než nabídka s fotkou cizí stavby. */
+test('a symboly popisku jsou prázdné, ne „undefined"',
+  uvodniFotoSymboly(zakF).UVODNI_FOTO_POPIS === ''
+  && uvodniFotoSymboly(zakF).UVODNI_FOTO_NAZEV === '');
+
+zakF.uvodniFoto = 'data:image/png;base64,iVBORw0KGgo=';
+zakF.uvodniFotoNazev = 'stavba-sever.png';
+zakF.uvodniFotoPopis = 'Pohled na objekt z ulice';
+test('nahraná fotka jde do dokumentu pod symbolem UVODNI_FOTO',
+  uvodniFotoObrazky(zakF).UVODNI_FOTO === zakF.uvodniFoto);
+test('popisek a název jdou do dokumentu jako textové symboly',
+  uvodniFotoSymboly(zakF).UVODNI_FOTO_POPIS === 'Pohled na objekt z ulice'
+  && uvodniFotoSymboly(zakF).UVODNI_FOTO_NAZEV === 'stavba-sever.png');
+/* Fotka se předává přesně tak, jak ji prohlížeč vyrobil — žádné překódování.
+ * Kdyby se cestou měnila, rozešel by se náhled na obrazovce s dokumentem. */
+test('fotka se cestou nepřekódovává',
+  uvodniFotoObrazky(zakF).UVODNI_FOTO.indexOf('data:image/png;base64,') === 0);
+test('prázdný řetězec se chová jako nenahraná fotka',
+  Object.keys(uvodniFotoObrazky({ uvodniFoto: '' })).length === 0);
+test('chybějící zakázka funkce neshodí',
+  Object.keys(uvodniFotoObrazky(null)).length === 0
+  && uvodniFotoSymboly(null).UVODNI_FOTO_POPIS === '');
+
 console.log('\nPASS=' + passes + ' FAIL=' + fails);
 process.exit(fails ? 1 : 0);
