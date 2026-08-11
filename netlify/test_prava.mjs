@@ -49,8 +49,12 @@ import zalohaNocni from './functions/zaloha_nocni.mjs';
 import zalohaVynuceno from './functions/zaloha_vynuceno.mjs';
 import zdravi from './functions/zdravi.mjs';
 import zobrazeni from './functions/zobrazeni.mjs';
+import schvalovaniFn from './functions/schvalovani.mjs';
+import pdPole from './functions/pd_pole.mjs';
+import pdDealy from './functions/pd_dealy.mjs';
+import pdDeal from './functions/pd_deal.mjs';
 import { config as configNocni } from './functions/zaloha_nocni.mjs';
-import { ADMIN_EMAIL, ROLE } from './lib/sdilene.mjs';
+import { ADMIN_EMAIL, ROLE, POKUSY_MAX, zpozdeniMs, pokusyReset } from './lib/sdilene.mjs';
 
 import { createHmac } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -307,6 +311,38 @@ const MATICE = [
     url: 'http://x/api/zaloha_vynuceno', telo: () => ({ duvod: 'matice' }),
     proc: 'zálohu vyvolává správce; běžný uživatel by tím jen zatěžoval server',
     prava: JEN_ADMIN },
+
+
+  /* Napojení na Pipedrive (#16). Čtení smí každý přihlášený — obchodník bez
+   * seznamu zakázek v CRM nemá nad čím počítat. Ven z aplikace se tím nic
+   * nedostane: token žije jen v prostředí serveru a v odpovědi není.
+   * V téhle sadě není nastavené napojení, takže funkce odpovídají „napojení
+   * není nastavené" — a právě to je i jejich zkouška: bez tokenu se nesmí
+   * rozbít ani prozradit, jestli token vůbec existuje. */
+  { fn: pdDealy, soubor: 'pd_dealy.mjs', nazev: 'Pipedrive — seznam případů (GET /api/pd/dealy)',
+    metoda: 'GET', url: 'http://x/api/pd/dealy',
+    proc: 'obchodník potřebuje vybrat zakázku, nad kterou bude počítat',
+    prava: PRIHLASENY_OK },
+
+  { fn: pdDeal, soubor: 'pd_deal.mjs', nazev: 'Pipedrive — detail případu (GET /api/pd/deal)',
+    metoda: 'GET', url: 'http://x/api/pd/deal?id=1',
+    proc: 'z detailu se plní hlavička kalkulace a krycí list',
+    prava: PRIHLASENY_OK },
+
+  /* Sdílený rejstřík žádostí o slevu (#102). Čte ho každý přihlášený —
+   * rozhodnutí z 10. 8. 2026 zní, že všichni vidí všechny zakázky (#103),
+   * a rejstřík navíc nenese žádnou částku. Rozhodovat o žádosti je jiná věc:
+   * to hlídá strop role. */
+  { fn: schvalovaniFn, soubor: 'schvalovani.mjs',
+    nazev: 'schvalování — sdílený rejstřík (GET /api/schvalovani)',
+    metoda: 'GET', url: 'http://x/api/schvalovani',
+    proc: 'schvalovatel musí vidět, že někde vznikla žádost, aniž by tu zakázku otevíral',
+    prava: PRIHLASENY_OK },
+
+  { fn: pdPole, soubor: 'pd_pole.mjs', nazev: 'Pipedrive — mapa vlastních polí (GET /api/pd/pole)',
+    metoda: 'GET', url: 'http://x/api/pd/pole',
+    proc: 'názvy polí v CRM nejsou tajemství; vynucené obnovení už jen pro správce',
+    prava: PRIHLASENY_OK },
 ];
 
 console.log('\n===== KŘÍŽOVÁ MATICE: cesta × role =====\n');
@@ -587,6 +623,180 @@ test('noční záloha proběhne i bez přihlášení (spouští ji Netlify, ne u
  * toho, aby ji někdo doplnil do matice.
  * ============================================================ */
 
+/* ============================================================
+ * BRZDA PROTI HÁDÁNÍ HESEL A ČAS ODPOVĚDI (#92 a #93, 9. 8. 2026)
+ *
+ * Obě opatření mají společné to, že se dají zavést špatně a vypadat dobře.
+ *
+ * #92: zámek účtu po N pokusech je zbraň, kterou lze obrátit proti majiteli
+ * — stačí zkoušet hesla k cizímu účtu a jeho majitel se ten den nepřihlásí.
+ * Proto se tady netestuje jen „po deseti pokusech to přestane pouštět", ale
+ * hlavně opak: že SPRÁVNÉ heslo projde i uprostřed útoku.
+ *
+ * #93: hláška je správně neurčitá, ale čas odpovědi ji prozradí. Měří se
+ * proto skutečné trvání obou větví, ne jen text hlášky.
+ * ============================================================ */
+
+/* ============================================================
+ * SDÍLENÝ REJSTŘÍK ŽÁDOSTÍ O SLEVU (#102 a #103, 10. 8. 2026)
+ *
+ * Dvě rozhodnutí z 10. 8. 2026, zapsaná sem, aby se nezměnila mlčky:
+ *
+ * #103 — „všichni vidí všechny zakázky, resp. kalkulace." Zapsáno doslova,
+ * protože je to rozhodnutí, které se dělá tím, že se neudělá: dosud to tak
+ * server dělal, ale nikde nestálo, že to tak MÁ být.
+ *
+ * #102 — fronta schvalování jde napříč zakázkami. Právě proto tu je celá
+ * druhá půlka téhle sady: přehled napříč zakázkami je jediné místo, kde jde
+ * jedním požadavkem obejít matici zobrazení. Kdyby rejstřík vozil částky,
+ * uviděl by cenu i ten, komu ji administrátor v zakázce nepřidělil.
+ * ============================================================ */
+
+console.log('\n===== SDÍLENÝ REJSTŘÍK ŽÁDOSTÍ O SLEVU =====\n');
+
+function zakazkaSeSlevou(cislo, procenta, stav) {
+  const z = zk.novaZakazka();
+  z.cislo = cislo;
+  z.nazevAkce = 'Zkušební akce ' + procenta + ' %';
+  const v = z.varianty[0];
+  v.data.sleva = { procenta, role: 'Obchodník', stav, poznamka: '' };
+  return z;
+}
+/* Zakládá administrátor — obchodník ji pak musí v rejstříku vidět (#103). */
+await post(zakazky, 'http://x/api/zakazky',
+  { zakazka: zakazkaSeSlevou('2026 - OPR - CN - 0910', 18, 'čeká na schválení') }, cAdmin);
+await post(zakazky, 'http://x/api/zakazky',
+  { zakazka: zakazkaSeSlevou('2026 - OPR - CN - 0911', 3, 'schváleno automaticky') }, cAdmin);
+
+const rej = await (await get(schvalovaniFn, 'http://x/api/schvalovani', cObch)).json();
+test('rejstřík vrátí čekající žádost i z cizí zakázky',
+  rej.ok && rej.zadosti.some(z => z.cislo === '2026 - OPR - CN - 0910'),
+  JSON.stringify(rej).slice(0, 200));
+test('žádost nese číslo zakázky, název akce i procento',
+  rej.zadosti.every(z => z.cislo && z.nazevAkce && typeof z.sleva.procenta === 'number'));
+test('výchozí přehled ukazuje jen to, co čeká na rozhodnutí',
+  rej.zadosti.every(z => z.sleva.stav === 'čeká na schválení'),
+  rej.zadosti.map(z => z.sleva.stav).join(','));
+
+const rejVse = await (await get(schvalovaniFn, 'http://x/api/schvalovani?vse=1', cObch)).json();
+test('na vyžádání se ukážou i rozhodnuté žádosti',
+  rejVse.zadosti.some(z => z.sleva.stav === 'schváleno automaticky'));
+test('rejstřík řekne, kolik žádostí čeká a kolik jich je celkem',
+  rejVse.pocetCeka >= 1 && rejVse.pocetCelkem >= 2, rejVse.pocetCeka + '/' + rejVse.pocetCelkem);
+
+/* #103 doslova: obchodník vidí i zakázku, kterou nezaložil. */
+test('obchodník vidí v rejstříku i cizí zakázku (rozhodnutí #103)',
+  rejVse.zadosti.some(z => z.cislo === '2026 - OPR - CN - 0911'));
+test('vedoucí vidí totéž co obchodník',
+  (await (await get(schvalovaniFn, 'http://x/api/schvalovani?vse=1',
+    UCTY['Vedoucí'].cookie)).json()).zadosti.length === rejVse.zadosti.length);
+
+/* Jádro věci: v rejstříku nesmí být žádná částka. */
+const REJ_KLICE = ['klic', 'cislo', 'nazevAkce', 'variantaId', 'variantaNazev',
+  'ridici', 'zamceno', 'upraveno', 'sleva'];
+const REJ_SLEVA = ['procenta', 'role', 'schema', 'poznamka', 'stav', 'schvalil', 'schvalilKdy',
+  'schvalenoProc', 'zamitl', 'zamitlKdy', 'zamitnutoProc', 'zamitnutoDuvod'];
+const naviec = [];
+rejVse.zadosti.forEach((z) => {
+  Object.keys(z).forEach(k => { if (!REJ_KLICE.includes(k)) naviec.push(k); });
+  Object.keys(z.sleva || {}).forEach(k => { if (!REJ_SLEVA.includes(k)) naviec.push('sleva.' + k); });
+});
+test('rejstřík nenese nic nad rámec vyjmenovaných údajů', naviec.length === 0, naviec.join(','));
+const rejText = JSON.stringify(rejVse);
+test('rejstřík neveze cenu, náklad ani marži',
+  !/cena|naklad|marze|zaklad/i.test(rejText),
+  (rejText.match(/cena|naklad|marze|zaklad/i) || [])[0]);
+test('rejstřík neveze data kalkulace ani ceník',
+  !rejText.includes('profilas') && !rejText.includes('cenik'));
+
+console.log('\n===== BRZDA PROTI HÁDÁNÍ HESEL =====\n');
+
+test('zpozdeniMs: první dva překlepy se netrestají čekáním',
+  zpozdeniMs(0) === 0 && zpozdeniMs(1) === 0 && zpozdeniMs(2) === 0);
+test('zpozdeniMs: od třetího neúspěchu zpoždění roste',
+  zpozdeniMs(3) > 0 && zpozdeniMs(5) > zpozdeniMs(3));
+test('zpozdeniMs: zpoždění má strop (funkce se musí vejít do časového limitu)',
+  zpozdeniMs(50) === zpozdeniMs(1000) && zpozdeniMs(50) <= 2000);
+
+await post(uzivatele, 'http://x/api/uzivatele',
+  { akce: 'zaloz', email: 'brzda@example.com', jmeno: 'Terč útoku',
+    role: 'Obchodník', heslo: 'BrzdaHeslo1' }, cAdmin);
+
+const spatne = (email) => post(prihlaseni, 'http://x/api/prihlaseni',
+  { email, heslo: 'urcite-spatne-heslo' });
+
+let stavy = [];
+for (let i = 0; i < POKUSY_MAX; i++) stavy.push((await spatne('brzda@example.com')).status);
+test('prvních ' + POKUSY_MAX + ' špatných pokusů dostane obyčejné odmítnutí (401)',
+  stavy.every(s => s === 401), stavy.join(','));
+const pres = await spatne('brzda@example.com');
+test('pokus nad limit se odmítne s 429 (Too Many Requests)', pres.status === 429, pres.status);
+test('odmítnutí nad limit říká, že jde o počet pokusů, ne o špatné heslo',
+  /mnoho/i.test((await pres.json()).chyba || ''));
+
+/* Jádro věci: útočník vyčerpal limit, majitel se přesto dostane dovnitř. */
+const poUtoku = await post(prihlaseni, 'http://x/api/prihlaseni',
+  { email: 'brzda@example.com', heslo: 'BrzdaHeslo1' });
+test('správné heslo projde i po vyčerpání limitu (útočník majitele nezamkne)',
+  poUtoku.status === 200, poUtoku.status);
+test('úspěšné přihlášení počítadlo vynuluje',
+  (await spatne('brzda@example.com')).status === 401);
+
+/* Totéž pro hlavní administrátorský účet — u něj by zámek byl nejhorší,
+ * protože není nikdo, kdo by ho odemkl. */
+for (let i = 0; i <= POKUSY_MAX + 1; i++) await spatne(ADMIN_EMAIL);
+const adminPoUtoku = await post(prihlaseni, 'http://x/api/prihlaseni',
+  { email: ADMIN_EMAIL, heslo: 'Docasne.Heslo.123' });
+test('účet hlavního administrátora nejde zamknout hádáním hesel',
+  adminPoUtoku.status === 200, adminPoUtoku.status);
+
+/* Počítadlo běží i na e-mail, který v databázi není. Kdyby se počítaly jen
+ * existující účty, prozradila by brzda sama, které adresy u nás jsou. */
+let stavyNeznamy = [];
+for (let i = 0; i <= POKUSY_MAX; i++) stavyNeznamy.push((await spatne('nikdo@example.com')).status);
+test('brzda platí i pro neznámý e-mail (jinak by prozradila, kdo u nás je)',
+  stavyNeznamy[stavyNeznamy.length - 1] === 429, stavyNeznamy.join(','));
+
+console.log('\n===== ČAS ODPOVĚDI NEPROZRADÍ EXISTUJÍCÍ ÚČTY =====\n');
+
+await post(uzivatele, 'http://x/api/uzivatele',
+  { akce: 'zaloz', email: 'merene@example.com', jmeno: 'Měřený',
+    role: 'Obchodník', heslo: 'MereneHeslo1' }, cAdmin);
+
+/* Měří se mediánem, ne průměrem: jediné zaškobrtnutí sběrače paměti by
+ * průměr vychýlilo o víc než celý rozdíl, který hledáme. */
+async function medianMs(email) {
+  const casy = [];
+  for (let i = 0; i < 10; i++) {
+    const t0 = process.hrtime.bigint();
+    await post(prihlaseni, 'http://x/api/prihlaseni', { email, heslo: 'jineSpatneHeslo' });
+    casy.push(Number(process.hrtime.bigint() - t0) / 1e6);
+    await pokusyReset(email);   /* ať do měření nezasáhne brzda */
+  }
+  return casy.sort((a, b) => a - b)[5];
+}
+const tExistuje = await medianMs('merene@example.com');
+const tNeexistuje = await medianMs('vubec.neexistuje@example.com');
+test('neexistující účet a špatné heslo vrací tutéž hlášku i stavový kód',
+  (await (await spatne('vubec.neexistuje2@example.com')).json()).chyba
+  === (await (await spatne('merene@example.com')).json()).chyba);
+test('rozdíl časů obou větví je pod 50 ms (neprozradí existující účty)',
+  Math.abs(tExistuje - tNeexistuje) < 50,
+  'existující ' + tExistuje.toFixed(1) + ' ms vs neexistující ' + tNeexistuje.toFixed(1) + ' ms');
+await pokusyReset('merene@example.com');
+
+console.log('\n===== HLAVNÍ ÚČET POZNÁ SERVER, NE PROHLÍŽEČ (#95) =====\n');
+
+const seznamHlavni = await (await get(uzivatele, 'http://x/api/uzivatele', cAdmin)).json();
+const radekHlavni = (seznamHlavni.uzivatele || []).filter(x => x.hlavni);
+test('seznam účtů označuje právě jeden účet jako hlavní', radekHlavni.length === 1,
+  radekHlavni.length);
+test('a je to účet z ADMIN_EMAIL', radekHlavni[0] && radekHlavni[0].email === ADMIN_EMAIL);
+const jaHlavni = await (await get(ja, 'http://x/api/ja', cAdmin)).json();
+test('/api/ja řekne hlavnímu administrátorovi, že hlavní je', jaHlavni.hlavni === true);
+const jaObycejny = await (await get(ja, 'http://x/api/ja', cObch)).json();
+test('/api/ja u běžného účtu hlavní příznak nenastavuje', jaObycejny.hlavni === false);
+
 console.log('\n===== ZDROJOVÁ KONTROLA =====\n');
 
 const VEREJNE_ZAMERNE = ['prihlaseni.mjs', 'odhlaseni.mjs', 'zdravi.mjs', 'zaloha_nocni.mjs'];
@@ -609,8 +819,13 @@ test('vyzadujRoli si ověřuje účet v databázi, ne jen cookie',
  * znak po znaku.) */
 test('hesla se porovnávají časově bezpečně (timingSafeEqual)',
   /function hesloSedi[\s\S]{0,500}timingSafeEqual\s*\(/.test(sdilene));
+/* Sůl se hledá UVNITŘ otiskHesla, ne kdekoli v souboru. Volné hledání
+ * `randomBytes(` přestalo platit ve chvíli, kdy soubor začal náhodná data
+ * používat i jinde (zástupný otisk pro #93) — mutace „sůl je pro všechny
+ * stejná" pak procházela, protože slovo v souboru pořád bylo. */
 test('hesla se ukládají jen jako scrypt otisk se solí',
-  /scryptSync/.test(sdilene) && /randomBytes\(\d+\)/.test(sdilene));
+  /scryptSync/.test(sdilene)
+  && /function otiskHesla[\s\S]{0,300}randomBytes\(\d+\)/.test(sdilene));
 test('tajemstvi relace se bere z prostředí, není v kódu',
   /process\.env\.TAJEMSTVI_RELACE/.test(sdilene)
   && !/TAJEMSTVI_RELACE\s*=\s*['"]/.test(sdilene.replace(/process\.env\./g, '')));
@@ -619,6 +834,19 @@ test('tajemstvi relace se bere z prostředí, není v kódu',
  * si vlastní relaci. Raději ať server křičí, že proměnná chybí. */
 test('tajemství relace nemá záložní hodnotu v kódu',
   !/TAJEMSTVI_RELACE\s*\|\|/.test(sdilene));
+
+/* Zpoždění se v testech přeskakuje (jinak by sada běžela o minuty déle),
+ * takže žádný test výš nedokáže, že se na ně na serveru opravdu čeká.
+ * Hlídá to tahle statická kontrola. */
+const kodPrihlaseni = readFileSync(resolve(KOREN, 'functions', 'prihlaseni.mjs'), 'utf8');
+test('přihlášení se u neúspěchu skutečně zdrží (pockej + zpozdeniMs)',
+  /pockej\s*\(\s*zpozdeniMs\s*\(/.test(kodPrihlaseni));
+/* Pořadí je celá podstata #92: kdyby se počítadlo ptalo dřív, než se ověří
+ * heslo, dal by se majitel účtu zamknout deseti špatnými pokusy. */
+test('heslo se ověřuje dřív, než se rozhoduje o brzdě',
+  kodPrihlaseni.indexOf('hesloSedi(') < kodPrihlaseni.indexOf('pokusyNeuspech('));
+test('u neznámého účtu se scrypt počítá proti zástupnému otisku (#93)',
+  /hesloSedi\([\s\S]{0,120}FALESNY_OTISK/.test(kodPrihlaseni));
 
 console.log(`\n${ok} prošlo, ${fail} selhalo`);
 if (fail) { console.log('\nSelhalo:\n - ' + selhalo.join('\n - ')); }

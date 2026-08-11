@@ -19,6 +19,7 @@ import zakazky from './functions/zakazky.mjs';
 import zaloha from './functions/zaloha.mjs';
 import zalohaNocni from './functions/zaloha_nocni.mjs';
 import zalohaVynuceno from './functions/zaloha_vynuceno.mjs';
+import { ADMIN_EMAIL } from './lib/sdilene.mjs';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const zk = require('../src/zakazka.js');
@@ -52,8 +53,8 @@ const get = (fn, url, cookie) => fn(new Request(url, { headers: cookie ? { cooki
  * kde je `require` skutečný příkaz CommonJS a bundler ho vystopuje) a všechny
  * cesty v něm musí na disku existovat. */
 
-import { readFileSync, readdirSync, existsSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
+import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const KOREN = dirname(fileURLToPath(import.meta.url));
@@ -114,14 +115,14 @@ test('program bez přihlášení odmítnut', (await get(program, 'http://x/api/p
 test('zakázky bez přihlášení odmítnuty', (await get(zakazky, 'http://x/api/zakazky')).status === 401);
 
 /* 2) první přihlášení administrátora (bootstrap z prostředí) */
-const spatne = await post(prihlaseni, 'http://x/api/prihlaseni', { email: 'vendl.jaroslav@engineers-cz.cz', heslo: 'jine' });
+const spatne = await post(prihlaseni, 'http://x/api/prihlaseni', { email: ADMIN_EMAIL, heslo: 'jine' });
 test('špatné heslo odmítnuto', spatne.status === 401);
-const r1 = await post(prihlaseni, 'http://x/api/prihlaseni', { email: 'vendl.jaroslav@engineers-cz.cz', heslo: 'Docasne.Heslo.123' });
+const r1 = await post(prihlaseni, 'http://x/api/prihlaseni', { email: ADMIN_EMAIL, heslo: 'Docasne.Heslo.123' });
 const o1 = await r1.json();
 test('bootstrap administrátora funguje', o1.ok && o1.role === 'Administrátor', JSON.stringify(o1));
 const cookie = (r1.headers.get('set-cookie') || '').split(';')[0];
 test('relace se vydala v cookie', cookie.startsWith('relace='));
-test('/api/ja zná přihlášeného', (await (await get(ja, 'http://x/api/ja', cookie)).json()).email === 'vendl.jaroslav@engineers-cz.cz');
+test('/api/ja zná přihlášeného', (await (await get(ja, 'http://x/api/ja', cookie)).json()).email === ADMIN_EMAIL);
 
 /* 3) uživatelé: založení obchodníka + jeho omezená práva */
 const z1 = await (await post(uzivatele, 'http://x/api/uzivatele', { akce: 'zaloz', email: 'obchodnik@engineers-cz.cz', jmeno: 'Test Obchodník', role: 'Obchodník', heslo: 'ObchodHeslo1' }, cookie)).json();
@@ -180,7 +181,7 @@ test('administrátor firmu zveřejní', fPub.ok === true && !!fPub.kdy, JSON.str
 const fCteni = await (await get(firma, 'http://x/api/firma', cookieObch)).json();
 test('obchodník si firmu přečte', fCteni.ok && fCteni.firma.udaje.nazev === SKUT.nazev, JSON.stringify(fCteni.firma));
 test('zveřejněná firma nese, kdo a kdy',
-  fCteni.firma.kdo === 'vendl.jaroslav@engineers-cz.cz' && /^\d{4}-\d{2}-\d{2}T/.test(fCteni.firma.kdy));
+  fCteni.firma.kdo === ADMIN_EMAIL && /^\d{4}-\d{2}-\d{2}T/.test(fCteni.firma.kdy));
 test('zveřejněná firma nenese značku ukázkových dat', fCteni.firma.udaje.ukazkove === undefined);
 
 /* 5) zakázky: uložení, rejstřík, načtení, ochrana zámku */
@@ -240,7 +241,7 @@ test('vynucený otisk nese celou databázi', !!vynOtisk && vynOtisk.program.plat
   && Object.keys(vynOtisk.zakazky).length === 1 && !!vynOtisk.firma);
 test('vynucený otisk je poznat od nočního podle zdroje',
   typeof vynOtisk.zdroj === 'string' && vynOtisk.zdroj.includes('vynuc'), vynOtisk && vynOtisk.zdroj);
-test('vynucený otisk nese, kdo ho pořídil', vynOtisk.kdo === 'vendl.jaroslav@engineers-cz.cz', vynOtisk && vynOtisk.kdo);
+test('vynucený otisk nese, kdo ho pořídil', vynOtisk.kdo === ADMIN_EMAIL, vynOtisk && vynOtisk.kdo);
 const seznamOt = await (await get(zalohaVynuceno, 'http://x/api/zaloha_vynuceno', cookie)).json();
 test('seznam otisků vrátí dnešní zálohu', seznamOt.ok && seznamOt.otisky.length >= 1
   && seznamOt.otisky[0].den === vyn.den, JSON.stringify(seznamOt));
@@ -255,6 +256,48 @@ test('seznam otisků neveze otisky hesel', !seznamText.includes('heslo'), seznam
 test('seznam otisků nese jen souhrn (den, čas, zdroj, počty)',
   Object.keys(seznamOt.otisky[0]).every(k => ['den', 'porizena', 'zdroj', 'kdo', 'pocetZakazek', 'pocetUctu'].includes(k)),
   Object.keys(seznamOt.otisky[0]).join(','));
+
+/* ============================================================
+ * ADRESA HLAVNÍHO ADMINISTRÁTORA JEN NA JEDNOM MÍSTĚ (#95, 9. 8. 2026)
+ *
+ * Do 8. 8. 2026 byla adresa napsaná dvakrát: na serveru v `ADMIN_EMAIL`,
+ * kde ji server vymáhá, a znovu v prohlížeči v `online_ui.js`, kde jen
+ * rozhodovala, že se hlavní účet nedá zbavit role ani vypnout. Nebyla to
+ * díra — server si pojistku hlídá sám. Byla to past na údržbu: kdyby se
+ * adresa změnila na jednom místě a na druhém ne, choval by se prohlížeč
+ * jinak než server a nikdo by nepoznal proč.
+ *
+ * Kontrola prochází zdrojáky aplikace i serveru (testy vynechává, ty se
+ * musí umět přihlásit) a trvá na jediném výskytu.
+ * ============================================================ */
+
+const KOREN_PROJEKTU = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const PRESKOCIT = /(^|\/)(node_modules|dist|_soukrome|\.git|deploy|navrh)(\/|$)|(^|\/)(test_|overit_|snimky_|mutace\.mjs)/;
+
+function projdi(slozka, nalezy) {
+  for (const jmeno of readdirSync(slozka)) {
+    const cesta = join(slozka, jmeno);
+    const rel = cesta.slice(KOREN_PROJEKTU.length + 1);
+    if (PRESKOCIT.test(rel)) continue;
+    if (statSync(cesta).isDirectory()) { projdi(cesta, nalezy); continue; }
+    if (!/\.(js|mjs|json|html|toml|py)$/.test(jmeno)) continue;
+    const obsah = readFileSync(cesta, 'utf8');
+    const kolik = obsah.split(ADMIN_EMAIL).length - 1;
+    if (kolik) nalezy.push(rel + ' (' + kolik + 'x)');
+  }
+  return nalezy;
+}
+
+const vyskyty = [];
+for (const kde of ['src', 'netlify', 'server']) projdi(join(KOREN_PROJEKTU, kde), vyskyty);
+test('adresa hlavního administrátora je ve zdrojácích právě jednou',
+  vyskyty.length === 1, vyskyty.join(', ') || 'nikde');
+test('a to v netlify/lib/sdilene.mjs, odkud si ji vyzvedne server i prohlížeč',
+  vyskyty.length === 1 && vyskyty[0].startsWith('netlify/lib/sdilene.mjs'), vyskyty.join(', '));
+
+const uiKod = readFileSync(join(KOREN_PROJEKTU, 'src', 'ui', 'online_ui.js'), 'utf8');
+test('prohlížeč hlavní účet nepoznává podle e-mailu, ale podle příznaku ze serveru',
+  /const hlavni = !!u\.hlavni/.test(uiKod));
 
 console.log(`\n${ok} prošlo, ${fail} selhalo`);
 process.exit(fail ? 1 : 0);

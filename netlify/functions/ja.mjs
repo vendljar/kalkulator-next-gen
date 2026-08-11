@@ -9,12 +9,15 @@
  * telefon a sken podpisu s razítkem. Aplikace jimi vyplňuje blok „Vypracoval"
  * v cenové nabídce, takže je musí mít hned po obnovení stránky; jinak by první
  * nabídka vygenerovaná po načtení odešla bez podpisu. */
-import { vyzadujRoli, json, podpisCti } from '../lib/sdilene.mjs';
+/* `hlavni` říká prohlížeči, že jde o hlavní administrátorský účet — ten,
+ * který nejde zbavit role ani vypnout. Adresa zůstává jen na serveru (#95). */
+import { vyzadujRoli, json, podpisCti, ADMIN_EMAIL } from '../lib/sdilene.mjs';
 export default async (req) => {
   const { chyba, relace, ucet } = await vyzadujRoli(req);
   if (chyba) return chyba;
   return json({ ok: true, email: relace.email, role: relace.role, jmeno: relace.jmeno || '',
     titul: relace.titul || '', funkce: relace.funkce || '', telefon: relace.telefon || '',
+    hlavni: relace.email === ADMIN_EMAIL,
     podpis: await podpisCti(ucet.email) });
 };
 export const config = { path: '/api/ja' };

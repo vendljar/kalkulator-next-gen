@@ -9,7 +9,8 @@
  * HMAC kódem (TAJEMSTVI_RELACE z prostředí Netlify) v HttpOnly cookie.
  * Reset hesla provádí administrátor (rozhodnutí 3. 8. 2026) — žádný e-mail.
  *
- * První administrátor: vendl.jaroslav@engineers-cz.cz (rozhodnutí 3. 8. 2026).
+ * První administrátor: adresa je níž v konstantě ADMIN_EMAIL a NIKDE JINDE
+ * (rozhodnutí 3. 8. 2026, jedno místo od 9. 8. 2026 — #95).
  * Účet vznikne prvním přihlášením s heslem z proměnné ADMIN_INIT_HESLO,
  * kterou si uživatel nastaví v Netlify (heslo nikdy neputuje přes konverzaci
  * ani repozitář); po založení účtu lze proměnnou smazat.
@@ -51,6 +52,78 @@ export function hesloSedi(heslo, ulozene) {
     const b = scryptSync(String(heslo), sul, 64);
     return timingSafeEqual(Buffer.from(hash, 'hex'), b);
   } catch (e) { return false; }
+}
+
+/* ---------- zástupný otisk pro neexistující účty (#93, 9. 8. 2026) ----------
+ *
+ * Hláška „Nesprávný e-mail nebo heslo." schválně neříká, co z toho bylo
+ * špatně. Prozradil to ale ČAS odpovědi: u neznámé adresy se scrypt vůbec
+ * nepočítal a odpověď přišla o desítky milisekund dřív než u existujícího
+ * účtu se špatným heslem. Kdo měří, přečte si z toho seznam našich adres.
+ *
+ * Proti tomu se u neznámého účtu počítá scrypt proti tomuhle zástupnému
+ * otisku. Výsledek se zahodí — jde jen o to, aby obě větve stály stejně
+ * práce. Otisk vzniká z náhodných dat při startu funkce, takže se proti
+ * němu nedá nic „uhodnout". */
+export const FALESNY_OTISK = otiskHesla(randomBytes(24).toString('hex'));
+
+/* ---------- brzda proti hádání hesel (#92, 9. 8. 2026) ----------
+ *
+ * Zamknout účet po N pokusech je zbraň, kterou lze obrátit proti majiteli:
+ * stačí, aby někdo cizí zkoušel hesla k účtu administrátora, a ten se ten
+ * den nepřihlásí vůbec — a není nikdo, kdo by mu účet odemkl.
+ *
+ * Proto brzda nikdy nebrání SPRÁVNÉMU heslu. Heslo se ověřuje vždycky jako
+ * první a když sedí, uživatel jde dovnitř bez ohledu na počítadlo (a
+ * počítadlo se přitom vynuluje). Zdržují a odmítají se jen špatná hesla:
+ * od třetího neúspěchu roste zpoždění odpovědi, po desátém se další pokusy
+ * odmítají s 429 po dobu okna. Útočník tím ztratí rychlost, majitel nic.
+ *
+ * Počítadlo je vedené na e-mail — i na takový, který v databázi není.
+ * Kdyby se počítaly jen existující účty, prozradila by brzda sama, které
+ * adresy u nás jsou (a zahodila by tím opravu #93). */
+export const POKUSY_ULOZISTE = 'pokusy';
+export const POKUSY_MAX = 10;
+export const POKUSY_OKNO_MS = 15 * 60 * 1000;
+
+/* Zpoždění v milisekundách podle počtu neúspěchů za sebou. Do dvou pokusů
+ * se nečeká vůbec — překlep v hesle je běžná věc a trestat ho čekáním by
+ * jen otravovalo. Strop dvě vteřiny je kompromis: hádání zpomalí na
+ * nepoužitelnou míru, a přitom se funkce nevejde do časového limitu. */
+export function zpozdeniMs(neuspechu) {
+  if (!(neuspechu > 2)) return 0;
+  return Math.min((neuspechu - 2) * 250, 2000);
+}
+
+/* V testech se nečeká — sada by jinak běžela o minuty déle. Že se na
+ * zpoždění opravdu čeká, hlídá statická kontrola v test_prava.mjs. */
+export function pockej(ms) {
+  if (!ms || globalThis.__TEST_ULOZISTE) return Promise.resolve();
+  return new Promise((hotovo) => setTimeout(hotovo, ms));
+}
+
+function pokusyKlic(email) { return String(email || '').trim().toLowerCase(); }
+
+export async function pokusyStav(email) {
+  const s = await uloziste(POKUSY_ULOZISTE);
+  const z = await s.cti(pokusyKlic(email));
+  /* Po uplynutí okna se počítadlo zapomíná. Bez toho by se neúspěchy
+   * sčítaly napříč měsíci a člověk, který si jednou za čas splete heslo,
+   * by se jednoho dne bez příčiny nepřihlásil. */
+  if (!z || (Date.now() - (z.posledni || 0)) > POKUSY_OKNO_MS) return { n: 0, posledni: 0 };
+  return { n: z.n || 0, posledni: z.posledni || 0 };
+}
+
+export async function pokusyNeuspech(email) {
+  const s = await uloziste(POKUSY_ULOZISTE);
+  const z = { n: (await pokusyStav(email)).n + 1, posledni: Date.now() };
+  await s.zapis(pokusyKlic(email), z);
+  return z;
+}
+
+export async function pokusyReset(email) {
+  const s = await uloziste(POKUSY_ULOZISTE);
+  await s.zapis(pokusyKlic(email), { n: 0, posledni: 0 });
 }
 
 /* ---------- relace (HMAC cookie) ---------- */

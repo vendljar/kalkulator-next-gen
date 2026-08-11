@@ -97,14 +97,52 @@ const MUTACE = [
 
   /* ---------- přihlášení (functions/prihlaseni.mjs) ---------- */
   { nazev: 'přihlášení nekontroluje heslo', soubor: 'functions/prihlaseni.mjs',
-    hledej: '|| !hesloSedi(heslo, ucet.heslo))',
-    nahrad: ')',
+    hledej: '  const pustit = !!ucet && ucet.aktivni !== false && sedi;',
+    nahrad: '  const pustit = !!ucet && ucet.aktivni !== false;',
     proc: 'stačilo by znát e-mail kolegy' },
 
   { nazev: 'přihlásí se i vypnutý účet', soubor: 'functions/prihlaseni.mjs',
-    hledej: 'if (!ucet || ucet.aktivni === false || !hesloSedi(heslo, ucet.heslo))',
-    nahrad: 'if (!ucet || !hesloSedi(heslo, ucet.heslo))',
+    hledej: '  const pustit = !!ucet && ucet.aktivni !== false && sedi;',
+    nahrad: '  const pustit = !!ucet && sedi;',
     proc: 'vypnutí účtu by nic neznamenalo' },
+
+  /* ---------- brzda proti hádání hesel a čas odpovědi (#92, #93) ---------- */
+  { nazev: 'brzda pustí neomezený počet pokusů', soubor: 'functions/prihlaseni.mjs',
+    hledej: '  if (stav.n > POKUSY_MAX)',
+    nahrad: '  if (false)',
+    proc: 'hádání hesel by nic nezpomalilo a nikde by po něm nezůstala stopa' },
+
+  { nazev: 'úspěšné přihlášení nevynuluje počítadlo', soubor: 'functions/prihlaseni.mjs',
+    hledej: '    await pokusyReset(email);',
+    nahrad: '    ;',
+    proc: 'po deseti překlepech za den by se člověk nepřihlásil ani se správným heslem' },
+
+  { nazev: 'brzda předběhne ověření hesla', soubor: 'functions/prihlaseni.mjs',
+    hledej: '  const pustit = !!ucet && ucet.aktivni !== false && sedi;\n\n  if (pustit) {',
+    nahrad: '  const pustit = !!ucet && ucet.aktivni !== false && sedi\n    && (await pokusyStav(email)).n <= POKUSY_MAX;\n\n  if (pustit) {',
+    proc: 'útočník by deseti špatnými pokusy zamkl majitele účtu — i hlavního administrátora' },
+
+  { nazev: 'u neznámého účtu se scrypt nepočítá', soubor: 'functions/prihlaseni.mjs',
+    hledej: '  const sedi = hesloSedi(heslo, (ucet && ucet.heslo) ? ucet.heslo : FALESNY_OTISK);',
+    nahrad: '  const sedi = (ucet && ucet.heslo) ? hesloSedi(heslo, ucet.heslo) : false;',
+    proc: 'z času odpovědi by šlo přečíst, které e-maily v databázi jsou' },
+
+  /* ---------- sdílený rejstřík žádostí o slevu (#102) ---------- */
+  { nazev: 'rejstřík žádostí je veřejný', soubor: 'functions/schvalovani.mjs',
+    hledej: '  const { chyba } = await vyzadujRoli(req);      // stačí být přihlášen',
+    nahrad: '  const { chyba } = { chyba: null };',
+    proc: 'kdokoli zvenčí by si vytáhl seznam zakázek i s procenty slev' },
+
+  { nazev: 'rejstřík vydá i částky ze zakázky', soubor: 'functions/schvalovani.mjs',
+    hledej: '    out.push({\n      klic,',
+    nahrad: '    out.push({\n      cenaPoSleve: (v.data && v.data.sleva && v.data.sleva.cenaPoSleve) || null,\n      klic,',
+    proc: 'přehled napříč zakázkami by obešel matici zobrazení — cenu by uviděl i ten, komu ji správce nedal' },
+
+  /* ---------- hlavní účet pozná server, ne prohlížeč (#95) ---------- */
+  { nazev: 'seznam účtů neřekne, který je hlavní', soubor: 'functions/uzivatele.mjs',
+    hledej: 'aktivni: x.aktivni !== false, hlavni: x.email === ADMIN_EMAIL });',
+    nahrad: 'aktivni: x.aktivni !== false });',
+    proc: 'prohlížeč by musel adresu znát sám — a měl by ji ve zdrojácích podruhé' },
 
   { nazev: 'zaváděcí heslo administrátora se nekontroluje', soubor: 'functions/prihlaseni.mjs',
     hledej: '      && heslo === process.env.ADMIN_INIT_HESLO) {',

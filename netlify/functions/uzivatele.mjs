@@ -138,9 +138,13 @@ export default async (req) => {
      * a rozesílat ho do prohlížeče nemá důvod. Podpis tu schází schválně —
      * je to pár set kilobajtů na účet a seznam se načítá při každém otevření
      * správy účtů; kdo ho chce vidět, otevře profil konkrétního kolegy. */
+    /* `hlavni` posílá server (#95, 9. 8. 2026). Do té doby si prohlížeč
+     * porovnával e-mail s adresou napsanou v `online_ui.js` — takže adresa
+     * hlavního administrátora byla ve zdrojácích dvakrát a při změně na
+     * serveru by se aplikace začala chovat jinak než server. */
     if (x) out.push({ email: x.email, jmeno: x.jmeno, titul: x.titul || '',
       funkce: x.funkce || '', telefon: x.telefon || '',
-      role: x.role, aktivni: x.aktivni !== false });
+      role: x.role, aktivni: x.aktivni !== false, hlavni: x.email === ADMIN_EMAIL });
   }
   return json({ ok: true, uzivatele: out });
 };
