@@ -159,19 +159,77 @@ test('OCK a PROJ nabízejí tytéž sazby (seznamy se nerozešly)',
   JSON.stringify(kr.KRYCI_POKUTY) === JSON.stringify(krp.KRYCI_POKUTY_SAZBY),
   JSON.stringify(krp.KRYCI_POKUTY_SAZBY));
 
+/* Výchozí sazba se u obou pokut liší a je to záměr (12. 8. 2026):
+ *   prodlení DODÁVKY  → 0, tedy bez pokuty. Prodlení způsobíme my a sjednávat
+ *                       si sankci sami na sebe má být vědomé rozhodnutí.
+ *   prodlení SPLATNOSTI → 0,05 % / den. To je jediné prodlení, které
+ *                       nezpůsobíme my, a bez sankce na pozdní platbu nemáme
+ *                       žádnou páku.
+ * Kdyby se to prohodilo, odcházely by nabídky s pokutou proti nám a bez
+ * pokuty proti zákazníkovi — proto se hlídá každá zvlášť, ne obě jedním
+ * cyklem. */
+const VYCHOZI_POKUTA = { pokutaDodavka: '0', pokutaSplatnost: '0,05 % / den',
+                         pokutaTermin: '0' };
 POKUTY_OCK.forEach((id) => {
   const p = najdi(kr.KRYCI_SEKCE, id);
   test('OCK: ' + id + ' je výběr, ne volné pole', p.typ === 'vyber', p.typ);
   test('OCK: ' + id + ' nabízí celý číselník',
     JSON.stringify(p.o) === JSON.stringify(kr.KRYCI_POKUTY));
-  test('OCK: ' + id + ' je předvyplněná nulou (bez pokuty)', p.prefill(ctx(VLASTNI)) === '0',
-    p.prefill(ctx(VLASTNI)));
+  test('OCK: ' + id + ' má správnou výchozí sazbu (' + VYCHOZI_POKUTA[id] + ')',
+    p.prefill(ctx(VLASTNI)) === VYCHOZI_POKUTA[id], p.prefill(ctx(VLASTNI)));
 });
 POKUTY_PROJ.forEach((id) => {
   const p = najdi(krp.KRYCI_PROJ_SEKCE, id);
   test('PROJ: ' + id + ' je výběr, ne volné pole', p.typ === 'vyber', p.typ);
-  test('PROJ: ' + id + ' je předvyplněná nulou (bez pokuty)', p.prefill(ctxProj(VLASTNI)) === '0');
+  test('PROJ: ' + id + ' má správnou výchozí sazbu (' + VYCHOZI_POKUTA[id] + ')',
+    p.prefill(ctxProj(VLASTNI)) === VYCHOZI_POKUTA[id], p.prefill(ctxProj(VLASTNI)));
 });
+
+/* ============================================================
+ * 3b) Záloha a limit pokut jako rolovací seznam (12. 8. 2026)
+ * ============================================================
+ *
+ * Obojí bývalo volné pole (u projekce trojice přepínačů). Zadání J. V.:
+ * záloha z rolovacího seznamu s možností 70 % a vlastní volby, limit pokut
+ * také seznamem, protože „UPLATNĚN" a „NEUPLATNĚN" se od sebe liší jedním
+ * slovem a znamenají opak. */
+{
+  const zalohaOck = najdi(kr.KRYCI_SEKCE, 'zaloha1');
+  const zalohaProj = najdi(krp.KRYCI_PROJ_SEKCE, 'zaloha');
+  test('OCK: záloha je rolovací seznam', zalohaOck.typ === 'vyber', zalohaOck.typ);
+  test('PROJ: záloha je rolovací seznam', zalohaProj.typ === 'vyber', zalohaProj.typ);
+  test('OCK: záloha nabízí i sedmdesát procent',
+    zalohaOck.o.some(x => /70/.test(x)), zalohaOck.o.join(' | '));
+  test('PROJ: záloha nabízí i sedmdesát procent',
+    zalohaProj.o.some(x => /70/.test(x)), zalohaProj.o.join(' | '));
+  test('OCK: záloha nabízí i variantu bez zálohy',
+    zalohaOck.o.some(x => /bez zálohy/i.test(x)));
+  test('PROJ: záloha nabízí i variantu bez zálohy',
+    zalohaProj.o.some(x => /bez zálohy/i.test(x)));
+  test('OCK: výchozí záloha je padesát procent',
+    /50/.test(zalohaOck.prefill(ctx(VLASTNI))), zalohaOck.prefill(ctx(VLASTNI)));
+  test('PROJ: výchozí záloha je padesát procent',
+    /50/.test(zalohaProj.prefill(ctxProj(VLASTNI))), zalohaProj.prefill(ctxProj(VLASTNI)));
+  /* U výtahové šachty nese volba i milník — v podmínkách nestačí procento,
+   * musí být jasné, kdy se fakturuje. U projekce se fakturuje po stupních
+   * dokumentace, tam by věta u zálohy mátla. */
+  test('OCK: volba zálohy nese i milník, ke kterému se váže',
+    /po podpisu/i.test(zalohaOck.prefill(ctx(VLASTNI))), zalohaOck.prefill(ctx(VLASTNI)));
+
+  const limitOck = najdi(kr.KRYCI_SEKCE, 'pokutaLimit');
+  const limitProj = najdi(krp.KRYCI_PROJ_SEKCE, 'pokutaLimit');
+  test('OCK: limit pokut je rolovací seznam', limitOck.typ === 'vyber', limitOck.typ);
+  test('PROJ: limit pokut je rolovací seznam', limitProj.typ === 'vyber', limitProj.typ);
+  test('OCK a PROJ nabízejí u limitu pokut totéž',
+    JSON.stringify(limitOck.o) === JSON.stringify(limitProj.o), JSON.stringify(limitProj.o));
+  test('limit pokut nabízí obě znění, uplatněný i neuplatněný',
+    limitOck.o.some(x => /^Uplatněn/.test(x)) && limitOck.o.some(x => /^NEUPLATNĚN/.test(x)),
+    limitOck.o.join(' | '));
+  test('OCK: výchozí je UPLATNĚNÝ limit',
+    /^Uplatněn/.test(limitOck.prefill(ctx(VLASTNI))), limitOck.prefill(ctx(VLASTNI)));
+  test('PROJ: výchozí je UPLATNĚNÝ limit',
+    /^Uplatněn/.test(limitProj.prefill(ctxProj(VLASTNI))), limitProj.prefill(ctxProj(VLASTNI)));
+}
 
 /* Ruční hodnota mimo číselník musí projít — zákazník si občas prosadí
  * jinou sazbu a nabídka na to musí umět odpovědět. */
@@ -195,9 +253,12 @@ test('do krycího listu se propíše firemní způsob fakturace',
   najdiRadek('Způsob fakturace') === 'po etapách dle harmonogramu');
 test('do krycího listu se propíše firemní rozsah',
   najdiRadek('Rozsah') === 'je dán technickou specifikací v příloze č. 2');
-test('do krycího listu se propíše nulová pokuta, ne dřívějších 0,05 % / den',
+test('do krycího listu se propíše nulová pokuta za prodlení dodávky',
   najdiRadek('Smluvní pokuta – prodlení dodávky') === '0',
   najdiRadek('Smluvní pokuta – prodlení dodávky'));
+test('do krycího listu se propíše pokuta za prodlení splatnosti',
+  najdiRadek('Smluvní pokuta – prodlení splatnosti') === '0,05 % / den',
+  najdiRadek('Smluvní pokuta – prodlení splatnosti'));
 
 /* Symboly do šablony nabídky — bez nich by se standardy do Wordu nedostaly. */
 const sym = fm.firmaSymboly();

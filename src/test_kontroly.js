@@ -85,27 +85,39 @@ function ctxZdravy(zmeny) {
 const kody = v => v.nalezy.map(n => n.kod);
 const svitiJen = (v, kod) => kody(v).length === 1 && kody(v)[0] === kod;
 
-/* ---------- 0) globální sleva PROJ nad maximum (N4, audit 1. 8. 2026) ----------
- * Pole má v UI meze, ale data přijdou i importem nebo starší zakázkou –
- * kontrola proto hlídá hodnotu v datech, ne jen formulář. Jen varování,
+/* ---------- 0) sleva projekce (#134, 12. 8. 2026) ----------
+ * Do 12. 8. 2026 hlídala kontrola jen horní mez zrušeného pole „Globální sleva
+ * PROJ" – víc hlídat nešlo, protože ta sleva neměla ani strop podle role, ani
+ * schvalování. Teď má projekce vlastní slevu se stejnými pravidly jako sleva
+ * na výtahovou šachtu, takže se hlídá stejně: nesmyslná hodnota, sleva pod
+ * minimální marží a sleva nad stropem role bez schválení. Jen varování,
  * nic se neblokuje (pravidlo #10). */
 {
-  const nadMax = kontrolyProved(ctxZdravy(c => { c.projZadani.slevaPct = -50; }));
-  test('sleva PROJ nad maximum se ohlásí', kody(nadMax).includes('slevaProjMax'),
-    kody(nadMax).join(','));
-  test('sleva PROJ nad maximum jen varuje, neblokuje', nadMax.brani === false);
-  const vMezich = kontrolyProved(ctxZdravy(c => { c.projZadani.slevaPct = -20; }));
-  test('sleva PROJ v mezích neruší', !kody(vMezich).includes('slevaProjMax'),
-    kody(vMezich).join(','));
-  /* Bez nastavení platí výchozí maximum 30 % – stejná hodnota jako
-   * NAST.slevy.maxGlobalni v ui/common.js (hlídá se textově níže). */
-  const bezNast = kontrolyProved(ctxZdravy(c => {
-    c.projZadani.slevaPct = -50; c.nast = { slevy: { minMarze: 0.10 } }; }));
-  test('maximum platí i bez nastavení (výchozích 30 %)',
-    kody(bezNast).includes('slevaProjMax'), kody(bezNast).join(','));
-  const prirazka = kontrolyProved(ctxZdravy(c => { c.projZadani.slevaPct = 15; }));
-  test('kladné procento (přirážka) maximum slevy neporušuje',
-    !kody(prirazka).includes('slevaProjMax'), kody(prirazka).join(','));
+  const sl = (zmena) => Object.assign({ procenta: 0, role: 'Obchodník', stav: '' }, zmena);
+  const zaporna = kontrolyProved(ctxZdravy(c => { c.slevaProj = sl({ procenta: -5 }); }));
+  test('záporná sleva projekce se ohlásí', kody(zaporna).includes('slevaProj'),
+    kody(zaporna).join(','));
+  test('sleva projekce jen varuje, neblokuje', zaporna.brani === false);
+  const pres100 = kontrolyProved(ctxZdravy(c => { c.slevaProj = sl({ procenta: 140 }); }));
+  test('sleva projekce nad sto procent se ohlásí', kody(pres100).includes('slevaProj'));
+  const ceka = kontrolyProved(ctxZdravy(c => {
+    c.slevaProj = sl({ procenta: 12, stav: 'čeká na schválení' }); }));
+  test('neschválená sleva projekce nad stropem role se ohlásí',
+    kody(ceka).includes('slevaProj'), kody(ceka).join(','));
+  const schvalena = kontrolyProved(ctxZdravy(c => {
+    c.slevaProj = sl({ procenta: 3, stav: 'schváleno automaticky' }); }));
+  test('sleva projekce v mezích neruší', !kody(schvalena).includes('slevaProj'),
+    kody(schvalena).join(','));
+  /* A hlavně: sleva na výtahovou šachtu nesmí rozsvítit pravidlo projekce
+   * a naopak. Právě tohle prolnutí se 12. 8. 2026 opravovalo. */
+  const jenOck = kontrolyProved(ctxZdravy(c => {
+    c.sleva = sl({ procenta: 140 }); }));
+  test('sleva OCK nerozsvítí pravidlo projekce', !kody(jenOck).includes('slevaProj'),
+    kody(jenOck).join(','));
+  const jenProjSleva = kontrolyProved(ctxZdravy(c => {
+    c.slevaProj = sl({ procenta: 140 }); }));
+  test('sleva projekce nerozsvítí pravidlo OCK', !kody(jenProjSleva).includes('sleva'),
+    kody(jenProjSleva).join(','));
 }
 
 /* výchozí maxGlobalni v ui/common.js se musí shodovat se záložním v kontroly.js */
@@ -124,11 +136,11 @@ test('ui/common.js má výchozí maxGlobalni', !!mMax && Math.abs(parseFloat(mMa
   const jenProj = kontrolyProved(ctxZdravy(c => {
     c.jenProj = true;
     c.zadani.sirka = 0;                       // rozbité zadání OCK…
-    c.projZadani.slevaPct = -50;              // …a zároveň chyba v PROJ
+    c.slevaProj = { procenta: 140, role: 'Obchodník', stav: '' };   // …a zároveň chyba v PROJ
   }));
   test('u zakázky jen PROJ pravidla OCK mlčí', !kody(jenProj).includes('rozmery'),
     kody(jenProj).join(','));
-  test('pravidla PROJ platí dál', kody(jenProj).includes('slevaProjMax'),
+  test('pravidla PROJ platí dál', kody(jenProj).includes('slevaProj'),
     kody(jenProj).join(','));
   const sOck = kontrolyProved(ctxZdravy(c => { c.zadani.sirka = 0; }));
   test('bez příznaku se OCK hlídá jako dřív', kody(sOck).includes('rozmery'));

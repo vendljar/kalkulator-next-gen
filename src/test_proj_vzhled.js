@@ -115,10 +115,16 @@ test('karty stojí hned pod výpočetním oknem (za kartou Cenová kalkulace PRO
   /card\('Cenová kalkulace PROJ'[\s\S]{0,200}slevaKarta\('proj'\)[\s\S]{0,120}zaokrKarta\('proj'\)/.test(kod));
 test('karta slevy umí druhou kotvu proj-sleva', /'proj-sleva'/.test(spol));
 test('karta zaokrouhlení umí druhou kotvu proj-zaokr', /'proj-zaokr'/.test(zaokrUi));
-test('sleva má pořád jen jeden stav (SL), PROJ si vlastní nezakládá',
-  !/SL_PROJ|slevaProj\s*=/.test(spol + kalk));
-test('globální sleva PROJ se zadává v kartě slevy, ne v hlavičce',
-  /PJ\.slevaPct/.test(spol));
+/* Od 12. 8. 2026 (#134) má projekce VLASTNÍ slevu (SLP nad data.slevaProj).
+ * Do té doby tu stál opačný test — „PROJ si vlastní stav nezakládá" — a byl
+ * to právě ten stav, kvůli kterému se pod výpočtem projekce ukazovala cena
+ * výtahové šachty. Karta se pořád skládá jedinou funkcí; co se liší, je
+ * část, nad kterou pracuje. */
+test('projekce má vlastní stav slevy (SLP)', /\bSLP\b/.test(spol));
+test('karta slevy si část odvozuje z jedné funkce, ne dvěma kopiemi',
+  /function slevaCast\(/.test(spol) && (spol.match(/function slevaKarta\(/g) || []).length === 1);
+test('zrušené pole globální slevy PROJ už v UI není',
+  !/PJ\.slevaPct/.test(spol) && !/pjSlevaGlobal/.test(spol + kalk));
 
 /* Hlavička už obchodní zaokrouhlení neopisuje – je v kartě pod výpočtem
  * a v souhrnné tabulce. Cena nabídky v hlavičce naopak zůstává, protože je to
@@ -149,16 +155,19 @@ test('žádný zdroják nedrží ceníkovou marži natvrdo', spatne.length === 0
 const sablona = fs.readFileSync(__dirname + '/app_template.html', 'utf8');
 const zakUi = fs.readFileSync(__dirname + '/ui/zakazka_ui.js', 'utf8');
 
-/* N10a – znaménko globální slevy PROJ: zadává se kladně, ukládá záporně.
- * Obrácené znaménko by ze slevy udělalo přirážku a nikdo by si nevšiml. */
-test('pole globální slevy PROJ ukazuje zápor uloženého čísla',
-  /value="\$\{-\(PJ\.slevaPct \|\| 0\)\}"/.test(spol));
-test('obsluha globální slevy PROJ ukládá záporné číslo',
-  /set\('PJ\.slevaPct',\s*-/.test(spol));
-
-/* N4 – pole má meze: min 0 a max z nastavení (výchozích 30 %). */
-test('pole globální slevy PROJ má min i max',
-  /Globální sleva PROJ[\s\S]{0,400}min="0" max="/.test(spol));
+/* N10a a N4 padly 12. 8. 2026 spolu s polem „Globální sleva PROJ" (#134):
+ * znaménko ani horní mez se nehlídají u pole, které neexistuje. Sleva
+ * projekce se zadává kladně jako každá jiná sleva a hlídá ji stejná trojice
+ * pravidel (strop role, schvalování, minimální marže).
+ *
+ * Co se hlídat MUSÍ: že karta v projekci počítá z ceny projekce. Kdyby se
+ * vrátila k výpočtu OCK, byli bychom přesně tam, kde 12. 8. 2026 začínal
+ * tenhle nález. */
+test('základ slevy se bere podle části', /function slevaZaklad\(/.test(spol));
+test('sleva projekce se počítá z výpočtu projekce',
+  /slevaZaklad[\s\S]{0,400}vypocetProj\(PJ, PC\)/.test(spol));
+test('sleva projekce nebere základ z výpočtu OCK',
+  !/cast === 'proj'[\s\S]{0,300}souhrn\.zakladCena/.test(spol));
 
 /* N10b – jedna karta nad jedním stavem: kalkulace PROJ karty jen VOLÁ,
  * nesmí si stavět vlastní (druhý stav by rozdvojil politiku slevy). */
@@ -184,10 +193,10 @@ test('funkce slevaKarta existuje právě jednou (v common.js)',
 test('v UI zakázky není generování přes Apps Script',
   !/generujNabidkuDocs/.test(zakUi) && !/google\.script/.test(zakUi));
 
-/* N6 – karta slevy přežije chybu výpočtu OCK: blok globální slevy PROJ se
- * skládá dřív, než se karta kvůli chybějícímu výpočtu vzdá. */
-test('karta slevy se v PROJ vykreslí i bez výpočtu OCK',
-  /projBlok[\s\S]{0,2500}if \(!v\)/.test(spol.slice(spol.indexOf('function slevaKarta'))));
+/* Karta se bez výpočtu své části nevykreslí — cena se neodhaduje. Dřív se
+ * v projekci vykreslovala i po pádu výpočtu OCK, protože nesla globální slevu
+ * PROJ; ta je zrušená, takže výjimka padla s ní (#134). */
+test('karta slevy se bez výpočtu nevykreslí', /if \(!v \|\| !SLC\) return '';/.test(spol));
 
 /* Paušál dopravy z ceníku (2. 8. 2026): řádek dopravy má zaškrtávátko
  * „mimo Prahu" napojené na doprava.mimoPrahu — bez něj by položka ceníku

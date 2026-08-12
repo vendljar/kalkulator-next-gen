@@ -169,7 +169,7 @@ test('technická verze neuvádí u činností žádnou částku',
 /* Hodnota zakázky = cena projekční části z nabídky, tedy po obchodním
  * zaokrouhlení. Kdyby se sem přičetlo OCK, byly by tytéž peníze ve dvou
  * smlouvách – dodávka konstrukce má vlastní krycí list. */
-const projCena = global.cenaNabidkyProj(rProj, global.zaokrProjZ(v.data)).cena;
+const projCena = global.cenaNabidkyProj(rProj, null, global.zaokrProjZ(v.data)).cena;
 test('hodnota zakázky odpovídá ceně projekce z nabídky (včetně zaokrouhlení)',
   c.hodnota === kc(projCena), [c.hodnota, kc(projCena)]);
 const rOck = global.vypocet(v.data.ock.zadani, v.data.cenik, JEKLY, v.data.ock.fixes);

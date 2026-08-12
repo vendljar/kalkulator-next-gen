@@ -23,6 +23,10 @@ const fm = require('./firma.js');
 Object.keys(fm).forEach(k => { global[k] = fm[k]; });
 const pr = require('./preklad.js');
 Object.keys(pr).forEach(k => { global[k] = pr[k]; });
+/* sleva.js kvůli slevaPodil() – nabidka_proj.js ho volá přes typeof, takže
+ * bez něj by se sleva tiše nepočítala a test by měřil nulu. */
+const SLV = require('./sleva.js');
+global.slevaPodil = SLV.slevaPodil;
 const NP = require('./nabidka_proj.js');
 const { nabidkaProjData, NABIDKA_PROJ_DEF, NABIDKA_PROJ_SAZBY, NABIDKA_PROJ_SEKCE } = NP;
 
@@ -179,27 +183,113 @@ test('nemění sazebník ani definici', (() => {
 })());
 
 
-/* ---------- #71: sleva ZAK-10 do projekce nevstupuje (rozhodnutí 1. 8. 2026) ----------
+/* ---------- #71 + #134: dvě slevy, každá nad svou cenou ----------
+ *
  * „Sleva na OCK i PROJ globálně být nemá. Tedy pokud je to rozdělené zvlášť,
- * pak je to správně." Sleva na nabídku (ZAK-10, stav SL) se počítá JEN z ceny
- * výtahové šachty; projekce má vlastní PJ.slevaPct. V kódu to vypadá jako
- * opomenutí – tenhle test říká, že to opomenutí není. Kdo ho rozbije, sahá
- * na schválené obchodní rozhodnutí a musí ho nejdřív nechat znovu schválit. */
+ * pak je to správně." (1. 8. 2026) — a 12. 8. 2026 k tomu přibylo: „každá
+ * kalkulace musí počítat slevy ze svých vlastních cen a nepropisovat je
+ * vzájemně."
+ *
+ * Do 12. 8. 2026 to platilo jen zpola: sleva OCK sice do ceny projekce
+ * nevstupovala, ale karta slevy se pod výpočtem projekce vykreslovala s čísly
+ * z výtahové šachty a projekce měla vedle toho druhou, úplně jinou slevu bez
+ * schvalování. Teď má projekce vlastní slevu se stejnými pravidly a nabídka
+ * ji vykazuje samostatným řádkem. */
 const zo = require('./zaokrouhleni.js');
-test('#71: cenaNabidkyProj nemá parametr slevy',
-  typeof zo.cenaNabidkyProj === 'function' && zo.cenaNabidkyProj.length === 2,
+test('cenaNabidkyProj bere slevu projekce (tři parametry jako u OCK)',
+  typeof zo.cenaNabidkyProj === 'function' && zo.cenaNabidkyProj.length === 3,
   zo.cenaNabidkyProj && zo.cenaNabidkyProj.length);
+
+/* Sleva na výtahovou šachtu nesmí s cenou projekce hnout ani o korunu. */
 {
   const before = JSON.stringify({ bezDph: d.souhrn.bezDph, sDph: d.souhrn.sDph });
-  v.data.sleva = { procenta: 10, stav: 'schváleno', role: 'Jednatel',
-                   schvalil: 'Jednatel', schvalilKdy: '2026-08-01T10:00:00.000Z' };
+  v.data.sleva = { procenta: 10, stav: 'schváleno', role: 'Vedoucí',
+                   schvalil: 'Vedoucí', schvalilKdy: '2026-08-01T10:00:00.000Z' };
   const d2 = nabidkaProjData(zak, v);
   const after = JSON.stringify({ bezDph: d2.souhrn.bezDph, sDph: d2.souhrn.sDph });
-  test('#71: schválená sleva ZAK-10 10 % nezmění cenu PROJ ani o korunu',
+  test('schválená sleva OCK 10 % nezmění cenu PROJ ani o korunu',
     before === after, before + ' vs ' + after);
   const rPo = vypocetProj(v.data.proj.zadani, v.data.proj.cenik);
-  test('#71: výpočet projekce se slevou ZAK-10 vůbec nepočítá',
+  test('výpočet projekce se slevou OCK vůbec nepočítá',
     Math.abs(rPo.souhrn.celkem - r.souhrn.celkem) < 1e-9);
+}
+
+/* A naopak: sleva projekce cenu projekce změnit MUSÍ — a to přesně o své
+ * procento, dokud je schválená. */
+{
+  const bez = nabidkaProjData(zak, v).souhrn;
+  v.data.slevaProj = { procenta: 10, stav: 'schváleno', role: 'Vedoucí',
+                       schvalil: 'Vedoucí', schvalilKdy: '2026-08-12T10:00:00.000Z' };
+  const se = nabidkaProjData(zak, v).souhrn;
+  test('schválená sleva projekce cenu projekce sníží', se.bezDph < bez.bezDph,
+    bez.bezDph + ' → ' + se.bezDph);
+  test('sleva se počítá ze součtu sekcí projekce',
+    Math.abs(se.slevaKc - se.soucetSekci * 0.1) < 0.01, JSON.stringify(se));
+  test('rozpad sedí: součet sekcí − sleva + zaokrouhlení = cena',
+    Math.abs(se.soucetSekci - se.slevaKc + se.zaokrKc - se.bezDph) < 0.01, JSON.stringify(se));
+
+  /* Neschválená sleva se do dokumentu nepropíše — stejné pravidlo jako u OCK.
+   * Nabídka je závazná nabídka, ne přání obchodníka. */
+  v.data.slevaProj = { procenta: 25, stav: 'čeká na schválení', role: 'Obchodník' };
+  test('neschválená sleva projekce se do nabídky nepropíše',
+    Math.abs(nabidkaProjData(zak, v).souhrn.bezDph - bez.bezDph) < 0.01);
+
+  /* Dokument slevu ukazuje vlastním řádkem, ne schovanou v ceně sekcí. */
+  v.data.slevaProj = { procenta: 10, stav: 'schváleno', role: 'Vedoucí' };
+  const ph = nabidkaProjData(zak, v).placeholders;
+  test('nabídka PROJ vypisuje procento slevy', /10/.test(ph.PROJ_SLEVA_PROC), ph.PROJ_SLEVA_PROC);
+  test('nabídka PROJ vypisuje slevu v Kč', !!ph.PROJ_SLEVA_KC, ph.PROJ_SLEVA_KC);
+  test('nabídka PROJ vypisuje cenu před slevou', !!ph.PROJ_CENA_PRED_SLEVOU, ph.PROJ_CENA_PRED_SLEVOU);
+
+  /* Bez slevy zůstávají řádky prázdné. Nula by v dokumentu vypadala jako
+   * „slevu jsme dali a byla nulová". */
+  v.data.slevaProj = { procenta: 0, stav: '', role: 'Obchodník' };
+  const ph0 = nabidkaProjData(zak, v).placeholders;
+  test('bez slevy zůstanou řádky slevy v nabídce PROJ prázdné',
+    ph0.PROJ_SLEVA_KC === '' && ph0.PROJ_SLEVA_PROC === '' && ph0.PROJ_CENA_PRED_SLEVOU === '');
+}
+
+/* ---------- popis záměru do Wordu (12. 8. 2026) ----------
+ * Ve VZORu je na tom místě popis jedné konkrétní stavby. V šabloně ho vystřídal
+ * symbol {{POPIS_ZAMERU}}, aby se do nabídky dostalo to, co obchodník napsal
+ * v aplikaci — jinak by každá nabídka odešla s popisem cizího domu. */
+{
+  const zpz = zk.novaZakazka();
+  const v0 = zpz.varianty[0];
+  test('nevyplněný popis záměru zůstane ve Wordu prázdný',
+    nabidkaProjData(zpz, v0).placeholders.POPIS_ZAMERU === '',
+    nabidkaProjData(zpz, v0).placeholders.POPIS_ZAMERU);
+  zpz.popisZameru = '  Bytový dům, přístavba výtahu do zrcadla schodiště.  ';
+  test('vyplněný popis záměru jde do Wordu bez okrajových mezer',
+    nabidkaProjData(zpz, v0).placeholders.POPIS_ZAMERU
+      === 'Bytový dům, přístavba výtahu do zrcadla schodiště.');
+}
+
+/* ---------- úvodní fotka projekční nabídky (12. 8. 2026) ----------
+ * Nabídka PROJ se od 12. 8. tiskne i do Wordu a bere si do dokumentu vlastní
+ * fotku. Test hlídá, že si nebere fotku nabídky OCK — obě nabídky odcházejí
+ * samostatně a fotka šachty na titulní straně projekční nabídky by byla chyba,
+ * které si nikdo nevšimne, dokud ji neuvidí zákazník. */
+{
+  global.uvodniFotoObrazky = zk.uvodniFotoObrazky;
+  global.uvodniFotoSymboly = zk.uvodniFotoSymboly;
+  const zf = zk.novaZakazka();
+  const v0 = zf.varianty[0];
+  test('bez nahrané fotky nejde do nabídky PROJ žádný obrázek',
+    !nabidkaProjData(zf, v0).obrazky.UVODNI_FOTO);
+
+  zf.uvodniFoto = 'data:image/png;base64,T0NL';          // fotka nabídky OCK
+  test('fotka nabídky OCK se do nabídky PROJ nepropíše',
+    !nabidkaProjData(zf, v0).obrazky.UVODNI_FOTO);
+
+  zf.uvodniFotoProj = 'data:image/png;base64,UFJPSg==';  // fotka nabídky PROJ
+  zf.uvodniFotoProjPopis = 'Bytový dům, pohled z ulice';
+  const dF = nabidkaProjData(zf, v0);
+  test('vlastní fotka PROJ jde do dokumentu pod symbolem UVODNI_FOTO',
+    dF.obrazky.UVODNI_FOTO === zf.uvodniFotoProj, dF.obrazky.UVODNI_FOTO);
+  test('popisek fotky PROJ jde do dokumentu jako textový symbol',
+    dF.placeholders.UVODNI_FOTO_POPIS === 'Bytový dům, pohled z ulice',
+    dF.placeholders.UVODNI_FOTO_POPIS);
 }
 
 console.log(fail ? `\n${fail} CHYB` : '\nVŠECHNY TESTY NABÍDKY PROJ OK');

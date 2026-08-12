@@ -50,7 +50,8 @@ const primoOck = zo.cenaNabidkyOck(eng.vypocet(v1.data.ock.zadani, v1.data.cenik
                                    v1.data.sleva, v1.data.zaokr);
 test('cena nabídky OCK sedí s přímým voláním jádra',
   r.cenaOck && Math.abs(r.cenaOck.cena - primoOck.cena) < 1e-9, JSON.stringify(r.cenaOck));
-const primoProj = zo.cenaNabidkyProj(ep.vypocetProj(v1.data.proj.zadani, v1.data.proj.cenik), v1.data.zaokr);
+const primoProj = zo.cenaNabidkyProj(ep.vypocetProj(v1.data.proj.zadani, v1.data.proj.cenik),
+                                    v1.data.slevaProj, v1.data.zaokr);
 test('cena nabídky PROJ sedí s přímým voláním jádra',
   r.cenaProj && Math.abs(r.cenaProj.cena - primoProj.cena) < 1e-9);
 

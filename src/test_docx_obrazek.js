@@ -246,6 +246,94 @@ const ZPRAC = { ZPRAC_JMENO: 'Ing. Jan Zkušební', ZPRAC_TEL: '+420 111 222 333
     test('žádná část není prázdná', v.polozky.every(p => p.data.length > 0));
   }
 
+  /* ---------- 12) novější způsob vložení obrázku (DrawingML) ----------
+   *
+   * Šablona nabídky PROJ (12. 8. 2026) nemá obrázky ve starém VML, ale
+   * v DrawingML: alternativní text sedí v atributu `descr` uzlu <wp:docPr>
+   * a odkaz na médium až v <a:blip r:embed>. Rámeček je v EMU (914 400 na
+   * palec) a Word do něj obrázek SÁM nevepíše – nakreslí ho přesně na zadané
+   * rozměry. Fotka na výšku vložená do rámečku na šířku by se tedy roztáhla,
+   * kdyby se rozměry nedopočítaly. */
+  {
+    const RAMEC_S = 1828800, RAMEC_V = 914400;   // 2 × 1 palec
+    const drawingXml = (descr) => '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<w:document xmlns:w="w" xmlns:r="r" xmlns:wp="wp" xmlns:a="a" xmlns:pic="pic"><w:body>'
+      + '<w:p><w:r><w:t>Objednatel: {{ZPRAC_JMENO}}</w:t></w:r></w:p>'
+      + '<w:p><w:r><w:drawing><wp:inline distT="0" distB="0">'
+      + '<wp:extent cx="' + RAMEC_S + '" cy="' + RAMEC_V + '"/>'
+      + '<wp:effectExtent l="0" t="0" r="0" b="0"/>'
+      + '<wp:docPr id="115" name="obrázek 115"' + (descr ? ' descr="' + descr + '"' : '') + '/>'
+      + '<a:graphic><a:graphicData><pic:pic><pic:blipFill><a:blip r:embed="rId8"/></pic:blipFill>'
+      + '<pic:spPr><a:xfrm><a:off x="0" y="0"/>'
+      + '<a:ext cx="' + RAMEC_S + '" cy="' + RAMEC_V + '"/></a:xfrm></pic:spPr>'
+      + '</pic:pic></a:graphicData></a:graphic>'
+      + '</wp:inline></w:drawing></w:r></w:p>'
+      + '</w:body></w:document>';
+    const rozmeryEmu = xml => {
+      const m = /<wp:extent[^>]*cx="(\d+)"[^>]*cy="(\d+)"/.exec(xml);
+      const a = /<a:ext[^>]*cx="(\d+)"[^>]*cy="(\d+)"/.exec(xml);
+      return { s: m && Number(m[1]), v: m && Number(m[2]),
+               aS: a && Number(a[1]), aV: a && Number(a[2]) };
+    };
+
+    /* Široký obrázek (6×2) – omezí ho šířka rámečku, výška vyjde třetinová. */
+    {
+      const blob = await docxVyplnSablonu(await sablona({ dokument: drawingXml('{{UVODNI_FOTO}}') }),
+        ZPRAC, [], { UVODNI_FOTO: 'data:image/png;base64,' + PNG_6x2 });
+      const v = await rozbal(blob);
+      const doc = v.text('word/document.xml');
+      test('DrawingML: obrázek se vyměnil za nahranou fotku',
+        v.mapa['word/media/image2.png'].length === b64(PNG_6x2).length);
+      test('DrawingML: alternativní text se vyprázdnil',
+        !doc.includes('{{UVODNI_FOTO}}') && doc.includes('descr=""'), doc.slice(0, 0));
+      test('DrawingML: text v dokumentu se doplnil normálně', doc.includes('Ing. Jan Zkušební'));
+      const r = rozmeryEmu(doc);
+      test('DrawingML: šířka zůstala na okraji rámečku', r.s === RAMEC_S, JSON.stringify(r));
+      test('DrawingML: výška se dopočítala podle poměru stran (6×2)',
+        Math.abs(r.v - RAMEC_S / 3) <= 1, JSON.stringify(r));
+      test('DrawingML: vnitřní rozměr tvaru jde s rámečkem',
+        r.aS === r.s && r.aV === r.v, JSON.stringify(r));
+    }
+
+    /* Vysoký obrázek (2×6) – teď naopak omezí výška. Bez dopočtu by se
+     * fotka na výšku roztáhla přes celý široký rámeček. */
+    {
+      const blob = await docxVyplnSablonu(await sablona({ dokument: drawingXml('{{UVODNI_FOTO}}') }),
+        ZPRAC, [], { UVODNI_FOTO: 'data:image/jpeg;base64,' + JPEG_2x6 });
+      const doc = (await rozbal(blob)).text('word/document.xml');
+      const r = rozmeryEmu(doc);
+      test('DrawingML: výška zůstala na okraji rámečku', r.v === RAMEC_V, JSON.stringify(r));
+      test('DrawingML: šířka se dopočítala podle poměru stran (2×6)',
+        Math.abs(r.s - RAMEC_V / 3) <= 1, JSON.stringify(r));
+      test('DrawingML: obrázek se do rámečku vešel', r.s <= RAMEC_S && r.v <= RAMEC_V);
+    }
+
+    /* Bez nahrané fotky musí celý tvar zmizet – prázdný rámeček uprostřed
+     * nabídky vypadá jako chyba tisku a fotka ze šablony by byla cizí stavba. */
+    {
+      const blob = await docxVyplnSablonu(await sablona({ dokument: drawingXml('{{UVODNI_FOTO}}') }),
+        ZPRAC, [], {});
+      const doc = (await rozbal(blob)).text('word/document.xml');
+      test('DrawingML: bez fotky se celý obrázek z dokumentu odstraní',
+        !doc.includes('<w:drawing') && !doc.includes('UVODNI_FOTO'));
+      test('DrawingML: zbytek dokumentu zůstal', doc.includes('Ing. Jan Zkušební'));
+    }
+
+    /* Obrázek bez alternativního textu se nesmí dotknout – v šabloně jsou
+     * i obrázky, které tam patří natrvalo (ilustrace rozsahu prací). */
+    {
+      const blob = await docxVyplnSablonu(await sablona({ dokument: drawingXml('') }),
+        ZPRAC, [], { UVODNI_FOTO: 'data:image/jpeg;base64,' + JPEG_2x6 });
+      const v = await rozbal(blob);
+      const doc = v.text('word/document.xml');
+      test('DrawingML: neoznačený obrázek zůstal v dokumentu', doc.includes('<w:drawing'));
+      test('DrawingML: neoznačenému obrázku se nezměnily bajty',
+        v.mapa['word/media/image2.png'].length === b64(PNG_6x2).length);
+      test('DrawingML: neoznačenému obrázku se nezměnil rámeček',
+        rozmeryEmu(doc).s === RAMEC_S && rozmeryEmu(doc).v === RAMEC_V);
+    }
+  }
+
   console.log(fail ? `\n${fail} TESTŮ SELHALO` : `\nVŠECHNY TESTY (${ok}) OK`);
   process.exit(fail ? 1 : 0);
 })();

@@ -166,13 +166,44 @@ test('neschválená sleva se nepropíše ani při zaokrouhlení',
 test('chybí-li výpočet, koncová cena se nehádá', zo.cenaNabidkyOck(null, null, null) === null);
 
 /* ---------- 5) koncová cena PROJ ---------- */
-const cp0 = zo.cenaNabidkyProj(rp, null);
+const cp0 = zo.cenaNabidkyProj(rp, null, null);
 test('PROJ bez zaokrouhlení = součet sekcí', cp0.cena === rp.souhrn.celkem && cp0.zaokrKc === 0);
-const cpZ = zo.cenaNabidkyProj(rp, { krok: 1000, smer: 'dolu' });
+const cpZ = zo.cenaNabidkyProj(rp, null, { krok: 1000, smer: 'dolu' });
 test('PROJ se zaokrouhlí na tisíce', cpZ.cena % 1000 === 0, cpZ.cena);
 test('PROJ zná rozdíl proti součtu sekcí',
   Math.abs(cpZ.pred + cpZ.zaokrKc - cpZ.cena) < 1e-6, [cpZ.pred, cpZ.zaokrKc, cpZ.cena]);
-test('chybí-li výpočet PROJ, nic se nehádá', zo.cenaNabidkyProj(null, null) === null);
+test('chybí-li výpočet PROJ, nic se nehádá', zo.cenaNabidkyProj(null, null, null) === null);
+
+/* ---------- 5b) PROJ: zaokrouhlují se JEDNOTLIVÉ ČINNOSTI (#135) ----------
+ *
+ * Nabídka PROJ vypisuje cenu každé činnosti zvlášť. Kdyby se zaokrouhloval
+ * jen součet, musel by pod ním stát dorovnávací řádek „obchodní zaokrouhlení"
+ * — a přesně ten měl podle zadání z 12. 8. 2026 zmizet. Zaokrouhlují se proto
+ * rovnou ceny činností; jejich součet je pak zaokrouhlený sám od sebe a nic
+ * se nedorovnává. Tady se hlídá, že to tak opravdu je — kdyby se to rozešlo,
+ * nabídka by ukazovala jiný součet než hlavička kalkulace. */
+{
+  const zaokrTis = { krok: 1000, smer: 'nahoru' };
+  const cIt = zo.cenaNabidkyProj(rp, null, zaokrTis);
+  const soucetZaokr = rp.sekce.reduce((a, s) => a + zo.zaokrouhli(s.celkem, zaokrTis), 0);
+  test('cena PROJ = součet zaokrouhlených činností',
+    Math.abs(cIt.cena - soucetZaokr) < 0.01, [cIt.cena, soucetZaokr]);
+  test('každá činnost sama vychází na krok zaokrouhlení',
+    rp.sekce.every(s => zo.zaokrouhli(s.celkem, zaokrTis) % 1000 === 0));
+  /* Se slevou platí totéž — zaokrouhluje se cena činnosti PO slevě, aby
+   * i tehdy sedělo „součet činností = celková cena". */
+  const cItS = zo.cenaNabidkyProj(rp, { procenta: 10, stav: 'schváleno' }, zaokrTis);
+  const soucetPoSleve = rp.sekce.reduce((a, s) => a + zo.zaokrouhli(s.celkem * 0.9, zaokrTis), 0);
+  test('se slevou = součet zaokrouhlených činností po slevě',
+    Math.abs(cItS.cena - soucetPoSleve) < 0.01, [cItS.cena, soucetPoSleve]);
+  /* Vykazovaná sleva je rozdíl dvou zaokrouhlených čísel — jen tak v nabídce
+   * platí „cena před slevou − sleva = cena" na korunu. */
+  test('vykazovaná sleva sedí na rozdíl zaokrouhlených čísel',
+    Math.abs(cItS.zakladZaokr - cItS.slevaKcVykaz - cItS.cena) < 0.01,
+    [cItS.zakladZaokr, cItS.slevaKcVykaz, cItS.cena]);
+  test('rozpad drží i po změně: základ − sleva + zaokrouhlení = cena',
+    Math.abs(cItS.zaklad - cItS.slevaKc + cItS.zaokrKc - cItS.cena) < 0.01, JSON.stringify(cItS));
+}
 
 /* ---------- 6) všechna místa ukazují stejné číslo ---------- */
 /* Tohle je jádro testu: kdyby některý dokument zaokrouhlení minul, rozejdou
@@ -183,7 +214,7 @@ v.data.sleva = { procenta: 7, stav: 'schváleno', role: 'Jednatel' };
 v.data.zaokr     = { krok: 1000, smer: 'dolu' };
 v.data.zaokrProj = { krok: 500,  smer: 'nahoru' };
 const ocekavana = zo.cenaNabidkyOck(r, v.data.sleva, v.data.zaokr).cena;
-const ocekavanaProj = zo.cenaNabidkyProj(rp, v.data.zaokrProj).cena;
+const ocekavanaProj = zo.cenaNabidkyProj(rp, null, v.data.zaokrProj).cena;
 
 const nd = nabidkaData(zak, v, JEKLY);
 test('nabídka OCK ukazuje zaokrouhlenou cenu',
@@ -193,15 +224,31 @@ test('nabídka OCK má DPH ze zaokrouhlené ceny',
   Math.abs(parse(nd.placeholders.DPH_KC) - ocekavana * v.data.cenik.dph) < 0.01, nd.placeholders.DPH_KC);
 test('nabídka OCK má celkem s DPH ze zaokrouhlené ceny',
   Math.abs(parse(nd.placeholders.CENA_S_DPH) - ocekavana * (1 + v.data.cenik.dph)) < 0.01, nd.placeholders.CENA_S_DPH);
-/* Rozdíl musí být v dokumentu vidět jako vlastní řádek, ne rozpuštěný ve slevě:
- * jinak by cena před slevou minus sleva nedávala koncovou cenu. */
-test('nabídka OCK uvádí zaokrouhlení jako vlastní údaj',
-  !!nd.placeholders.ZAOKROUHLENI_KC && /\d/.test(nd.placeholders.ZAOKROUHLENI_KC),
-  nd.placeholders.ZAOKROUHLENI_KC);
-test('rozpad v nabídce sedí: cena před slevou − sleva + zaokrouhlení = cena bez DPH',
+/* ZAOKROUHLENÍ SE V NABÍDCE NEUVÁDÍ (#135, 12. 8. 2026).
+ *
+ * Do 12. 8. 2026 měl rozdíl vlastní řádek („Obchodní zaokrouhlení + 49 Kč"),
+ * aby čísla v dokumentu dávala součet. Zákazníkovi to ale neříká nic — čte
+ * položky, ne naše zaokrouhlovací pravidlo. Zadání J. V.: řádek pryč,
+ * zaokrouhlovat rovnou položky.
+ *
+ * Součet proto musí sedět bez něj: do dokumentu jdou zaokrouhlená čísla
+ * a sleva je jejich rozdíl. Tenhle test je jádro celé změny — kdyby se
+ * rozpad rozešel, nabídka by zákazníkovi nedala součet a nikdo by nepoznal
+ * proč. */
+test('nabídka OCK neuvádí zaokrouhlení vlastním údajem',
+  nd.placeholders.ZAOKROUHLENI_KC === '', nd.placeholders.ZAOKROUHLENI_KC);
+test('rozpad v nabídce sedí bez zaokrouhlení: cena před slevou − sleva = cena bez DPH',
   Math.abs(parse(nd.placeholders.CENA_PRED_SLEVOU) - parse(nd.placeholders.SLEVA_KC)
-           - parse(nd.placeholders.ZAOKROUHLENI_KC.replace('−', '')) - parse(nd.placeholders.CENA_BEZ_DPH)) < 0.02,
-  [nd.placeholders.CENA_PRED_SLEVOU, nd.placeholders.SLEVA_KC, nd.placeholders.ZAOKROUHLENI_KC, nd.placeholders.CENA_BEZ_DPH]);
+           - parse(nd.placeholders.CENA_BEZ_DPH)) < 0.02,
+  [nd.placeholders.CENA_PRED_SLEVOU, nd.placeholders.SLEVA_KC, nd.placeholders.CENA_BEZ_DPH]);
+/* A obě čísla musí být zaokrouhlená, ne jen jejich rozdíl. */
+{
+  const krok = v.data.zaokr.krok;
+  test('cena před slevou je zaokrouhlená na krok nastavení',
+    parse(nd.placeholders.CENA_PRED_SLEVOU) % krok === 0, nd.placeholders.CENA_PRED_SLEVOU);
+  test('koncová cena je zaokrouhlená na krok nastavení',
+    parse(nd.placeholders.CENA_BEZ_DPH) % krok === 0, nd.placeholders.CENA_BEZ_DPH);
+}
 
 const ctx = kr.kryciCtx(zak, v, JEKLY);
 test('krycí list OCK ukazuje stejnou cenu jako nabídka',
@@ -216,8 +263,20 @@ test('porovnání variant ukazuje zaokrouhlenou cenu PROJ',
   [m('projCelkem').hodnoty[0], ocekavanaProj]);
 test('porovnání variant: celkem = OCK + PROJ po zaokrouhlení',
   Math.abs(m('celkemBezDph').hodnoty[0] - (ocekavana + ocekavanaProj)) < 0.01);
-test('porovnání variant zvlášť ukáže zaokrouhlení', !!m('zaokrKc') && m('zaokrKc').hodnoty[0] < 0,
-  m('zaokrKc') && m('zaokrKc').hodnoty[0]);
+/* Řádek „zaokrouhlení" v porovnání je součet dopadu obou částí. Znaménko se
+ * nehlídá: OCK se v téhle fixtuře zaokrouhluje dolů a PROJ nahoru, takže co
+ * převáží, závisí na datech — hlídá se to, co platit MUSÍ: řádek je vidět
+ * a sedí na rozdíl mezi spočtenou a nabídkovou cenou obou částí. */
+{
+  const zaokrRadek = m('zaokrKc') && m('zaokrKc').hodnoty[0];
+  const dopadOck = zo.cenaNabidkyOck(r, v.data.sleva, v.data.zaokr).zaokrKc;
+  const dopadProj = zo.cenaNabidkyProj(rp, v.data.slevaProj, v.data.zaokrProj).zaokrKc;
+  test('porovnání variant zvlášť ukáže zaokrouhlení', zaokrRadek !== 0 && zaokrRadek != null,
+    zaokrRadek);
+  test('řádek zaokrouhlení sedí na dopad obou částí',
+    Math.abs(zaokrRadek - (dopadOck + dopadProj)) < 0.02,
+    [zaokrRadek, dopadOck, dopadProj]);
+}
 /* Bez zaokrouhlení nemá řádek v tabulce co dělat – prázdný řádek s nulou je
  * jen šum ve srovnání, které má být rychle přehlédnutelné. */
 const varBez = zk.novaZakazka();
@@ -240,8 +299,8 @@ test('marže bere cenu po zaokrouhlení', mSe.cena < mBez.cena && mSe.marze < mB
   [mBez.cena, mSe.cena]);
 test('marže bez zaokrouhlení zůstává beze změny',
   Math.abs(mz.marzeStavOck(r, v.data.sleva, nast).cena - mBez.cena) < 1e-9);
-const mp = mz.marzeStavProj(rp, nast, { krok: 100000, smer: 'dolu' });
-test('marže PROJ bere celek po zaokrouhlení', mp.celek.cena === zo.cenaNabidkyProj(rp, { krok: 100000, smer: 'dolu' }).cena);
+const mp = mz.marzeStavProj(rp, null, nast, { krok: 100000, smer: 'dolu' });
+test('marže PROJ bere celek po zaokrouhlení', mp.celek.cena === zo.cenaNabidkyProj(rp, null, { krok: 100000, smer: 'dolu' }).cena);
 test('sekce PROJ se zaokrouhlením nemění', mp.sekce.length === mz.marzeStavProj(rp, nast).sekce.length);
 
 /* ---------- 8) zapnutí nic neblokuje a nic nemaže ---------- */
@@ -327,12 +386,12 @@ test('cenaSDph: nečíselná cena je nula', cenaSDph(undefined, 0.21).sDph === 0
 
   /* Dorovnání nesmí být „nastav výchozí" – to by staré nabídce změnilo cenu. */
   const d1 = { zaokr: { krok: 1000, smer: 'nahoru' } };
-  const cenaPred = zo.cenaNabidkyProj(rp, zo.zaokrProjZ(d1)).cena;
+  const cenaPred = zo.cenaNabidkyProj(rp, null, zo.zaokrProjZ(d1)).cena;
   zo.zaokrZajisti(d1);
   test('zaokrZajisti dosadí PROJ dosavadní hodnotu, ne výchozí',
     d1.zaokrProj.krok === 1000 && d1.zaokrProj.smer === 'nahoru', JSON.stringify(d1.zaokrProj));
   test('zaokrZajisti nezmění cenu PROJ ani o korunu',
-    zo.cenaNabidkyProj(rp, zo.zaokrProjZ(d1)).cena === cenaPred);
+    zo.cenaNabidkyProj(rp, null, zo.zaokrProjZ(d1)).cena === cenaPred);
   test('zaokrZajisti je idempotentní', (() => {
     const otiskD = JSON.stringify(d1); zo.zaokrZajisti(d1); zo.zaokrZajisti(d1);
     return JSON.stringify(d1) === otiskD;
@@ -360,12 +419,12 @@ test('cenaSDph: nečíselná cena je nula', cenaSDph(undefined, 0.21).sDph === 0
   /* Import staré zakázky: pole se dorovná a cena PROJ zůstane. */
   const stara2 = JSON.parse(JSON.stringify(zk.novaZakazka()));
   stara2.varianty.forEach(x => { delete x.data.zaokrProj; x.data.zaokr = { krok: 1000, smer: 'nahoru' }; });
-  const cenaStare = zo.cenaNabidkyProj(rp, stara2.varianty[0].data.zaokr).cena;
+  const cenaStare = zo.cenaNabidkyProj(rp, null, stara2.varianty[0].data.zaokr).cena;
   const naimportovana = zk.importZakazka(JSON.parse(JSON.stringify(stara2)));
   const dImp = naimportovana.varianty[0].data;
   test('import staré zakázky dorovná pole PROJ', !!dImp.zaokrProj, JSON.stringify(dImp.zaokrProj));
   test('import staré zakázky nezmění cenu PROJ',
-    zo.cenaNabidkyProj(rp, zo.zaokrProjZ(dImp)).cena === cenaStare);
+    zo.cenaNabidkyProj(rp, null, zo.zaokrProjZ(dImp)).cena === cenaStare);
 
   /* Teprve tady se ověřuje vlastní zadání: dvě nastavení, dvě různé ceny,
    * a přepnutí PROJ se nesmí dotknout ceny šachty (a naopak). */
@@ -375,7 +434,7 @@ test('cenaSDph: nečíselná cena je nula', cenaSDph(undefined, 0.21).sDph === 0
   v2.data.zaokr     = { krok: 1000, smer: 'nahoru' };
   v2.data.zaokrProj = { krok: 100,  smer: 'dolu' };
   const cOck  = zo.cenaNabidkyOck(r, v2.data.sleva, zo.zaokrOckZ(v2.data));
-  const cProj = zo.cenaNabidkyProj(rp, zo.zaokrProjZ(v2.data));
+  const cProj = zo.cenaNabidkyProj(rp, null, zo.zaokrProjZ(v2.data));
   test('OCK se zaokrouhlí podle svého nastavení', cOck.cena % 1000 === 0, cOck.cena);
   test('PROJ se zaokrouhlí podle svého nastavení', cProj.cena % 100 === 0 && cProj.zaokrKc <= 0,
     [cProj.cena, cProj.zaokrKc]);
@@ -385,9 +444,9 @@ test('cenaSDph: nečíselná cena je nula', cenaSDph(undefined, 0.21).sDph === 0
     return zo.cenaNabidkyOck(r, v2.data.sleva, zo.zaokrOckZ(v2.data)).cena === pred;
   })());
   test('změna OCK nezmění cenu PROJ', (() => {
-    const pred = zo.cenaNabidkyProj(rp, zo.zaokrProjZ(v2.data)).cena;
+    const pred = zo.cenaNabidkyProj(rp, null, zo.zaokrProjZ(v2.data)).cena;
     v2.data.zaokr = { krok: 100000, smer: 'dolu' };
-    return zo.cenaNabidkyProj(rp, zo.zaokrProjZ(v2.data)).cena === pred;
+    return zo.cenaNabidkyProj(rp, null, zo.zaokrProjZ(v2.data)).cena === pred;
   })());
 
   /* Porovnání variant čte obě části zvlášť – jinak by tabulka ukázala jinou
@@ -401,7 +460,7 @@ test('cenaSDph: nečíselná cena je nula', cenaSDph(undefined, 0.21).sDph === 0
   const m3 = k => por3.metriky.find(x => x.klic === k);
   test('porovnání variant čte PROJ z vlastního nastavení',
     Math.abs(m3('projCelkem').hodnoty[0]
-             - zo.cenaNabidkyProj(rp, v3.varianty[0].data.zaokrProj).cena) < 0.01,
+             - zo.cenaNabidkyProj(rp, null, v3.varianty[0].data.zaokrProj).cena) < 0.01,
     m3('projCelkem').hodnoty[0]);
   test('porovnání variant čte OCK z vlastního nastavení',
     Math.abs(m3('ockPoSleve').hodnoty[0]
@@ -414,9 +473,9 @@ test('cenaSDph: nečíselná cena je nula', cenaSDph(undefined, 0.21).sDph === 0
                                { krok: 100000, smer: 'dolu' }, { krok: 100, smer: 'nahoru' });
   const pJedno = mz.marzePrehled(r, rp, v3.varianty[0].data.sleva, nastM, { krok: 100000, smer: 'dolu' });
   test('marzePrehled: PROJ se řídí šestým parametrem',
-    pDve.proj.celek.cena === zo.cenaNabidkyProj(rp, { krok: 100, smer: 'nahoru' }).cena);
+    pDve.proj.celek.cena === zo.cenaNabidkyProj(rp, null, { krok: 100, smer: 'nahoru' }).cena);
   test('marzePrehled bez šestého parametru se chová jako dřív',
-    pJedno.proj.celek.cena === zo.cenaNabidkyProj(rp, { krok: 100000, smer: 'dolu' }).cena);
+    pJedno.proj.celek.cena === zo.cenaNabidkyProj(rp, null, { krok: 100000, smer: 'dolu' }).cena);
   test('marzePrehled: OCK zůstává na svém nastavení', pDve.ock.cena === pJedno.ock.cena);
 }
 
@@ -431,7 +490,8 @@ test('cenaSDph: nečíselná cena je nula', cenaSDph(undefined, 0.21).sDph === 0
   const com = fs3.readFileSync(__dirname + '/ui/common.js', 'utf8');
   const kui = fs3.readFileSync(__dirname + '/ui/kontroly_ui.js', 'utf8');
   const mui = fs3.readFileSync(__dirname + '/ui/marze_ui.js', 'utf8');
-  test('Kalkulace PROJ počítá cenu z vlastního nastavení', prj.includes('cenaNabidkyProj(r, ZOP)'));
+  test('Kalkulace PROJ počítá cenu z vlastního nastavení i vlastní slevy',
+  prj.includes('cenaNabidkyProj(r, SLP, ZOP)'));
   test('Kalkulace PROJ nikde nesahá na zaokrouhlení OCK',
     !/zaokrStav\([^)]*,\s*ZO\)/.test(prj) && !/cenaNabidkyProj\(r,\s*ZO\)/.test(prj));
   test('zámek chrání i přepínače PROJ',

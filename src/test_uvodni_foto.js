@@ -95,5 +95,61 @@ test('chybějící zakázka funkce neshodí',
   Object.keys(uvodniFotoObrazky(null)).length === 0
   && uvodniFotoSymboly(null).UVODNI_FOTO_POPIS === '');
 
+
+/* ============================================================
+ * ÚVODNÍ FOTKA NABÍDKY PROJ (12. 8. 2026)
+ *
+ * Nabídka PROJ dostala tisk do Wordu stejně jako OCK — a s ním i vlastní
+ * úvodní fotku. VLASTNÍ je tu to podstatné: kalkulace OCK a PROJ jsou dvě
+ * nezávislé nabídky, které spolu často vůbec nesouvisí (projekce se prodává
+ * samostatně). Kdyby obě části sdílely jedno pole, výměna fotky v nabídce
+ * šachty by tiše přepsala titulní stranu už odsouhlasené nabídky projekce.
+ *
+ * Přenos mezi částmi existuje, ale jen na výslovné vyžádání tlačítkem
+ * (nabidkaFotoPrevezmi v UI) — stejně jako u hlaviček.
+ * ============================================================ */
+
+const zp = novaZakazka();
+['uvodniFotoProj', 'uvodniFotoProjNazev', 'uvodniFotoProjPopis'].forEach(k =>
+  test('nová zakázka má pole ' + k, zp[k] === '', zp[k]));
+
+const staraP = novaZakazka();
+delete staraP.uvodniFotoProj; delete staraP.uvodniFotoProjNazev; delete staraP.uvodniFotoProjPopis;
+const mP = importZakazka(JSON.parse(JSON.stringify(staraP)));
+['uvodniFotoProj', 'uvodniFotoProjNazev', 'uvodniFotoProjPopis'].forEach(k =>
+  test('migrace doplní prázdné pole ' + k, mP[k] === '', mP[k]));
+
+const FOTO_OCK = 'data:image/png;base64,T0NL';
+const FOTO_PROJ = 'data:image/png;base64,UFJPSg==';
+zp.uvodniFoto = FOTO_OCK; zp.uvodniFotoNazev = 'sachta.png'; zp.uvodniFotoPopis = 'Zrcadlo schodiště';
+zp.uvodniFotoProj = FOTO_PROJ; zp.uvodniFotoProjNazev = 'dum-projekce.png';
+zp.uvodniFotoProjPopis = 'Bytový dům, pohled z ulice';
+
+test('bez upřesnění části se pořád bere fotka OCK (starší volání beze změny)',
+  uvodniFotoObrazky(zp).UVODNI_FOTO === FOTO_OCK);
+test('část „proj" bere fotku projekce',
+  uvodniFotoObrazky(zp, 'proj').UVODNI_FOTO === FOTO_PROJ,
+  uvodniFotoObrazky(zp, 'proj').UVODNI_FOTO);
+test('část „ock" bere fotku šachty',
+  uvodniFotoObrazky(zp, 'ock').UVODNI_FOTO === FOTO_OCK);
+test('popisky se mezi částmi také nemíchají',
+  uvodniFotoSymboly(zp, 'proj').UVODNI_FOTO_POPIS === 'Bytový dům, pohled z ulice'
+  && uvodniFotoSymboly(zp, 'proj').UVODNI_FOTO_NAZEV === 'dum-projekce.png'
+  && uvodniFotoSymboly(zp, 'ock').UVODNI_FOTO_POPIS === 'Zrcadlo schodiště');
+
+/* Nabídka PROJ smí být bez fotky, i když nabídka OCK fotku má — a naopak.
+ * Prázdno znamená „tvar ze šablony zahodit", ne „vzít fotku odjinud". */
+const jenOck = novaZakazka(); jenOck.uvodniFoto = FOTO_OCK;
+test('fotka OCK se sama nepropíše do nabídky PROJ',
+  Object.keys(uvodniFotoObrazky(jenOck, 'proj')).length === 0);
+const jenProj = novaZakazka(); jenProj.uvodniFotoProj = FOTO_PROJ;
+test('fotka PROJ se sama nepropíše do nabídky OCK',
+  Object.keys(uvodniFotoObrazky(jenProj, 'ock')).length === 0);
+
+test('fotka projekce přežije uložení a načtení zakázky',
+  importZakazka(JSON.parse(JSON.stringify(zp))).uvodniFotoProj === FOTO_PROJ);
+test('neznámá část se chová jako OCK (nikdy nespadne)',
+  uvodniFotoObrazky(zp, 'nesmysl').UVODNI_FOTO === FOTO_OCK);
+
 console.log('\nPASS=' + passes + ' FAIL=' + fails);
 process.exit(fails ? 1 : 0);
