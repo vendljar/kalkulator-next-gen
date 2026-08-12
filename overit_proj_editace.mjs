@@ -243,7 +243,7 @@ const zobrazeni = await p.evaluate(([marze, zdroj]) => {
       .map(c => c.id).filter(Boolean).join(','),
     slevaDole: !!document.querySelector('#proj-sleva'),
     zaokrDole: !!document.querySelector('#proj-zaokr'),
-    globSlevaVKarte: !!document.querySelector('#proj-sleva input[onchange^="pjSlevaGlobal"]'),
+    slevaProjVKarte: !!document.querySelector('#proj-sleva input[onchange^="slevaProjSet"]'),
     zaokrRadky: [...document.querySelectorAll('#proj-zaokr table.sd-tbl tr td:first-child')]
       .map(t => t.textContent.trim()).join(' || '),
     prmText: [...document.querySelectorAll('#page-proj .prm .prm-l')].map(e => e.textContent.trim()).join(' || '),
@@ -291,7 +291,7 @@ ok('pod výpočtem PROJ stojí sekce Sleva na nabídku', zobrazeni.slevaDole);
 ok('pod výpočtem PROJ stojí sekce Obchodní zaokrouhlení', zobrazeni.zaokrDole);
 ok(`sekce jdou hned za výpočtem, před souhrnem (${zobrazeni.poradiKaret})`,
    /proj-kalkulace,proj-sleva,proj-zaokr,proj-souhrn/.test(zobrazeni.poradiKaret));
-ok('globální sleva PROJ se zadává v sekci slevy', zobrazeni.globSlevaVKarte);
+ok('sleva projekce se zadává v kartě pod výpočtem projekce', zobrazeni.slevaProjVKarte);
 /* Od 4. 8. 2026 karta v Kalkulaci PROJ ukazuje POUZE projekční práce – zadání:
  * „do kalkulace ock patří pouze část týkající se výtahové šachty, část týkající
  * se projekčních prací pak patří do sekce kalkulace proj." Řádek s výtahovou
@@ -314,29 +314,23 @@ ok(`prázdné vlastní % sekce ukazuje globální hodnotu číslem (${zobrazeni.
 const audit = await p.evaluate(() => {
   const v = aktivniVarianta(ZAK);
   const identita = (SL === v.data.sleva) && (ZO === v.data.zaokr);
-  // poznámka zapsaná v kartě PROJ se objeví i v kartě OCK (slevaSetPozn → render)
-  slevaSetPozn('audit-pozn-123');
-  const ockPozn = document.querySelector('#ock-sleva input[onchange^="slevaSetPozn"]');
-  const projPozn = document.querySelector('#proj-sleva input[onchange^="slevaSetPozn"]');
-  const poznSync = !!ockPozn && !!projPozn
-    && ockPozn.value === 'audit-pozn-123' && projPozn.value === 'audit-pozn-123';
-  // překlep 150 % se přistřihne na firemní maximum (výchozích 30 %)
-  pjSlevaGlobal(150);
-  const orez = PJ.slevaPct;
-  pjSlevaGlobal(15);
-  const patnact = PJ.slevaPct;
-  pjSlevaGlobal(0);
-  const vstup = document.querySelector('#proj-sleva input[onchange^="pjSlevaGlobal"]');
-  const meze = !!vstup && vstup.min === '0' && +vstup.max > 0;
-  return { identita, poznSync, orez, patnact, meze,
-           zamek: typeof pjSlevaGlobal === 'function' && pjSlevaGlobal._zamek === true };
+  /* #134 (12. 8. 2026): karty jsou dvě nad DVĚMA slevami. Poznámka zapsaná
+   * u projekce se proto do karty OCK propsat NESMÍ — dřív to byl tentýž
+   * objekt a psaní v jedné kartě přepisovalo druhou. */
+  slevaProjSet('poznamka', 'pozn-projekce-123');
+  slevaSet('poznamka', 'pozn-ock-456');
+  const ockPozn = document.querySelector('#ock-sleva input[onchange^="slevaSet(\'poznamka\'"]');
+  const projPozn = document.querySelector('#proj-sleva input[onchange^="slevaProjSet(\'poznamka\'"]');
+  return { ockPozn: ockPozn ? ockPozn.value : null,
+           projPozn: projPozn ? projPozn.value : null,
+           dvaObjekty: aktivniVarianta(ZAK).data.sleva !== aktivniVarianta(ZAK).data.slevaProj,
+           zamek: typeof slevaProjSet === 'function' && slevaProjSet._zamek === true };
 });
-ok('SL i ZO jsou TENTÝŽ objekt jako data varianty (jedna politika, dvě karty)', audit.identita);
-ok('poznámka ke slevě se propíše do obou karet', audit.poznSync);
-ok(`globální sleva 150 % se přistřihne na maximum (uloženo ${audit.orez})`, audit.orez === -30);
-ok('globální sleva 15 % se uloží záporně (sleva, ne přirážka)', audit.patnact === -15);
-ok('pole globální slevy má min a max', audit.meze);
-ok('obsluha globální slevy je chráněná zámkem', audit.zamek);
+ok('poznámka u slevy projekce zůstane u projekce', audit.projPozn === 'pozn-projekce-123', audit.projPozn);
+ok('poznámka u slevy OCK zůstane u OCK', audit.ockPozn === 'pozn-ock-456', audit.ockPozn);
+ok('slevy jsou dva samostatné objekty', audit.dvaObjekty);
+ok('obsluha slevy projekce je chráněná zámkem varianty', audit.zamek);
+
 
 // --- přepínač „jen projekce" i v kalkulaci PROJ (3. 8. 2026) ---------------
 /* Uživatel ho hledal v hlavičce kalkulace projekce — tak tam je: týž stav

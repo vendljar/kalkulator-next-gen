@@ -132,7 +132,7 @@ test('a poradí se, kde se sleva zadává', /Sleva na nabídku/.test(t));
 
 /* ---------- 3) sleva nad strop role zadavatele → žádost ---------- */
 
-await page.evaluate(() => { prepniTab('kalk'); slevaSetRole('Obchodník'); slevaSetProc(8); });
+await page.evaluate(() => { prepniTab('kalk'); slevaSet('role', 'Obchodník'); slevaSet('procenta', 8); });
 await page.waitForTimeout(250);
 let s = await stav();
 test('sleva 8 % nad stropem obchodníka (5 %) čeká na rozhodnutí', s.kategorie === 'ceka', JSON.stringify(s));
@@ -169,7 +169,7 @@ await page.evaluate(() => { prepniTab('kalk'); render(); });
 await page.waitForTimeout(200);
 test('schválení přežije překreslení', (await stav()).kategorie === 'schvaleno');
 
-await page.evaluate(() => slevaSetProc(12));
+await page.evaluate(() => slevaSet('procenta', 12));
 await page.waitForTimeout(250);
 s = await stav();
 test('zvýšení slevy sráží schválení zpět na „čeká"', s.kategorie === 'ceka', JSON.stringify(s));
@@ -224,7 +224,7 @@ await page.waitForTimeout(200);
 test('administrátor smí právo schvalování přidělit vedoucímu',
   await page.evaluate(() => zobrazeniSmi('Vedoucí', 'sleva.schvalovani', NAST.zobrazeni) === true));
 
-await page.evaluate(() => { prepniTab('kalk'); slevaSetProc(20); });
+await page.evaluate(() => { prepniTab('kalk'); slevaSet('procenta', 20); });
 await page.waitForTimeout(250);
 await page.evaluate(() => zobrNahled('Vedoucí'));
 await page.waitForTimeout(300);
@@ -233,7 +233,7 @@ test('sleva 20 % je nad stropem vedoucího (15 %) – tlačítko Schválit nemá
   await tlacitko('Schválit').count() === 0);
 test('a seznam napíše, kdo o ní rozhodne', /přesahuje strop role/.test(t), t.slice(0, 400));
 
-await page.evaluate(() => { zobrNahled(''); prepniTab('kalk'); slevaSetProc(10); });
+await page.evaluate(() => { zobrNahled(''); prepniTab('kalk'); slevaSet('procenta', 10); });
 await page.waitForTimeout(250);
 await page.evaluate(() => zobrNahled('Vedoucí'));
 await page.waitForTimeout(300);

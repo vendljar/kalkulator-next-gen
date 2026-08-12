@@ -1026,7 +1026,7 @@ test('vedoucí vidí totéž co obchodník',
 
 /* Jádro věci: v rejstříku nesmí být žádná částka. */
 const REJ_KLICE = ['klic', 'cislo', 'nazevAkce', 'variantaId', 'variantaNazev',
-  'ridici', 'zamceno', 'upraveno', 'sleva'];
+  'cast', 'ridici', 'zamceno', 'upraveno', 'sleva'];
 const REJ_SLEVA = ['procenta', 'role', 'schema', 'poznamka', 'stav', 'schvalil', 'schvalilKdy',
   'schvalenoProc', 'zamitl', 'zamitlKdy', 'zamitnutoProc', 'zamitnutoDuvod'];
 const naviec = [];

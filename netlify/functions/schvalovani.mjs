@@ -41,10 +41,25 @@ function zadostiZeZakazky(zak, klic) {
   const varianty = Array.isArray(zak && zak.varianty) ? zak.varianty : [];
   const out = [];
   for (const v of varianty) {
-    const sl = v && v.data && v.data.sleva;
-    if (!sl || !(+sl.procenta > 0)) continue;
-    out.push({
+    /* Dvě slevy, dvě žádosti (#134, 12. 8. 2026): sleva na výtahovou šachtu
+     * a sleva na projekční práce. Každá se počítá z ceny své kalkulace, takže
+     * i v rejstříku stojí samostatně — vedoucí může jednu pustit a druhou ne. */
+    for (const cast of ['ock', 'proj']) {
+      const sl = v && v.data && (cast === 'proj' ? v.data.slevaProj : v.data.sleva);
+      if (!sl || !(+sl.procenta > 0)) continue;
+      out.push(zadost(zak, klic, v, sl, cast));
+    }
+  }
+  return out;
+}
+
+/* Jeden záznam rejstříku. Vypisuje se jmenovitě, ne kopií objektu slevy —
+ * kdyby se do slevy někdy přidalo pole s částkou, takhle se do rejstříku
+ * nedostane samo. */
+function zadost(zak, klic, v, sl, cast) {
+  return {
       klic,
+      cast,
       cislo: String((zak && zak.cislo) || ''),
       nazevAkce: String((zak && zak.nazevAkce) || ''),
       variantaId: v.id,
@@ -66,9 +81,7 @@ function zadostiZeZakazky(zak, klic) {
         zamitnutoProc: sl.zamitnutoProc == null ? null : +sl.zamitnutoProc,
         zamitnutoDuvod: String(sl.zamitnutoDuvod || ''),
       },
-    });
-  }
-  return out;
+  };
 }
 
 export default async (req) => {

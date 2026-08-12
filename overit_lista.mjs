@@ -790,7 +790,11 @@ ok('rozdíl je záporný a menší než krok',
 ok('hlavička OCK rozdíl přizná', z38zap.hlavicka);
 ok('nabídka ukazuje tutéž cenu jako hlavička', z38zap.nabidka === Math.round(z38zap.nabidkova),
    z38zap.nabidka + ' vs ' + z38zap.nabidkova);
-ok('nabídka nese rozdíl vlastním řádkem', !!z38zap.nabidkaRadek, z38zap.nabidkaRadek);
+/* Od 12. 8. 2026 (#135) nabídka dorovnávací řádek NEMÁ — zadání J. V.:
+ * „ve výstupní vytištěné cenové nabídce online i work neuváděj řádek obchodní
+ * zaokrouhlení. místo toho zaokrouhluj už jednotlivé položky." Symbol
+ * v šabloně zůstává (starší šablony ho mají), ale plní se prázdnem. */
+ok('nabídka OCK dorovnávací řádek neuvádí', !z38zap.nabidkaRadek, z38zap.nabidkaRadek);
 ok('krycí list ukazuje tutéž cenu', z38zap.kryci === Math.round(z38zap.nabidkova),
    z38zap.kryci + ' vs ' + z38zap.nabidkova);
 ok('porovnání variant ukazuje tutéž cenu', z38zap.porovnani === Math.round(z38zap.nabidkova),
@@ -807,7 +811,7 @@ const z38proj = await p.evaluate(() => {
   zaokrProjSetKrok(5000); zaokrProjSetSmer('dolu');
   const v = aktivniVarianta(ZAK);
   const r = vypocetProj(PJ, PC);
-  const cn = cenaNabidkyProj(r, ZOP);
+  const cn = cenaNabidkyProj(r, SLP, ZOP);
   const np = nabidkaProjData(ZAK, v, 'cz');
   const cislo = s => +String(s).split(',')[0].replace(/[^\d-]/g, '');
   return { cena: cn.cena, nasobek: cn.cena % 5000 === 0,
@@ -821,9 +825,12 @@ ok('PROJ se zaokrouhlí vlastním nastavením', z38proj.nasobek, String(z38proj.
 ok('nastavení OCK a PROJ jsou oddělená', z38proj.oddelene);
 ok('změna zaokrouhlení PROJ nezmění cenu OCK', z38proj.ockNezmenena);
 ok('souhrn PROJ ukáže cenu nabídky zvlášť', z38proj.souhrn);
+/* Cena v dokumentu se skládá ze zaokrouhlených cen jednotlivých činností
+ * (#135) — a přesně to samé číslo musí ukazovat hlavička kalkulace, jinak by
+ * obchodník viděl jinou cenu na obrazovce a jinou v odeslané nabídce. */
 ok('nabídka PROJ ukazuje tutéž cenu', Math.abs(z38proj.dokument - Math.round(z38proj.cena)) <= 1,
    z38proj.dokument + ' vs ' + z38proj.cena);
-ok('nabídka PROJ nese rozdíl vlastním řádkem', !!z38proj.dokumentRadek, z38proj.dokumentRadek);
+ok('nabídka PROJ dorovnávací řádek neuvádí', !z38proj.dokumentRadek, z38proj.dokumentRadek);
 
 const z38zpet = await p.evaluate(() => {
   zaokrSetKrok(0); zaokrProjSetKrok(0);   // obě části zpět do výchozího stavu

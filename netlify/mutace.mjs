@@ -176,8 +176,8 @@ const MUTACE = [
     proc: 'kdokoli zvenčí by si vytáhl seznam zakázek i s procenty slev' },
 
   { nazev: 'rejstřík vydá i částky ze zakázky', soubor: 'functions/schvalovani.mjs',
-    hledej: '    out.push({\n      klic,',
-    nahrad: '    out.push({\n      cenaPoSleve: (v.data && v.data.sleva && v.data.sleva.cenaPoSleve) || null,\n      klic,',
+    hledej: '  return {\n      klic,\n      cast,',
+    nahrad: '  return {\n      cenaPoSleve: (v.data && v.data.sleva && v.data.sleva.cenaPoSleve) || null,\n      klic,\n      cast,',
     proc: 'přehled napříč zakázkami by obešel matici zobrazení — cenu by uviděl i ten, komu ji správce nedal' },
 
   /* ---------- hlavní účet pozná server, ne prohlížeč (#95) ---------- */
