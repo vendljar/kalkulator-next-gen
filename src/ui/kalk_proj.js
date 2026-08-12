@@ -1,7 +1,8 @@
 /* ================= ZÁLOŽKA KALKULACE PROJ =================
  * Kalkulace projekčních prací dle vzoru Kalkulator_projekce.xlsx.
  * Sekce: položky hodiny×sazba / fixní částky, doprava bez přirážky,
- * globální přirážka (PC.marze) po sekcích, globální sleva + vlastní % sekce.
+ * globální přirážka (PC.marze) po sekcích s možností vlastního % sekce.
+ * Sleva projekce je vlastní (#134) a odečítá se až od hotové ceny.
  *
  * VZHLED (schválený návrh A2, 31. 7. 2026): tabulka vypadá stejně jako
  * kalkulace OCK — jedna tabulka pro celou kalkulaci a v ní sekce vždy ve
@@ -98,9 +99,10 @@ function renderProj() {
   const NC = POPIS_SL + (col.showCost ? 2 : 0) + 1 + (col.admin ? 1 : 0);
 
   /* Koncovou cenu skládá zaokrouhleni.js (#38) – hlavička i souhrn musí ukazovat
-   * totéž číslo, které pak odejde v nabídce. Ceny jednotlivých činností se
-   * nezaokrouhlují, jen jejich součet; rozdíl je proto vidět vlastním řádkem. */
-  const cnp = (typeof cenaNabidkyProj === 'function') ? cenaNabidkyProj(r, ZOP) : null;
+   * totéž číslo, které pak odejde v nabídce. Od 12. 8. 2026 (#135) se zaokrouhluje
+   * cena každé činnosti zvlášť, takže součet je zaokrouhlený sám od sebe a nabídka
+   * už nepotřebuje dorovnávací řádek. */
+  const cnp = (typeof cenaNabidkyProj === 'function') ? cenaNabidkyProj(r, SLP, ZOP) : null;
   const projCena = cnp ? cnp.cena : r.souhrn.celkem;
   const projZaokr = cnp ? cnp.zaokrKc : 0;
 
@@ -116,7 +118,9 @@ function renderProj() {
   const naklad = r.souhrn.naklad + r.souhrn.doprava;
   const hrubyZisk = projCena - naklad;
   const marze = projCena > 0 ? hrubyZisk / projCena : 0;
-  const slevaPodil = -(PJ.slevaPct || 0) / 100;
+  /* Poskytnutá sleva projekce (#134) – z vlastní slevy PROJ, ne z OCK
+   * a ne z bývalého pole „Globální sleva PROJ". */
+  const slevaProjPodil = cnp ? cnp.slevaPct : ((typeof slevaPodil === 'function') ? slevaPodil(SLP) : 0);
   const _dph = cenaSDph(projCena, PC.dph), dphKc = _dph.dphKc, celkemSDph = _dph.sDph;   // #14 krok 1
   const kv = NAST.kpiViditelne || {};
   const vidKpi = k => col.admin || kv[k];
@@ -125,7 +129,7 @@ function renderProj() {
     ? `<div class="kpi-line"><span class="kl">${label}${kpiChk(k)}</span><span class="kv">${val}</span></div>` : '';
   const pct = x => (Math.round(x * 1000) / 10).toLocaleString('cs-CZ') + ' %';
   const box3 = kpiLine('naklad', 'Náklad', fmt0(naklad)) + kpiLine('hrubyZisk', 'Hrubý zisk', fmt0(hrubyZisk));
-  const box4 = kpiLine('sleva', 'Poskytnutá sleva', pct(slevaPodil)) + kpiLine('marze', 'Marže', pct(marze));
+  const box4 = kpiLine('sleva', 'Poskytnutá sleva', pct(slevaProjPodil)) + kpiLine('marze', 'Marže', pct(marze));
   /* Obchodní zaokrouhlení má od 1. 8. 2026 vlastní sekci pod výpočtem (#38)
    * a vypisuje se i vlastním řádkem v souhrnné tabulce. V hlavičce by byl
    * jen třetí opis téhož čísla, tak tam není. Cena nabídky ale zůstává –
@@ -138,8 +142,8 @@ function renderProj() {
    * V hlavičce zůstává jen globální přirážka = PC.marze z ceníku PROJ:
    * přičítá se k nákladu sekce, je předvyplněná z ceníkové databáze
    * a jde ji tady rovnou přepsat.
-   *   Globální sleva (PJ.slevaPct) se 1. 8. 2026 přestěhovala dolů do karty
-   *   „Sleva na nabídku (ZAK-10)" – patří k ceně, která jde ven, ne k tomu,
+   *   Sleva projekce má vlastní kartu pod výpočtem (#134, 12. 8. 2026) a
+   *   počítá se z ceny projekce – patří k ceně, která jde ven, ne k tomu,
    *   z čeho se počítá. Popisky sedí vpravo u svých hodnot (.prm). */
   const hlava = `<div class="kalk-title">${ZAK.cislo ? `<span class="kt-cislo">${esc(ZAK.cislo)}</span>` : ''}${esc(ZAK.nazevAkce || 'Bez názvu akce')}</div>
   <div class="grand">
@@ -297,9 +301,9 @@ function renderProj() {
     <tr><th>Sekce</th><th>Náklad</th><th>Přirážka</th><th>Doprava</th><th>Cena</th><th>Sleva/přir.</th><th>Celkem</th></tr>
     ${r.sekce.filter(s => s.celkem !== 0 || s.naklad !== 0).map(s =>
       `<tr><td>${esc(s.nazev)}</td><td>${fmt(s.naklad)}</td><td>${fmt(s.marze)}</td><td>${fmt(s.dopravaKc)}</td>
-       <td>${fmt(s.cenaSDopravou)}</td><td>${num(s.pouzitePct)} % ⇒ ${fmt(s.slevaKc)}</td><td>${fmt(s.celkem)}</td></tr>`).join('')}
+       <td>${fmt(s.cenaSDopravou)}</td><td>${num(s.pouzitePct)} % ⇒ ${fmt(s.prirazkaKc)}</td><td>${fmt(s.celkem)}</td></tr>`).join('')}
     <tr class="tot"><td>CELKEM</td><td>${fmt(r.souhrn.naklad)}</td><td>${fmt(r.souhrn.marze)}</td><td>${fmt(r.souhrn.doprava)}</td>
-      <td>${fmt(r.souhrn.cena)}</td><td>${fmt(r.souhrn.sleva)}</td><td><b>${fmt0(r.souhrn.celkem)}</b></td></tr>
+      <td>${fmt(r.souhrn.cena)}</td><td>${fmt(r.souhrn.prirazka)}</td><td><b>${fmt0(r.souhrn.celkem)}</b></td></tr>
     ${projZaokr && typeof zaokrKc === 'function' ? `
     <tr><td colspan="6">Obchodní zaokrouhlení${typeof zaokrStav === 'function' && zaokrStav(r.souhrn.celkem, ZOP).popis ? ' (' + esc(zaokrStav(r.souhrn.celkem, ZOP).popis) + ')' : ''}</td>
       <td>${esc(zaokrKc(projZaokr))}</td></tr>

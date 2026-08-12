@@ -44,6 +44,9 @@ function kontrolyCtxAkt() {
     cenik: C,
     cenikProj: PC,
     sleva: (typeof SL !== 'undefined') ? SL : null,
+    /* Sleva projekce je vlastní veličina (#134) – kontroly ji musí
+     * dostat zvlášť, jinak by pravidlo hlídalo cizí číslo. */
+    slevaProj: (typeof SLP !== 'undefined') ? SLP : null,
     nast: (typeof NAST !== 'undefined') ? NAST : null,
     /* Hlavička zakázky sedí přímo na ZAK (cislo, nazevAkce, objednatel…),
      * ne ve vnořeném objektu – viz novaZakazka() v zakazka.js. */

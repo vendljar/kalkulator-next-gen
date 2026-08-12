@@ -74,7 +74,9 @@ function kontrolyMarze(ctx) {
                            ctx.jenProj ? null : ctx.sleva, ctx.nast, ctx.zaokr,
                            /* PROJ má od 4. 8. 2026 vlastní zaokrouhlení; kontext
                             * bez něj se chová jako dřív (jedno pro obě části). */
-                           ctx.zaokrProj === undefined ? ctx.zaokr : ctx.zaokrProj); }
+                           ctx.zaokrProj === undefined ? ctx.zaokr : ctx.zaokrProj,
+                           /* sleva projekce (#134) – vlastní, nikdy ne ta z OCK */
+                           ctx.slevaProj); }
     catch (e) { p = null; }
   }
   try { ctx.__marze = p; } catch (e) { /* zmrazený kontext – nevadí */ }
@@ -225,24 +227,42 @@ const KONTROLY = [
     },
   },
   {
-    kod: 'slevaProjMax', kde: 'Kalkulace PROJ', nazev: 'Globální sleva PROJ nad maximem',
+    kod: 'slevaProj', kde: 'Kalkulace PROJ', nazev: 'Sleva projekce mimo rozsah nebo bez schválení',
     zjisti(ctx) {
-      /* Audit 1. 8. 2026 (N4). Pole má v UI meze a obsluha hodnotu přistřihne,
-       * ale data přijdou i importem nebo starší zakázkou – hlídá se proto
-       * hodnota v datech. Kladné číslo je přirážka a maximum slevy se jí
-       * netýká. Jen varování, nic se neblokuje (pravidlo #10). */
-      const z = ctx.projZadani;
-      if (!z || typeof z.slevaPct !== 'number' || !isFinite(z.slevaPct)) return null;
-      const sleva = -z.slevaPct;                    // v datech je sleva záporně
-      if (!(sleva > 0)) return null;
+      /* Zrcadlo pravidla „sleva" nad projekční částí (#134, 12. 8. 2026).
+       * Do té doby tu bylo pravidlo „slevaProjMax", které hlídalo jen horní
+       * mez zrušeného pole „Globální sleva PROJ" — a nic víc, protože ta
+       * sleva neměla ani strop podle role, ani schvalování. Teď má obojí,
+       * takže se hlídá stejně jako sleva na výtahovou šachtu.
+       *
+       * Na rozdíl od OCK se pravidlo NEVYPÍNÁ u zakázky „jen projekce" —
+       * tam je to naopak jediná sleva, která na nabídce je. */
+      const s = ctx.slevaProj;
+      if (!s) return null;
+      /* Na zadanou hodnotu, ne na výsledek: slevaVyhodnot() zápornou slevu
+       * tiše ořízne na nulu, takže z jejího výstupu se překlep nepozná. */
+      const p = +s.procenta;
+      if (s.procenta !== '' && s.procenta != null && !isFinite(p))
+        return { text: 'Sleva projekce není číslo, takže se do nabídky nepromítne.' };
+      if (p < 0)
+        return { text: 'Sleva projekce je zadaná záporně. Záporná sleva je přirážka a aplikace ji '
+          + 'bere jako nulovou – v nabídce tedy žádná sleva nebude.' };
+      if (p > 100)
+        return { text: 'Sleva projekce je vyšší než sto procent. Taková nabídka nedává smysl.' };
+      if (!(p > 0)) return null;
+      if (typeof slevaVyhodnot !== 'function') return null;
+      const souhrn = ctx.projVysledek && ctx.projVysledek.souhrn ? ctx.projVysledek.souhrn : null;
+      if (!souhrn) return null;
       const nast = (ctx.nast && ctx.nast.slevy) || {};
-      const max = (typeof nast.maxGlobalni === 'number' && isFinite(nast.maxGlobalni)
-                   && nast.maxGlobalni >= 0) ? nast.maxGlobalni : 0.30;
-      if (sleva <= max * 100 + 1e-9) return null;
-      return { text: 'Globální sleva projekce je nad firemním maximem. Nabídka se s ní '
-        + 'počítá dál – ale takhle vysoká sleva má projít vědomým rozhodnutím, ne překlepem.',
-        detail: 'Zadáno ' + sleva + ' %, maximum ' + Math.round(max * 1000) / 10
-          + ' % (Nastavení → Slevy).' };
+      const v = slevaVyhodnot(souhrn.celkem, souhrn.naklad + (souhrn.doprava || 0), s, nast);
+      const schvalena = s.stav === 'schváleno' || s.stav === 'schváleno automaticky';
+      if (v.podMarzi && !schvalena)
+        return { text: 'Sleva projekce je tak velká, že by projekční část srazila pod firemní '
+          + 'minimum marže; zůstává zamítnutá a do nabídky nevstoupí.' };
+      if (v.nadStrop && !schvalena)
+        return { text: 'Sleva projekce je nad stropem role a nikdo ji zatím neschválil. '
+          + 'Dokud schválená není, počítá se nabídka projekce bez ní.' };
+      return null;
     },
   },
   {

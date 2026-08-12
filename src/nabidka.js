@@ -48,15 +48,18 @@ function nabidkaData(zak, varianta, jekly, lang) {
   /* Koncová cena: základní cena → schválená sleva (ZAK-10; neschválená ani
    * čekající se neuplatní) → obchodní zaokrouhlení (#38). Skládá to
    * zaokrouhleni.js, aby nabídka, krycí list i porovnání variant ukazovaly
-   * stejné číslo. Rozdíl ze zaokrouhlení jde do vlastního údaje, ne do slevy –
-   * jinak by uvedené procento neodpovídalo částce. */
+   * stejné číslo. Od 12. 8. 2026 (#135) se do dokumentu vypisují rovnou
+   * zaokrouhlené částky a řádek se zaokrouhlením v nabídce není — viz
+   * `zakladZaokr` a `slevaKcVykaz` v zaokrouhleni.js. */
   const sleva = d.sleva || {};
   const cn = (typeof cenaNabidkyOck === 'function') ? cenaNabidkyOck(r, sleva, d.zaokr) : null;
   const slevaP = cn ? cn.slevaPct : ((typeof slevaPodil === 'function') ? slevaPodil(sleva) : 0);
-  const cenaPredSlevou = r.souhrn.zakladCena;
-  const slevaKcNum = cn ? cn.slevaKc : cenaPredSlevou * slevaP;
-  const zaokrKcNum = cn ? cn.zaokrKc : 0;
-  const cenaBezDphNum = cn ? cn.cena : cenaPredSlevou - slevaKcNum;
+  /* Do dokumentu jdou ZAOKROUHLENÉ částky (#135): cena před slevou i koncová
+   * cena, a sleva jako jejich rozdíl. Rozpad tím sedí na korunu a v nabídce
+   * nemusí být řádek „obchodní zaokrouhlení", který zákazníkovi nic neříká. */
+  const cenaPredSlevou = cn ? cn.zakladZaokr : r.souhrn.zakladCena;
+  const cenaBezDphNum = cn ? cn.cena : cenaPredSlevou * (1 - slevaP);
+  const slevaKcNum = cn ? cn.slevaKcVykaz : cenaPredSlevou - cenaBezDphNum;
 
   const placeholders = {
     OBJEDNATEL: zak.objednatel || '…',
@@ -112,10 +115,10 @@ function nabidkaData(zak, varianta, jekly, lang) {
     CENA_PRED_SLEVOU: kc(cenaPredSlevou),
     SLEVA_PROC: slevaP ? String(Math.round(slevaP * 10000) / 100) : '0',
     SLEVA_KC: kc(slevaKcNum),
-    /* Prázdné, když zaokrouhlení nic nezměnilo – prázdný řádek „+0 Kč"
-     * v nabídce jen zdržuje čtenáře. Znaménko je součástí textu, aby se
-     * v dokumentu nedalo splést, kterým směrem se cena posunula. */
-    ZAOKROUHLENI_KC: zaokrKcNum ? ((zaokrKcNum < 0 ? '− ' : '+ ') + kc(Math.abs(zaokrKcNum))) : '',
+    /* Symbol zůstává kvůli starším šablonám, ale je VŽDY prázdný (#135):
+     * zaokrouhlují se položky, takže žádný dorovnávací řádek nevzniká.
+     * Kdyby se klíč zrušil, zůstal by v takové šabloně viset text {{…}}. */
+    ZAOKROUHLENI_KC: '',
     PRIP_LESENI_VNEJSI: prip('leseniVnejsi'),
     PRIP_SKN: prip('skn'),
   };

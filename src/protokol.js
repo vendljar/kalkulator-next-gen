@@ -192,6 +192,8 @@ const PROTOKOL_NAZVY = {
   kontakt: 'Kontaktní osoba', ico: 'IČO objednatele', datum: 'Datum nabídky',
   popisZameru: 'Popis záměru', uvodniFotoNazev: 'Název úvodní fotky',
   uvodniFotoPopis: 'Popisek úvodní fotky',
+  uvodniFotoProjNazev: 'Název úvodní fotky PROJ',
+  uvodniFotoProjPopis: 'Popisek úvodní fotky PROJ',
   nazev: 'Název', pozn: 'Poznámka', fixes: 'Režim výpočtu',
   prejezd: 'Přejezd', zdvih: 'Zdvih', prohluben: 'Prohlubeň',
   sirka: 'Šířka', hloubka: 'Hloubka', roztec: 'Rozteč', nastupiste: 'Počet nástupišť',
@@ -267,7 +269,8 @@ function _porovnej(pa, pb, cesta, ctx, out) {
 /* ---------- rozdíl dvou stavů zakázky ---------- */
 
 const PROTOKOL_HLAVICKA_POLE = ['cislo', 'nazevAkce', 'adresa', 'adresaObjednatele',
-  'objednatel', 'kontakt', 'ico', 'datum', 'popisZameru', 'uvodniFotoNazev', 'uvodniFotoPopis'];
+  'objednatel', 'kontakt', 'ico', 'datum', 'popisZameru', 'uvodniFotoNazev', 'uvodniFotoPopis',
+  'uvodniFotoProjNazev', 'uvodniFotoProjPopis'];
 
 /* Sekce dat varianty. `citlive` = obsahuje náklady firmy, `root: true` u dítěte
  * znamená, že se popis počítá až od jeho obsahu (jinak by každý řádek začínal
@@ -281,7 +284,8 @@ const PROTOKOL_SEKCE = {
   techspec: { kde: 'Technická specifikace' },
   kryci: { kde: 'Krycí list OCK', deti: { hodnoty: { kde: 'Krycí list OCK', root: true } } },
   kryciProj: { kde: 'Krycí list PROJ', deti: { hodnoty: { kde: 'Krycí list PROJ', root: true } } },
-  sleva: { kde: 'Sleva' },
+  sleva: { kde: 'Sleva OCK' },
+  slevaProj: { kde: 'Sleva PROJ' },
   zaokr: { kde: 'Obchodní zaokrouhlení' },
   zamek: { kde: 'Zámek varianty' },
 };
@@ -305,8 +309,12 @@ function protokolRozdil(a, b) {
   });
   /* Fotka se neporovnává obsahem – je to data URL o stovkách kilobajtů. */
   if (!!a.uvodniFoto !== !!b.uvodniFoto)
-    out.push({ kde: 'Hlavička zakázky', co: 'Úvodní fotka nabídky',
+    out.push({ kde: 'Hlavička zakázky', co: 'Úvodní fotka nabídky OCK',
                pred: a.uvodniFoto ? '(fotka)' : '', po: b.uvodniFoto ? '(fotka)' : '',
+               citlive: false, varianta: null });
+  if (!!a.uvodniFotoProj !== !!b.uvodniFotoProj)
+    out.push({ kde: 'Hlavička zakázky', co: 'Úvodní fotka nabídky PROJ',
+               pred: a.uvodniFotoProj ? '(fotka)' : '', po: b.uvodniFotoProj ? '(fotka)' : '',
                citlive: false, varianta: null });
 
   /* 2) hlavička nabídky PROJ */

@@ -61,16 +61,99 @@ function nabidkaProjKarta() {
     <div class="note" style="font-weight:600;margin-top:10px">Popis záměru (úvodní odstavec nabídky):</div>
     <textarea rows="4" style="width:100%" placeholder="Např.: Bytový dům, přístavba výtahu do zrcadla schodiště…"
       oninput="nabidkaProjPopis(this.value)">${esc(ZAK.popisZameru || '')}</textarea>
+    ${typeof nabidkaFotoKarta === 'function' ? nabidkaFotoKarta('proj') : ''}
     ${typeof kontrolyPanel === 'function' ? kontrolyPanel() : ''}
     ${typeof ukazkoveZabranaPanel === 'function' ? ukazkoveZabranaPanel() : ''}
     <div class="btns" style="margin-top:8px">
       <button class="primary"${typeof ukazkoveZabranaAttr === 'function' ? ukazkoveZabranaAttr() : ''}
+        onclick="nabidkaProjWord()">Vytvořit nabídku PROJ (Word)</button>
+      <button${typeof ukazkoveZabranaAttr === 'function' ? ukazkoveZabranaAttr() : ''}
         onclick="nabidkaProjNahled()">Kompletní náhled a tisk nabídky</button>
     </div>
+    <div class="note nabidkaProjStav" style="margin-top:6px"></div>
+    <div class="note">Word se plní <b>šablonou <code>Sablona_NABIDKA_PROJ.docx</code></b> – stejnou cestou jako nabídka OCK.
+      Šablonu buď nahrajte jednou v <b>Nastavení → Šablony</b> (pak se použije při každém generování), nebo ji vyberete
+      při prvním kliknutí na tlačítko. Ceny, hlavička, platební podmínky i úvodní fotka se do ní dosadí ze symbolů
+      <code>{{…}}</code>; pevný text zůstává tak, jak je v šabloně napsaný.</div>
     <div class="note" style="margin-top:6px">V náhledu lze zaškrtnout <b>✏️ Upravit text před tiskem</b> a nabídku ručně doladit
       (dopsat větu, přeformulovat, škrtnout odstavec) ještě před uložením do PDF. Tlačítko <b>↺ Vrátit původní znění</b>
       vrátí text vygenerovaný z kalkulace. Ruční úpravy platí <b>jen pro daný výtisk</b> – do zakázky ani do kalkulace
       se nepropisují, takže se čísla v aplikaci nemohou nepozorovaně rozejít.</div>`;
+}
+
+/* ============================================================================
+ * NABÍDKA PROJ DO WORDU (12. 8. 2026)
+ *
+ * Přesně tatáž cesta jako u nabídky OCK (zakazka_ui.js): šablona .docx se
+ * symboly {{…}} → dokumentVygeneruj('nabidkaProj', …) → stažený soubor →
+ * zámek varianty. Liší se jen šablona (Sablona_NABIDKA_PROJ.docx) a to, že
+ * nabídka PROJ nepracuje s příplatky ani s katalogem jeklů.
+ *
+ * Stav se hlásí přes TŘÍDU, ne přes id: karta nabídky PROJ se v aplikaci
+ * vykresluje dvakrát (Kalkulace PROJ a Přehled cenových nabídek) a hlášky
+ * o průběhu by jinak doputovaly jen do první kopie.
+ * ============================================================================ */
+let SABLONA_PROJ_DOCX = null;   // {nazev, data:ArrayBuffer} – drží se po dobu otevřené aplikace
+
+function nabidkaProjStavText(txt) {
+  document.querySelectorAll('.nabidkaProjStav').forEach(e => { e.textContent = txt; });
+}
+
+function nabidkaProjWord() {
+  // přednost má šablona nahraná v Nastavení → Šablony (SET-6)
+  if (typeof SABLONY !== 'undefined' && SABLONY.nabidkaProj) SABLONA_PROJ_DOCX = SABLONY.nabidkaProj;
+  if (SABLONA_PROJ_DOCX) { nabidkaProjWordGeneruj(); return; }
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.docx';
+  inp.onchange = () => {
+    const f = inp.files[0]; if (!f) return;
+    f.arrayBuffer().then(buf => {
+      SABLONA_PROJ_DOCX = { nazev: f.name, data: buf };
+      if (typeof SABLONY !== 'undefined') SABLONY.nabidkaProj = SABLONA_PROJ_DOCX;   // zapamatuj pro další generování
+      nabidkaProjWordGeneruj();
+    });
+  };
+  inp.click();
+}
+
+function nabidkaProjWordGeneruj() {
+  const L = (typeof jazyk === 'function') ? jazyk() : 'cz';
+  const mutace = (L !== 'cz' && typeof SABLONY !== 'undefined') ? SABLONY['nabidkaProj_' + L] : null;
+  const sablona = mutace ? mutace.data : SABLONA_PROJ_DOCX.data;
+  nabidkaProjStavText('Vyplňuji šablonu…' + (L !== 'cz' ? ' (' + L.toUpperCase() + ')' : ''));
+  /* Varianta se určuje jednou dopředu – potřebujeme ji i pro zámek (#34).
+   * Otázka „otevřená, nebo řídící varianta?" je stejná jako u OCK, proto se
+   * používá tatáž funkce; nabídka se tak nikdy nevytiskne z něčeho jiného,
+   * než co má obchodník na obrazovce. */
+  const varianta = (typeof nabidkaVarianta === 'function')
+    ? nabidkaVarianta()
+    : ((typeof aktivniVarianta === 'function') ? aktivniVarianta(ZAK) : (ZAK.varianty || [])[0]);
+  dokumentVygeneruj('nabidkaProj', sablona.slice(0), ZAK, varianta, JEKLY, L)
+    .then(res => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(res.blob);
+      a.download = res.nazevSouboru + '.docx';
+      a.click();
+      // stažený .docx je hotová nabídka pro zákazníka → varianta se uzamyká
+      let zamcenoText = '';
+      if (typeof zamekPoTisku === 'function') {
+        const z = zamekPoTisku('nabidkaProj', varianta.id);
+        if (z) zamcenoText = ' Varianta ' + (z.cislo || '') + ' je nyní uzamčená jako odeslaná nabídka; '
+          + 'pokračujte jejím klonem.';
+      }
+      nabidkaProjStavText('Hotovo – soubor ' + res.nazevSouboru + '.docx je ve Stažených. '
+        + 'Uložte jej do složky _CN, doupravte ve Wordu a vytiskněte do PDF.'
+        + (L !== 'cz' && !mutace ? ' Pozor: pevný text šablony zůstal český – jazykovou mutaci šablony '
+          + 'vyrobíte v Nastavení → Šablony.' : '')
+        + zamcenoText);
+    })
+    .catch(err => {
+      /* Šablona se zahazuje schválně: nejčastější příčina je vybraný špatný
+       * soubor (třeba šablona OCK). Kdyby zůstala v paměti, další kliknutí by
+       * spadlo úplně stejně a nešlo by vybrat jinou. */
+      SABLONA_PROJ_DOCX = null;
+      nabidkaProjStavText('Chyba: ' + err.message);
+    });
 }
 
 /* Kompletní tiskový náhled celé nabídky – všechny oddíly VZORu v pořadí. */
@@ -116,7 +199,11 @@ function nabidkaProjNahled() {
   const rekapHtml = d.rekapitulace.length ? `<h1 class="sekce">${esc(P('REKAPITULACE CENOVÉ NABÍDKY'))}</h1>
     <table class="rekap">${d.rekapitulace.map(r =>
       `<tr><td>${esc(r[0])}</td><td class="castka">${esc(r[1])}</td></tr>`).join('')}
-      ${p.PROJ_ZAOKROUHLENI_KC ? `<tr><td>${esc(P('Obchodní zaokrouhlení'))}</td><td class="castka">${esc(p.PROJ_ZAOKROUHLENI_KC)}</td></tr>` : ''}
+      ${/* Sleva projekce vlastním řádkem (#134). Rozpad musí sedět sám v sobě:
+           součet činností − sleva + zaokrouhlení = celkem bez DPH. Bez toho
+           by zákazník viděl součet, který mu nevychází. */ ''}
+      ${p.PROJ_SLEVA_KC ? `<tr><td>${esc(P('Cena před slevou'))}</td><td class="castka">${esc(p.PROJ_CENA_PRED_SLEVOU)}</td></tr>
+      <tr><td>${esc(P('Sleva'))} ${esc(p.PROJ_SLEVA_PROC)} %</td><td class="castka">− ${esc(p.PROJ_SLEVA_KC)}</td></tr>` : ''}
       <tr class="tot"><td><b>${esc(P('CELKEM bez DPH'))}</b></td><td class="castka"><b>${esc(p.PROJ_CELKEM_BEZ_DPH)}</b></td></tr>
       <tr><td>${esc(P('DPH'))} ${esc(p.PROJ_DPH_SAZBA)} %</td><td class="castka">${esc(p.PROJ_DPH_KC)}</td></tr>
       <tr class="tot"><td><b>${esc(P('CELKEM s DPH'))}</b></td><td class="castka"><b>${esc(p.PROJ_CELKEM_S_DPH)}</b></td></tr>
@@ -144,6 +231,9 @@ function nabidkaProjNahled() {
     table.rekap td{border-bottom:1px solid #dfe4ec} table.rekap tr.tot td{background:#f2f6ff}
     .chybi{color:#b91c1c}
     .pozn{font-size:11px;color:#6b7686;margin:6px 0 14px} .pozn p{margin:3px 0}
+    figure.uvod-foto{margin:14px 0 18px;text-align:center;page-break-inside:avoid}
+    figure.uvod-foto img{max-width:100%;max-height:320px;border-radius:6px}
+    figure.uvod-foto figcaption{font-size:11px;color:#6b7686;margin-top:5px}
     ${dokHlavickaCss()}
     .hlav td{border-bottom:0;padding:2px 8px}
     .bar{position:sticky;top:0;background:#fff;border-bottom:1px solid #e5e9f0;padding:8px 0;margin-bottom:8px;z-index:5}
@@ -167,6 +257,7 @@ function nabidkaProjNahled() {
       <tr><td>${esc(P('Adresa stavby'))}</td><td>${esc(p.ADRESA)}</td></tr>
       <tr><td>${esc(P('Datum'))}</td><td>${esc(p.DATUM)}</td></tr>
     </table>
+    ${typeof nabidkaFotoHtml === 'function' ? nabidkaFotoHtml('proj') : ''}
     ${html}
     ${rekapHtml}
     ${patickaHtml}

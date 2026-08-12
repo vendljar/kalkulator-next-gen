@@ -9,7 +9,7 @@
  *   3. VAROVÁNÍ PŘED ODCHODEM → prohlížeč se zeptá, když jsou neuložené změny.
  *
  * PROČ SE HISTORIE NEČTE ZE set(), ALE Z render():
- * Zakázku mění spousta cest – set(), slevaSetProc(), varNova(), editace ceníku,
+ * Zakázku mění spousta cest – set(), slevaSet(), varNova(), editace ceníku,
  * katalog, technická specifikace. Kdyby se historie napojila jen na set(),
  * tiše by přeskočila všechno ostatní a „Zpět" by občas skočilo o dva kroky
  * vedle. Každá z těch cest ale končí voláním render(). Proto si tady držíme

@@ -37,10 +37,13 @@ function marzePrehledAkt() {
    * Od 4. 8. 2026 má každá část vlastní nastavení: ZO = výtahová šachta,
    * ZOP = projekční práce. Kdyby ZOP z jakéhokoli důvodu nebyl, spadne se na
    * ZO – tedy na chování před rozdělením. */
+  /* Dvě slevy, každá ke své části (#134): SL k výtahové šachtě, SLP
+   * k projekci. Prohodit je znamená hlídat marži proti cizí ceně. */
   return marzePrehled(ock, proj, typeof SL !== 'undefined' ? SL : null, NAST,
                       typeof ZO !== 'undefined' ? ZO : null,
                       (typeof ZOP !== 'undefined' && ZOP) ? ZOP
-                        : (typeof ZO !== 'undefined' ? ZO : null));
+                        : (typeof ZO !== 'undefined' ? ZO : null),
+                      typeof SLP !== 'undefined' ? SLP : null);
 }
 
 /* cast: 'ock' | 'proj' | '' (celá nabídka) */

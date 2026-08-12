@@ -22,6 +22,14 @@
 const KRYCI_POKUTY_SAZBY = (typeof KRYCI_POKUTY !== 'undefined')
   ? KRYCI_POKUTY : ['0', '0,05 % / den', '0,1 % / den'];
 
+/* Zálohy a limit pokut (12. 8. 2026) — také jeden zdroj v kryci.js, tady jen
+ * záloha pro samostatný Node běh. U projekce nesou volby holé procento bez
+ * milníku: projekce se fakturuje po stupních dokumentace, ne po podpisu
+ * a montáži, takže by věta u zálohy mátla. */
+const KRYCI_PROJ_ZALOHY = ['Bez zálohy', 'Záloha 30 %', 'Záloha 50 %', 'Záloha 70 %'];
+const KRYCI_PROJ_LIMIT_POKUT = (typeof KRYCI_LIMIT_POKUT !== 'undefined')
+  ? KRYCI_LIMIT_POKUT : ['Uplatněn limit 10 %', 'NEUPLATNĚN limit 10 %'];
+
 /* devět činností v pořadí VZORu (klíče sekcí engine_proj.js) */
 /* Kdo nabídku vypracoval (#146) – u projekce platí totéž co u OCK; funkce
  * z kryci.js se v sestavené aplikaci sdílejí, v Node testech (kde je načtený
@@ -146,14 +154,21 @@ const KRYCI_PROJ_SEKCE = [
     { id: 'faktZamereni', label: 'Fakturace – zaměření a studie', verze: ['bo'], prefill: () => '100 % po předání výstupů', src: 'výchozí' },
     { id: 'faktDpz', label: 'Fakturace – DPZ a inženýrská činnost', verze: ['bo'], prefill: () => '100 % po odevzdání dokumentace', src: 'výchozí' },
     { id: 'faktDps', label: 'Fakturace – DPS a EZC', verze: ['bo'], prefill: () => '100 % po odevzdání dokumentace', src: 'výchozí' },
-    { id: 'zaloha', label: 'Záloha', verze: ['bo'], typ: 'radio', o: ['Bez zálohy', 'Záloha 30 %', 'Záloha 50 %'], prefill: () => 'Bez zálohy', src: 'výchozí' },
+    /* 12. 8. 2026: rolovací seznam místo trojice přepínačů, přibyla volba
+     * 70 % a výchozí je 50 % (rozhodnutí J. V.). Přepínače se do řádku vešly,
+     * dokud byly tři; se čtvrtou volbou a možností vlastního znění je
+     * rozbalovátko čitelnější — a hlavně je stejné jako u výtahové šachty. */
+    { id: 'zaloha', label: 'Záloha', verze: ['bo'],
+      typ: 'vyber', o: KRYCI_PROJ_ZALOHY, prefill: () => KRYCI_PROJ_ZALOHY[2], src: 'výchozí' },
     /* Výběr sazby pokuty — tentýž číselník jako u OCK (KRYCI_POKUTY v kryci.js),
      * aby se dvě verze seznamu nerozešly. Předvyplněná je nula, tedy bez pokuty. */
     { id: 'pokutaTermin', label: 'Smluvní pokuta – prodlení s odevzdáním', verze: ['bo', 'techdata'],
       typ: 'vyber', o: KRYCI_POKUTY_SAZBY, prefill: () => KRYCI_POKUTY_SAZBY[0], src: 'výchozí' },
     { id: 'pokutaSplatnost', label: 'Smluvní pokuta – prodlení splatnosti', verze: ['bo', 'techdata'],
-      typ: 'vyber', o: KRYCI_POKUTY_SAZBY, prefill: () => KRYCI_POKUTY_SAZBY[0], src: 'výchozí' },
-    { id: 'pokutaLimit', label: 'Limit smluvních pokut', verze: ['bo', 'techdata'], prefill: () => 'NEUPLATNĚN limit 10 %', src: 'výchozí' },
+      /* Předvyplněných 0,05 % / den od 12. 8. 2026 — stejně jako u OCK. */
+      typ: 'vyber', o: KRYCI_POKUTY_SAZBY, prefill: () => KRYCI_POKUTY_SAZBY[1], src: 'výchozí' },
+    { id: 'pokutaLimit', label: 'Limit smluvních pokut', verze: ['bo', 'techdata'],
+      typ: 'vyber', o: KRYCI_PROJ_LIMIT_POKUT, prefill: () => KRYCI_PROJ_LIMIT_POKUT[0], src: 'výchozí' },
     { id: 'pokutyJine', label: 'Jiné', verze: ['bo'], typ: 'textarea' },
     { id: 'platceDph', label: 'Plátce DPH', verze: ['bo'], typ: 'radio', o: ['Ano', 'Ne'], prefill: () => 'Ano', src: 'výchozí' },
     /* KL-7: viz kryci.js. Projekce má vlastní sazbu (PC.dph) — projekční práce
@@ -212,7 +227,7 @@ function kryciProjCtx(zak, varianta) {
     /* Stejná cena jako v nabídce PROJ, tj. po obchodním zaokrouhlení (#38);
      * ceny jednotlivých činností zůstávají nezaokrouhlené. */
     const cn = (typeof cenaNabidkyProj === 'function')
-      ? cenaNabidkyProj(r, (typeof zaokrProjZ === 'function') ? zaokrProjZ(d) : d.zaokr) : null;
+      ? cenaNabidkyProj(r, d.slevaProj, (typeof zaokrProjZ === 'function') ? zaokrProjZ(d) : d.zaokr) : null;
     hodnota = kryciProjKc(cn ? cn.cena : r.souhrn.celkem);
     const oc = r.sekce.filter(s => s.celkem > 0);
     const ne = r.sekce.filter(s => !(s.celkem > 0));

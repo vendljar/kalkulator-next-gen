@@ -20,6 +20,13 @@ function novaVariantaData() {
     techspec: JSON.parse(JSON.stringify(DEFAULT_TECHSPEC)),
     kryci: { hodnoty: {} },   // krycí list objednávky/SoD – ruční pole (prefill z kalkulace/techspec)
     kryciProj: { hodnoty: {} },   // krycí list zakázky PROJ – ruční pole (prefill z Kalkulace PROJ)
+    /* Dvě slevy, každá nad svou cenou (#134, 12. 8. 2026). `sleva` patří
+     * k výtahové šachtě, `slevaProj` k projekčním pracím. Mají stejný tvar
+     * i stejná pravidla (strop dle role, schvalování nad strop, pojistka
+     * minimální marže), ale nikdy se navzájem nepropisují — obě kalkulace
+     * spolu nemusí vůbec souviset a většinou nesouvisí. */
+    sleva: (typeof slevaDefault === 'function') ? slevaDefault() : null,
+    slevaProj: (typeof slevaDefault === 'function') ? slevaDefault() : null,
     // #38: obchodní zaokrouhlení se nové variantě dosazuje ROVNOU, aby šlo
     // poznat zakázku uloženou před #38 (té pole chybí a zůstane vypnuté).
     // Od 4. 8. 2026 má každá část nabídky vlastní nastavení: zaokr = výtahová
@@ -68,6 +75,12 @@ function novaZakazka() {
     popisZameru: '',            // úvodní odstavec cenové nabídky PROJ (OVP-CN)
     // Úvodní fotka cenové nabídky OCK (data URL, aby se přenesla se zakázkou)
     uvodniFoto: '', uvodniFotoNazev: '', uvodniFotoPopis: '',
+    /* Úvodní fotka cenové nabídky PROJ (12. 8. 2026) – VLASTNÍ pole, ne sdílené
+     * s OCK. Obě nabídky jsou samostatné dokumenty a projekce se často prodává
+     * bez šachty; jedno společné pole by znamenalo, že výměna fotky v jedné
+     * nabídce tiše přepíše titulní stranu druhé. Přenos mezi částmi je jen
+     * na tlačítko, stejně jako u hlaviček. */
+    uvodniFotoProj: '', uvodniFotoProjNazev: '', uvodniFotoProjPopis: '',
     datum: new Date().toISOString().slice(0, 10),
     // Hlavička nabídky PROJ je VĚDOMĚ oddělená od hlavičky OCK: projekční část
     // má vlastní číslo nabídky, jinou náplň i jiného objednatele. Nic se mezi
@@ -100,16 +113,26 @@ function novaZakazka() {
  * jako podpis) a k němu dva textové symboly, které si jde do šablony dopsat
  * kamkoli. Když fotka není nahraná, vrací se prázdno — a docxgen tvar ze
  * šablony odstraní. To je schválně: nabídka bez fotky je lepší než nabídka
- * s fotkou cizího objektu. */
-function uvodniFotoObrazky(zak) {
-  const f = (zak && zak.uvodniFoto) || '';
+ * s fotkou cizího objektu.
+ *
+ * `cast` = 'ock' (výchozí) nebo 'proj'. Každá nabídka má vlastní fotku, ale
+ * symbol v šabloně se jmenuje v obou stejně — šablona OCK i šablona PROJ tak
+ * zůstávají jednoduché a nemusí vědět, ze kterého pole se čerpá. */
+function uvodniFotoPole(cast) {
+  return cast === 'proj'
+    ? { foto: 'uvodniFotoProj', nazev: 'uvodniFotoProjNazev', popis: 'uvodniFotoProjPopis' }
+    : { foto: 'uvodniFoto', nazev: 'uvodniFotoNazev', popis: 'uvodniFotoPopis' };
+}
+function uvodniFotoObrazky(zak, cast) {
+  const p = uvodniFotoPole(cast);
+  const f = (zak && zak[p.foto]) || '';
   return f ? { UVODNI_FOTO: f } : {};
 }
-function uvodniFotoSymboly(zak) {
-  const z = zak || {};
+function uvodniFotoSymboly(zak, cast) {
+  const z = zak || {}, p = uvodniFotoPole(cast);
   return {
-    UVODNI_FOTO_NAZEV: String(z.uvodniFotoNazev || ''),
-    UVODNI_FOTO_POPIS: String(z.uvodniFotoPopis || ''),
+    UVODNI_FOTO_NAZEV: String(z[p.nazev] || ''),
+    UVODNI_FOTO_POPIS: String(z[p.popis] || ''),
   };
 }
 
@@ -262,6 +285,36 @@ function importZakazka(obj) {
        * nulu a cena zakázky by se po otevření tiše propadla. Guard kvůli
        * Node testům, které zakazka.js načítají bez engine.js. */
       if (typeof cenikMigraceLeseni === 'function') cenikMigraceLeseni(d.cenik);
+      /* Migrace 12. 8. 2026 (#134): projekce dostala vlastní slevu.
+       *
+       * Do té doby žila „globální sleva projekce" v zadání jako `slevaPct`
+       * (záporné číslo = sleva) a byla zamíchaná přímo do procenta každé
+       * sekce. Kdyby se jen přestala číst, spadla by cena projekce zpátky
+       * na plnou částku a rozpracované nabídky by po otevření podražily.
+       *
+       * Hodnota se proto převezme do nové slevy a označí jako SCHVÁLENÁ:
+       * staré pole žádné schvalování nemělo a viděl ho jen administrátor,
+       * takže to, co v něm stálo, už jednou někdo povolil. Kdo je podepsaný,
+       * je vidět v kartě slevy. Cena se tím nemění ani o korunu.
+       *
+       * Kladná hodnota (přirážka) se nepřevádí — sleva umí jen slevu; do
+       * ceny se propíše jako nula a v protokolu je vidět, že tam byla. */
+      if (typeof slevaDefault === 'function') {
+        if (!d.sleva) d.sleva = slevaDefault();
+        if (!d.slevaProj) {
+          d.slevaProj = slevaDefault();
+          const stara = (d.proj && d.proj.zadani) ? +d.proj.zadani.slevaPct || 0 : 0;
+          if (stara < 0) {
+            d.slevaProj.procenta = Math.min(100, -stara);
+            d.slevaProj.stav = 'schváleno';
+            d.slevaProj.schvalil = 'převzato z dřívější globální slevy PROJ';
+            d.slevaProj.poznamka = 'Sleva převedena 12. 8. 2026 z pole „Globální sleva PROJ".';
+          }
+        }
+      }
+      /* Staré pole se zahazuje, aby v datech nezůstal druhý zdroj slevy,
+       * který už nikdo nečte a který by při příštím čtení mátl. */
+      if (d.proj && d.proj.zadani) delete d.proj.zadani.slevaPct;
       if (!d.techspec) d.techspec = JSON.parse(JSON.stringify(DEFAULT_TECHSPEC));
       if (!d.kryci) d.kryci = { hodnoty: {} };
       if (!d.kryci.hodnoty) d.kryci.hodnoty = {};
@@ -304,6 +357,14 @@ function importZakazka(obj) {
     if (obj.uvodniFoto == null) obj.uvodniFoto = '';
     if (obj.uvodniFotoNazev == null) obj.uvodniFotoNazev = '';
     if (obj.uvodniFotoPopis == null) obj.uvodniFotoPopis = '';
+    /* migrace: vlastní úvodní fotka nabídky PROJ přibyla 12. 8. 2026. Zůstává
+     * PRÁZDNÁ – fotka z nabídky OCK se sem vědomě NEKOPÍRUJE. Zakázka může být
+     * jen projekční a dosazená fotka šachty by tiše změnila titulní stranu
+     * nabídky, kterou už zákazník viděl. Kdo ji chce mít v obou, přenese ji
+     * tlačítkem. */
+    if (obj.uvodniFotoProj == null) obj.uvodniFotoProj = '';
+    if (obj.uvodniFotoProjNazev == null) obj.uvodniFotoProjNazev = '';
+    if (obj.uvodniFotoProjPopis == null) obj.uvodniFotoProjPopis = '';
     // #37: interní zápisník a přílohy. Zakázka uložená dřív pole nemá a první
     // zápis by spadl na undefined.push. Guard kvůli Node testům, které
     // zakazka.js načítají bez poznamky.js.
@@ -343,12 +404,17 @@ function importZakazka(obj) {
  * UI je smí zobrazit jen administrátorovi (viz jeAdmin()). */
 const POROVNANI_METRIKY = [
   { klic: 'ockZaklad',   popis: 'Základní cena OCK bez DPH',   format: 'kc'  },
-  { klic: 'slevaPct',    popis: 'Schválená sleva',             format: 'pct', bezRozdilu: true },
-  { klic: 'slevaKc',     popis: 'Sleva v Kč',                  format: 'kc'  },
+  { klic: 'slevaPct',    popis: 'Schválená sleva OCK',         format: 'pct', bezRozdilu: true },
+  { klic: 'slevaKc',     popis: 'Sleva OCK v Kč',              format: 'kc'  },
   { klic: 'ockPoSleve',  popis: 'Cena OCK po slevě',           format: 'kc'  },
   { klic: 'ockNaklad',   popis: 'Náklad OCK',                  format: 'kc',  admin: true },
   { klic: 'marzeKc',     popis: 'Marže OCK po slevě',          format: 'kc',  admin: true },
   { klic: 'marzePct',    popis: 'Marže OCK po slevě v %',      format: 'pct', admin: true, bezRozdilu: true },
+  /* Projekce má vlastní slevu (#134, 12. 8. 2026) a v porovnání se vykazuje
+   * stejně jako sleva OCK — každá u své ceny, aby bylo vidět, která je která. */
+  { klic: 'projZaklad',    popis: 'Základní cena PROJ bez DPH', format: 'kc'  },
+  { klic: 'slevaProjPct',  popis: 'Schválená sleva PROJ',       format: 'pct', bezRozdilu: true },
+  { klic: 'slevaProjKc',   popis: 'Sleva PROJ v Kč',            format: 'kc'  },
   { klic: 'projCelkem',  popis: 'Kalkulace PROJ celkem',       format: 'kc'  },
   /* Řádek jen pro čtenáře: rozdíl už je v cenách výše započítaný, proto
    * „z toho". Když zaokrouhlení nikdo nepoužívá, porovnaniVariant() řádek
@@ -414,10 +480,27 @@ function porovnaniVariant(zak, vypocty, opts) {
     }
 
     if (c.proj && c.proj.souhrn) {
-      const projPred = c.proj.souhrn.celkem;
-      h.projCelkem = zaokrProj(projPred);
+      /* Sleva projekce se odečítá od ceny PROJEKCE (#134). Používá se tentýž
+       * `podil`, tedy tatáž pravidla schválení — jen nad druhým objektem
+       * a druhou cenou. */
+      h.projZaklad = c.proj.souhrn.celkem;
+      const pp = Math.max(0, Math.min(1, +podil(d.slevaProj || {}) || 0));
+      h.slevaProjPct = pp;
+      h.slevaProjKc = h.projZaklad * pp;
+      const projPred = h.projZaklad - h.slevaProjKc;
+      /* Cenu projekce skládá cenaNabidkyProj — tam se od 12. 8. 2026
+       * zaokrouhlují JEDNOTLIVÉ ČINNOSTI (#135), ne až součet. Kdyby si ji
+       * porovnání počítalo po svém (a do 12. 8. si počítalo), ukázalo by
+       * jiné číslo než nabídka a krycí list, a nikdo by nevěděl, které platí. */
+      const cnp = (typeof cenaNabidkyProj === 'function')
+        ? cenaNabidkyProj(c.proj, d.slevaProj, (typeof zaokrProjZ === 'function') ? zaokrProjZ(d) : d.zaokr)
+        : null;
+      h.projCelkem = cnp ? cnp.cena : zaokrProj(projPred);
       zaokrCelkem = (zaokrCelkem || 0) + (h.projCelkem - projPred);
     } else {
+      h.projZaklad = null;
+      h.slevaProjPct = null;
+      h.slevaProjKc = null;
       h.projCelkem = null;
     }
     h.zaokrKc = zaokrCelkem == null ? null : Math.round(zaokrCelkem * 100) / 100;
@@ -668,7 +751,7 @@ const StorageAdapter = {
 };
 
 if (typeof module !== 'undefined')
-  module.exports = { uvodniFotoObrazky, uvodniFotoSymboly, ZAKAZKA_SCHEMA, novaZakazka, novaVarianta, novaVariantaData,
+  module.exports = { uvodniFotoObrazky, uvodniFotoSymboly, uvodniFotoPole, ZAKAZKA_SCHEMA, novaZakazka, novaVarianta, novaVariantaData,
                      nastavRidici, ridiciVarianta, aktivniVarianta, importZakazka, StorageAdapter,
                      ZAK_HLAVICKA_POLE, zajistiProjHlavicku, projHlavicka,
                      projHlavickaEfektivni, projHlavickaZOck, projCisloNabidky,

@@ -6,7 +6,7 @@
  * změna přes set() se ukládá rovnou do varianty. */
 
 let ZAK = novaZakazka();
-let Z, C, OCK, PJ, PC, TS, KL, KLP, SL, ZO, ZOP;
+let Z, C, OCK, PJ, PC, TS, KL, KLP, SL, SLP, ZO, ZOP;
 
 function syncVarianta() {
   const v = aktivniVarianta(ZAK);
@@ -16,6 +16,10 @@ function syncVarianta() {
   if (!v.data.kryciProj) v.data.kryciProj = { hodnoty: {} };     // krycí list PROJ (KLP-1)
   if (!v.data.kryciProj.hodnoty) v.data.kryciProj.hodnoty = {};
   if (!v.data.sleva) v.data.sleva = slevaDefault();
+  /* #134: projekce má vlastní slevu. Variantě uložené dřív se dosadí
+   * prázdná – hodnotu ze zrušeného pole „Globální sleva PROJ" převede
+   * migrace v zakazka.js, aby se cena nezměnila. */
+  if (!v.data.slevaProj) v.data.slevaProj = slevaDefault();
   // #38: obchodní zaokrouhlení. Nová varianta si nastavení nese už z
   // novaVariantaData(); chybí-li pole úplně, jde o zakázku uloženou ještě
   // před #38 – té se cena otevřením v novější verzi měnit nesmí, proto
@@ -27,7 +31,7 @@ function syncVarianta() {
   zaokrZajisti(v.data);
   OCK = v.data.ock; Z = v.data.ock.zadani; C = v.data.cenik;
   PJ = v.data.proj.zadani; PC = v.data.proj.cenik; TS = v.data.techspec;
-  KL = v.data.kryci; KLP = v.data.kryciProj; SL = v.data.sleva;
+  KL = v.data.kryci; KLP = v.data.kryciProj; SL = v.data.sleva; SLP = v.data.slevaProj;
   ZO = v.data.zaokr; ZOP = v.data.zaokrProj;
   // trvalé (katalogové) položky ceníku → do zadání; idempotentní, páruje přes kid
   katalogAplikuj(KATALOG, Z);
@@ -443,8 +447,63 @@ function renderNabidkaOck() {
     + card('Cenová nabídka (CN)', nabidkaKarta(), false, 'ock-nabidka');
 }
 
-/* ---------- Sleva (ZAK-10): zadání, stropy dle role, schvalování ---------- */
-/* Přepočte a uloží stav slevy do SL; ruční rozhodnutí drží, dokud se nezmění %.
+/* ---------- Sleva (ZAK-10): zadání, stropy dle role, schvalování ----------
+ *
+ * DVĚ SLEVY, DVĚ CENY (#134, 12. 8. 2026).
+ *
+ * Do 12. 8. 2026 tu byla jedna sleva a její karta se vykreslovala dvakrát —
+ * pod výpočtem OCK a znovu pod výpočtem PROJ. V projekci tedy stálo „Cena
+ * před slevou" s částkou za výtahovou šachtu a pod ní marže a strop role
+ * spočítané z ceny, se kterou projekce nemá nic společného. Projekce k tomu
+ * měla ještě druhou, úplně jinou slevu (pole „Globální sleva PROJ") bez
+ * schvalování a bez stropu.
+ *
+ * Nově má každá kalkulace svou vlastní slevu nad svou vlastní cenou:
+ *   SL  … sleva na cenu výtahové šachty (OCK)
+ *   SLP … sleva na cenu projekčních prací (PROJ)
+ * Pravidla jsou pro obě stejná (strop dle role, schvalování nad strop,
+ * pojistka minimální marže), ale čísla se nikdy nemíchají. Obě kalkulace
+ * spolu nemusí souviset a většinou nesouvisí.
+ *
+ * Karta se proto skládá jednou funkcí nad popisem části — kdyby existovaly
+ * dvě kopie, rozejdou se. */
+
+/* Popis jedné části: kde má data, z čeho se počítá základ a náklad, jak se
+ * jmenují její obslužné funkce a kam se v aplikaci kotví. */
+function slevaCast(cast) {
+  const proj = cast === 'proj';
+  return {
+    cast: proj ? 'proj' : 'ock',
+    proj,
+    obj: proj ? (typeof SLP !== 'undefined' ? SLP : null) : (typeof SL !== 'undefined' ? SL : null),
+    nazev: proj ? 'Sleva na nabídku PROJ (ZAK-10)' : 'Sleva na nabídku OCK (ZAK-10)',
+    kotva: proj ? 'proj-sleva' : 'ock-sleva',
+    /* Dva tvary, aby věty dávaly česky smysl: „cena projekčních prací"
+     * (2. pád) a „platí jen pro projekční práce" (4. pád). */
+    coJe: proj ? 'projekčních prací' : 'výtahové šachty',
+    coJeAkuz: proj ? 'projekční práce' : 'výtahovou šachtu',
+    fn: proj ? 'slevaProjSet' : 'slevaSet',
+    zrus: proj ? 'slevaProjZrus()' : 'slevaZrus()',
+  };
+}
+
+/* Základ a náklad té části, ze které se sleva počítá. Vrací null, když se
+ * výpočet nepodařil — cena se nikdy neodhaduje. */
+function slevaZaklad(cast) {
+  if (cast === 'proj') {
+    let r = null; try { r = vypocetProj(PJ, PC); } catch (e) {}
+    if (!r || !r.souhrn) return null;
+    /* Náklad projekce zahrnuje dopravu — cena ji obsahuje, tak ji musí
+     * obsahovat i náklad, se kterým se poměřuje (audit 1. 8. 2026, N2). */
+    return { zaklad: r.souhrn.celkem, naklad: r.souhrn.naklad + (r.souhrn.doprava || 0) };
+  }
+  let r = null; try { r = vypocet(Z, C, JEKLY, OCK.fixes); } catch (e) {}
+  if (!r || !r.souhrn) return null;
+  return { zaklad: r.souhrn.zakladCena, naklad: r.souhrn.zakladNaklad };
+}
+
+/* Přepočte a uloží stav slevy dané části; ruční rozhodnutí drží, dokud se
+ * nezmění %.
  *
  * Samotný stavový automat („do stropu projde sám, nad strop čeká, pod marží
  * nelze") se 5. 8. 2026 přestěhoval do `schvalovani.js` – tady visel uvnitř
@@ -455,28 +514,44 @@ function renderNabidkaOck() {
  *
  * Uzamčená varianta se nepřepočítává: co odešlo zákazníkovi, je doklad. Stav
  * slevy se v ní jen zobrazí tak, jak byl v okamžiku tisku. */
-function slevaRefreshStav() {
-  let r = null; try { r = vypocet(Z, C, JEKLY, OCK.fixes); } catch (e) {}
-  if (!r) return null;
-  const v = slevaVyhodnot(r.souhrn.zakladCena, r.souhrn.zakladNaklad, SL, NAST.slevy);
+function slevaRefreshStavCast(cast) {
+  const c = slevaCast(cast);
+  const z = slevaZaklad(c.cast);
+  if (!z || !c.obj) return null;
+  const v = slevaVyhodnot(z.zaklad, z.naklad, c.obj, NAST.slevy);
   const zamceno = (typeof variantaUzamcena === 'function')
     && variantaUzamcena(aktivniVarianta(ZAK));
-  if (!zamceno) schvalovaniPrepocti(SL, v);
+  if (!zamceno) schvalovaniPrepocti(c.obj, v);
   return v;
 }
-function slevaSetProc(val) { SL.procenta = Math.max(0, +val || 0); render(); }
-function slevaSetRole(val) { SL.role = val; render(); }
-function slevaSetSchema(val) { SL.schema = val; render(); }
-/* render() i tady: karta slevy je v aplikaci dvakrát (OCK i PROJ) nad jedním
- * stavem a instance, ve které se poznámka NEnapsala, by jinak při nejbližším
- * překreslení vrátila starý text (audit 1. 8. 2026, N5). onchange pálí až
- * při opuštění pole, takže překreslení kurzor nekrade. */
-function slevaSetPozn(val) { SL.poznamka = val; render(); }
+/* Zpětně kompatibilní jméno pro slevu OCK – používá ho zbytek aplikace. */
+function slevaRefreshStav() { return slevaRefreshStavCast('ock'); }
+function slevaProjRefreshStav() { return slevaRefreshStavCast('proj'); }
+
+/* Settery. Obě části mají vlastní jména, protože ochrana zamčené varianty
+ * (zamek_ui.js) je vypisuje jmenovitě — a seznam, ve kterém by jedno jméno
+ * zastupovalo dvě různé slevy, se špatně kontroluje.
+ *
+ * render() i u poznámky: karta je v aplikaci na dvou místech a instance,
+ * ve které se poznámka NEnapsala, by jinak při nejbližším překreslení vrátila
+ * starý text (audit 1. 8. 2026, N5). onchange pálí až při opuštění pole,
+ * takže překreslení kurzor nekrade. */
+function slevaSet(pole, val) {
+  if (!SL) return;
+  if (pole === 'procenta') SL.procenta = Math.max(0, +val || 0); else SL[pole] = val;
+  render();
+}
+function slevaProjSet(pole, val) {
+  if (!SLP) return;
+  if (pole === 'procenta') SLP.procenta = Math.max(0, +val || 0); else SLP[pole] = val;
+  render();
+}
 /* `slevaSetSchvalitel` a `slevaSchval` tu skončily 5. 8. 2026: schvalování
  * má vlastní záložku (`ui/schvalovani_ui.js`). Pole `SL.schvalitel` ve
  * starých zakázkách zůstává – migrace rolí v `zakazka.js` ho dál převádí,
  * aby se archivní data nerozbila. */
 function slevaZrus() { Object.assign(SL, slevaDefault()); render(); }
+function slevaProjZrus() { Object.assign(SLP, slevaDefault()); render(); }
 
 /* Maximum globální slevy v % pro UI (výchozích 30 %; nastavuje se
  * v Nastavení → Slevy jako podíl, stejně jako minMarze). */
@@ -486,62 +561,24 @@ function slevaGlobalniMaxPct() {
   return Math.round(podil * 1000) / 10;
 }
 
-/* Obsluha pole „Globální sleva PROJ": kladné zadání → záporné uložení,
- * přistřižené na 0 až firemní maximum (audit 1. 8. 2026, N4). Přistřihává
- * se tady, ne ve výpočtu – vypocetProj musí umět i přirážku a starší data
- * mimo mez má nahlásit kontrola, ne tiše přepsat. */
-function pjSlevaGlobal(val) {
-  const omez = Math.max(0, Math.min(slevaGlobalniMaxPct(), +val || 0));
-  set('PJ.slevaPct', -omez);
-}
-
 /* Karta stojí pod výpočtem OCK i pod výpočtem PROJ (zadání 1. 8. 2026:
  * „sekce sleva na nabídku … tak jak to máme v kalkulaci OCK, tzn. pod
- * výpočetním oknem"). Je to jedna karta nad jedním stavem SL – vykreslená
- * podruhé s vlastní kotvou. V kalkulaci PROJ k ní přibude pole globální slevy
- * PROJ, které se sem přestěhovalo z hlavičky. */
+ * výpočetním oknem"). Od 12. 8. 2026 jsou to ale DVĚ karty nad DVĚMA
+ * slevami — každá počítá z ceny své vlastní kalkulace. */
 function slevaKarta(kontext) {
-  const proj = kontext === 'proj';
-  const v = slevaRefreshStav();
+  const c = slevaCast(kontext);
+  const SLC = c.obj;
+  const v = slevaRefreshStavCast(c.cast);
 
-  /* Globální sleva PROJ (PJ.slevaPct) se 1. 8. 2026 přestěhovala z hlavičky
-   * kalkulace sem, k ostatním slevám. Zadává se KLADNĚ jako poskytnutá sleva,
-   * v datech zůstává záporné číslo – stejné pole u sekce umí i přirážku
-   * (+30 % u zaměření), a obracet znaménko ve výpočtu by rozbilo sekce.
-   * Sekce s vlastním % globální slevu nepřebírají.
-   *   Sleva ZAK-10 nad tím se počítá z ceny šachty (OCK); že jsou to dvě
-   * různé věci, říká karta rovnou nahlas, ať nikdo nehledá, proč se procento
-   * shora neprojevilo v projekci. Pole je jako dřív jen pro admina.
-   *   Meze: 0 až firemní maximum (audit 1. 8. 2026, N4) – překlep 150 místo 15
-   * dělal zápornou cenu, na kterou hlídání marže nezareaguje (marže z ceny
-   * ≤ 0 neexistuje). Obsluha hodnotu navíc přistřihne, protože max na inputu
-   * je jen nápověda prohlížeče, ne zábrana. Hodnoty mimo mez došlé importem
-   * hlídá kontrola „slevaProjMax" v kontroly.js. */
-  const projBlok = (proj && typeof kalkSloupce === 'function' && kalkSloupce().admin)
-    ? `<div class="row" style="max-width:520px;margin-top:10px">
-         <label>Globální sleva PROJ <span class="note">(sekce s vlastním % ji nepřebírají)</span></label>
-         <span class="pct-wrap"><input type="number" step="1" min="0" max="${slevaGlobalniMaxPct()}" value="${-(PJ.slevaPct || 0)}"
-           onchange="pjSlevaGlobal(this.value)"> %</span></div>
-       <div class="note">Sleva na nabídku (ZAK-10) výše se počítá z ceny výtahové šachty (OCK);
-         projekční práce mají vlastní globální slevu v tomhle poli, nejvýš ${slevaGlobalniMaxPct()} %
-         (mez se nastavuje v Nastavení → Slevy). V nabídce i v krycím listu se obě vykazují zvlášť.</div>`
-    : '';
+  /* Bez výpočtu není co ukázat – cena se neodhaduje. Dřív se v projekci
+   * karta vykreslovala i tak, protože nesla globální slevu PROJ; ta je
+   * zrušená, takže tahle výjimka padla s ní. */
+  if (!v || !SLC) return '';
 
-  /* Bez výpočtu OCK se sleva ZAK-10 vyhodnotit nedá – počítá se z ceny šachty.
-   * Karta se ale kvůli tomu nesmí ztratit celá: v PROJ nese i globální slevu
-   * projekce, která s OCK nesouvisí (audit 1. 8. 2026, N6 – v v31.7.7 pole
-   * žilo v hlavičce a chyba OCK na něj nedosáhla; přesunem sem se na ni
-   * navázalo). V OCK zůstává dosavadní chování: bez výpočtu není co ukázat. */
-  if (!v) {
-    if (!proj) return '';
-    const inner = `<div class="note">Sleva na nabídku (ZAK-10) se počítá z ceny výtahové šachty
-        a výpočet OCK se teď nepodařil – zadání ZAK-10 je v záložce Kalkulace OCK.</div>${projBlok}`;
-    return card('Sleva na nabídku (ZAK-10)', inner, false, 'proj-sleva');
-  }
   const schemata = NAST.slevy.schemata || [];
   const schemaOpts = ['<option value="">— schéma slevy —</option>']
-    .concat(schemata.map(s => `<option ${s.nazev === SL.schema ? 'selected' : ''}>${esc(s.nazev)}</option>`)).join('');
-  const roleOpts = NAST.role.map(rr => `<option ${rr === SL.role ? 'selected' : ''}>${esc(rr)}</option>`).join('');
+    .concat(schemata.map(s => `<option ${s.nazev === SLC.schema ? 'selected' : ''}>${esc(s.nazev)}</option>`)).join('');
+  const roleOpts = NAST.role.map(rr => `<option ${rr === SLC.role ? 'selected' : ''}>${esc(rr)}</option>`).join('');
   const strop = v.strop;
 
   /* Stavů je pět, ale „zamítnuto" znamená dvě různé věci: buď slevu srazila
@@ -549,26 +586,26 @@ function slevaKarta(kontext) {
    * zamítl (a po snížení procenta půjde znovu). Rozliší je kategorie ze
    * `schvalovani.js` – v kartě se to musí poznat, protože rada uživateli je
    * v každém případě jiná. */
-  const kat = schvalovaniKategorie(SL);
+  const kat = schvalovaniKategorie(SLC);
   const stavMap = {
     bez: ['mut', 'bez slevy'],
     auto: ['', '✓ schváleno automaticky (v mezích role)'],
-    schvaleno: ['', '✓ schváleno – ' + esc(SL.schvalil || 'nadřízený')],
+    schvaleno: ['', '✓ schváleno – ' + esc(SLC.schvalil || 'nadřízený')],
     ceka: ['warn', '⏳ čeká na rozhodnutí – záložka Schvalování slev'],
-    zamitnuto: ['neg', '✕ zamítnuto – ' + esc(SL.zamitl || 'nadřízeným')],
+    zamitnuto: ['neg', '✕ zamítnuto – ' + esc(SLC.zamitl || 'nadřízeným')],
     podMarzi: ['neg', '✕ pod minimální marží – nelze schválit'],
   };
-  const [pillCls, pillTxt] = stavMap[kat] || ['mut', String(SL.stav || '')];
+  const [pillCls, pillTxt] = stavMap[kat] || ['mut', String(SLC.stav || '')];
   const pct = x => (Math.round(x * 10000) / 100).toLocaleString('cs-CZ') + ' %';
 
-  const dopad = +SL.procenta > 0 ? `<table class="sd-tbl" style="max-width:520px;margin-top:6px">
-      <tr><td>Cena před slevou (bez DPH)</td><td style="text-align:right">${fmt0(v.cenaPoSleve + v.slevaKc)}</td></tr>
+  const dopad = +SLC.procenta > 0 ? `<table class="sd-tbl" style="max-width:520px;margin-top:6px">
+      <tr><td>Cena ${esc(c.coJe)} před slevou (bez DPH)</td><td style="text-align:right">${fmt0(v.cenaPoSleve + v.slevaKc)}</td></tr>
       <tr><td>Sleva ${pct(v.procenta)}</td><td style="text-align:right;color:#b91c1c">− ${fmt0(v.slevaKc)}</td></tr>
       <tr><td><b>Cena po slevě (bez DPH)</b></td><td style="text-align:right;font-weight:700">${fmt0(v.cenaPoSleve)}</td></tr>
       <tr><td>Marže po slevě <span class="note">(min. ${pct(v.minMarze)})</span></td>
         <td style="text-align:right;color:${v.podMarzi ? '#b91c1c' : '#15803d'}">${pct(v.marzePoSleve)}</td></tr>
-      <tr><td>Strop role „${esc(SL.role)}"</td><td style="text-align:right">${pct(strop)}</td></tr>
-    </table>` : '<div class="note">Zadej slevu v % z ceny bez DPH. Do stropu role projde automaticky, nad strop půjde ke schválení.</div>';
+      <tr><td>Strop role „${esc(SLC.role)}"</td><td style="text-align:right">${pct(strop)}</td></tr>
+    </table>` : `<div class="note">Zadej slevu v % z ceny ${esc(c.coJe)} bez DPH. Do stropu role projde automaticky, nad strop půjde ke schválení.</div>`;
 
   /* Rozhodnutí o slevě se odsud 5. 8. 2026 přestěhovalo do vlastní záložky.
    * Do té doby tu stálo tlačítko „Schválit slevu" i rozbalovací seznam
@@ -577,32 +614,43 @@ function slevaKarta(kontext) {
    * proto zůstává jen stav a odkaz, kde se rozhoduje; rozhodovat smí ten,
    * komu administrátor přidělil právo „Schvalování slevy nad strop role". */
   const schvalBlok = kat === 'ceka'
-    ? `<div class="note" style="margin-top:6px">Sleva přesahuje strop role „${esc(SL.role)}"
+    ? `<div class="note" style="margin-top:6px">Sleva přesahuje strop role „${esc(SLC.role)}"
          (${pct(strop)}), takže čeká na rozhodnutí. Rozhoduje se v záložce
-         <b>Schvalování slev</b>${schvalovaniKdoMuze(+SL.procenta || 0, NAST.slevy, NAST.role).length
+         <b>Schvalování slev</b>${schvalovaniKdoMuze(+SLC.procenta || 0, NAST.slevy, NAST.role).length
            ? ' – o téhle slevě může rozhodnout: '
-             + esc(schvalovaniKdoMuze(+SL.procenta || 0, NAST.slevy, NAST.role).join(', ')) : ''}.
+             + esc(schvalovaniKdoMuze(+SLC.procenta || 0, NAST.slevy, NAST.role).join(', ')) : ''}.
          ${tabViditelny('schvalovani')
            ? '<button class="mini" style="margin-left:6px" onclick="prepniTab(\'schvalovani\')">Přejít na schvalování</button>' : ''}</div>`
-    : (kat === 'schvaleno' && SL.schvalilKdy
-        ? `<div class="note">Schválil: <b>${esc(SL.schvalil)}</b> · ${new Date(SL.schvalilKdy).toLocaleString('cs-CZ')}</div>`
-        : (kat === 'zamitnuto'
-            ? `<div class="note">Zamítl: <b>${esc(SL.zamitl || 'nadřízený')}</b>${SL.zamitlKdy
-                ? ' · ' + new Date(SL.zamitlKdy).toLocaleString('cs-CZ') : ''}${SL.zamitnutoDuvod
-                ? ' – ' + esc(SL.zamitnutoDuvod) : ''}. Sníženou slevu lze poslat ke schválení znovu.</div>` : ''));
+    : (kat === 'schvaleno' && SLC.schvalilKdy
+        ? `<div class="note">Schválil: <b>${esc(SLC.schvalil)}</b> · ${new Date(SLC.schvalilKdy).toLocaleString('cs-CZ')}</div>`
+        : (kat === 'schvaleno'
+            ? `<div class="note">Schválil: <b>${esc(SLC.schvalil)}</b></div>`
+            : (kat === 'zamitnuto'
+                ? `<div class="note">Zamítl: <b>${esc(SLC.zamitl || 'nadřízený')}</b>${SLC.zamitlKdy
+                    ? ' · ' + new Date(SLC.zamitlKdy).toLocaleString('cs-CZ') : ''}${SLC.zamitnutoDuvod
+                    ? ' – ' + esc(SLC.zamitnutoDuvod) : ''}. Sníženou slevu lze poslat ke schválení znovu.</div>` : '')));
+
+  /* Věta, proč tahle sleva nesahá na tu druhou část. Stojí tu proto, že
+   * dokud se obě karty tvářily stejně, hledal každý, kam se procento zadané
+   * v jedné z nich ztratilo. */
+  const oddeleni = `<div class="note" style="margin-top:8px">Tahle sleva platí jen pro
+      ${esc(c.coJeAkuz)} a počítá se z ${c.proj ? 'jejich' : 'její'} ceny. ${c.proj
+        ? 'Výtahová šachta (OCK) má vlastní slevu v záložce Kalkulace OCK'
+        : 'Projekční práce mají vlastní slevu v záložce Kalkulace PROJ'} – slevy se
+      nepropisují jedna do druhé a v nabídce i v krycím listu se vykazují zvlášť.</div>`;
 
   const inner = `<div class="zak-head" style="grid-template-columns:1fr 1fr 1fr">
-      <div class="row"><label>Schéma slevy</label><select onchange="slevaSetSchema(this.value)">${schemaOpts}</select></div>
-      <div class="row"><label>Role zadavatele</label><select onchange="slevaSetRole(this.value)">${roleOpts}</select></div>
-      <div class="row"><label>Sleva</label><span class="pct-wrap"><input type="number" step="0.5" min="0" value="${+SL.procenta || 0}" onchange="slevaSetProc(this.value)"> %</span></div>
+      <div class="row"><label>Schéma slevy</label><select onchange="${c.fn}('schema', this.value)">${schemaOpts}</select></div>
+      <div class="row"><label>Role zadavatele</label><select onchange="${c.fn}('role', this.value)">${roleOpts}</select></div>
+      <div class="row"><label>Sleva</label><span class="pct-wrap"><input type="number" step="0.5" min="0" value="${+SLC.procenta || 0}" onchange="${c.fn}('procenta', this.value)"> %</span></div>
     </div>
     <div class="row" style="max-width:100%"><label>Poznámka ke slevě</label>
-      <input type="text" value="${esc(SL.poznamka || '')}" onchange="slevaSetPozn(this.value)" placeholder="důvod, kampaň, partner…"></div>
+      <input type="text" value="${esc(SLC.poznamka || '')}" onchange="${c.fn}('poznamka', this.value)" placeholder="důvod, kampaň, partner…"></div>
     <div style="margin-top:6px">Stav: <span class="pill ${pillCls}">${pillTxt}</span>
-      ${slevaPlati(SL) ? '<span class="note" style="margin-left:8px">propíše se do ceny nabídky ↓</span>' : (+SL.procenta > 0 ? '<span class="note" style="margin-left:8px">neschválená sleva se do nabídky nepropíše</span>' : '')}</div>
-    ${dopad}${schvalBlok}${projBlok}
-    ${+SL.procenta > 0 ? '<div class="btns" style="margin-top:6px"><button class="mini" onclick="slevaZrus()">Zrušit slevu</button></div>' : ''}`;
-  return card('Sleva na nabídku (ZAK-10)', inner, false, proj ? 'proj-sleva' : 'ock-sleva');
+      ${slevaPlati(SLC) ? '<span class="note" style="margin-left:8px">propíše se do ceny nabídky ↓</span>' : (+SLC.procenta > 0 ? '<span class="note" style="margin-left:8px">neschválená sleva se do nabídky nepropíše</span>' : '')}</div>
+    ${dopad}${schvalBlok}${oddeleni}
+    ${+SLC.procenta > 0 ? `<div class="btns" style="margin-top:6px"><button class="mini" onclick="${c.zrus}">Zrušit slevu</button></div>` : ''}`;
+  return card(c.nazev, inner, false, c.kotva);
 }
 
 /* Výsledky výpočtů pro libovolnou variantu (pro přehledy) */

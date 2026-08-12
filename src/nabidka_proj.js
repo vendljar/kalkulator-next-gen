@@ -36,7 +36,9 @@ const NABIDKA_PROJ_SAZBY = {
   autorskyDozorMaxHodin: 30,
   dphPct: 21,                // použije se, nemá-li varianta vlastní ceník
   splatnostDni: 14,
-  platnostMesicu: 3,
+  /* 12. 8. 2026: platnost nabídky dva měsíce (rozhodnutí J. V.); do té doby tři.
+   * Číslo je tady i v krycím listu PROJ — bere si ho odsud, ať se nerozejdou. */
+  platnostMesicu: 2,
 };
 
 /* Definice dokumentu – pořadí i znění podle VZORu.
@@ -276,29 +278,60 @@ function nabidkaProjData(zak, varianta, lang) {
     return dd && m && y ? `${dd}.${m}.${y}` : String(iso);
   };
 
-  /* ceny sekcí podle klíče; sekce, která v kalkulaci není nebo vyšla nula,
-   * se v nabídce označí jako neuvedená – nikdy se nedosazuje smyšlená částka */
-  const ceny = {};
-  r.sekce.forEach(s => { ceny[s.key] = s.celkem; });
-  const cenaSekce = key => (ceny[key] == null ? null : ceny[key]);
+  /* ZAOKROUHLUJÍ SE POLOŽKY, NE CELEK (#135, 12. 8. 2026).
+   *
+   * Do 12. 8. 2026 se zaokrouhloval až součet a rozdíl se v rekapitulaci
+   * ukázal řádkem „Obchodní zaokrouhlení + 49,00 Kč". V nabídce to vypadalo
+   * jako přirážka za nic — zákazník čte položky, ne naše zaokrouhlovací
+   * pravidlo. Zadání J. V.: řádek pryč, zaokrouhlovat rovnou jednotlivé
+   * položky.
+   *
+   * Pořadí je proto: cena sekce → sleva → zaokrouhlení. Součet zaokrouhlených
+   * sekcí je zase násobek kroku, takže celek vychází rovnou a žádný dorovnávací
+   * řádek není potřeba. Sekce, která v kalkulaci není nebo vyšla nula, se
+   * v nabídce označí jako neuvedená – nikdy se nedosazuje smyšlená částka.
+   *
+   * Sleva se rozpouští do sekcí týmž procentem, ne po korunách: kdyby se
+   * odečetla až od součtu, nesouhlasil by součet vypsaných řádků s celkem. */
+  const zaokrP = (typeof zaokrProjZ === 'function') ? zaokrProjZ(d) : d.zaokr;
+  const zaokr = x => (typeof zaokrouhli === 'function') ? zaokrouhli(x, zaokrP) : x;
+  /* SLEVA PROJEKCE (#134). Počítá se z ceny projekce — nikdy z ceny výtahové
+   * šachty. Neschválená sleva se do dokumentu nepropíše (slevaPodil). */
+  const slevaPodilProj = (typeof slevaPodil === 'function') ? slevaPodil(d.slevaProj || {}) : 0;
+  const pSleva = Math.max(0, Math.min(1, slevaPodilProj || 0));
+
+  const cenyPred = {}, cenyPo = {};
+  r.sekce.forEach(s => {
+    cenyPred[s.key] = zaokr(s.celkem);                 // cena sekce před slevou
+    cenyPo[s.key] = zaokr(s.celkem * (1 - pSleva));    // a po ní
+  });
+  const cenaSekce = key => (cenyPo[key] == null ? null : cenyPo[key]);
 
   /* DPH: přednost má vlastní sazba projekční části (ceník PROJ). Starší zakázky
    * ji nemají – tam se použije dosud platná sazba z ceníku OCK, ať se čísla
    * po aktualizaci nezmění. */
   const dphPct = (pj.cenik && pj.cenik.dph != null) ? Math.round(pj.cenik.dph * 100)
     : (d.cenik && d.cenik.dph != null) ? Math.round(d.cenik.dph * 100) : NABIDKA_PROJ_SAZBY.dphPct;
-  /* Obchodní zaokrouhlení (#38) se uplatní až na celek. Zaokrouhluje se
-   * součet sekcí uvedených v TÉTO nabídce (ne r.souhrn.celkem), aby dokument
-   * dával součet sám v sobě; rozdíl se v rekapitulaci ukáže vlastním řádkem. */
-  const celkemPred = NABIDKA_PROJ_SEKCE.reduce((a, k) => a + (cenaSekce(k) || 0), 0);
-  /* Nastavení si PROJ drží vlastní (4. 8. 2026) – u starších variant se
-   * zaokrProjZ spadne na dosavadní společné pole, takže se cena nemění. */
-  const zaokrP = (typeof zaokrProjZ === 'function') ? zaokrProjZ(d) : d.zaokr;
-  const celkemBezDph = (typeof zaokrouhli === 'function') ? zaokrouhli(celkemPred, zaokrP) : celkemPred;
-  const zaokrKcNum = Math.round((celkemBezDph - celkemPred) * 100) / 100;
+
+  /* Součty se skládají ze sekcí uvedených v TÉTO nabídce (ne z r.souhrn),
+   * aby dokument dával součet sám v sobě. */
+  const soucetSekci = NABIDKA_PROJ_SEKCE.reduce((a, k) => a + (cenyPred[k] || 0), 0);
+  const celkemBezDph = NABIDKA_PROJ_SEKCE.reduce((a, k) => a + (cenaSekce(k) || 0), 0);
+  /* Sleva se vykazuje jako ROZDÍL zaokrouhlených částek, ne jako procento
+   * z nezaokrouhleného základu. Jen tak platí „cena před slevou − sleva =
+   * celkem" na korunu; jinak by v nabídce zbyl haléřový rozdíl, který nemá
+   * kam patřit. */
+  const slevaKcNum = Math.round((soucetSekci - celkemBezDph) * 100) / 100;
   /* #14 krok 1: DPH jedinou funkcí (záložka pro Node test bez zaokrouhleni.js) */
   const dphKc = (typeof cenaSDph === 'function')
     ? cenaSDph(celkemBezDph, dphPct / 100).dphKc : celkemBezDph * dphPct / 100;
+
+  /* Částka jedné činnosti pro šablonu. Prázdná (neoceněná) činnost se v
+   * dokumentu pojmenuje slovy, ne nulou — viz komentář u symbolů níž. */
+  const cenaSymbol = key => {
+    const v = cenaSekce(key);
+    return v ? kc(v) : P('není součástí této nabídky');
+  };
 
   /* --- rozbalení definice do bloků připravených k vykreslení --- */
   const proza = o => (o && typeof o === 'object' && o.cz !== undefined) ? o.cz : P(o);
@@ -361,12 +394,45 @@ function nabidkaProjData(zak, varianta, lang) {
     NAZEV_AKCE: h.nazevAkce || '…',
     CISLO_NABIDKY: String(h.cislo || '').replace(/\s+/g, ''),
     ADRESA: h.adresa || '…',
+    /* Úvodní odstavec nabídky – to, co obchodník napsal v kartě nabídky PROJ.
+     * Ve Wordu nahrazuje popis stavby ze VZORu. Nevyplněný zůstává PRÁZDNÝ:
+     * doplnit sem hlášku „nevyplněno" by znamenalo poslat ji zákazníkovi.
+     * Online náhled má vlastní upozornění, tam ho vidí jen obchodník. */
+    POPIS_ZAMERU: String((zak && zak.popisZameru) || '').trim(),
+    /* Ceny jednotlivých činností do šablony (#136, 12. 8. 2026). Wordová
+     * nabídka PROJ je jinak sázená než ta online: text je natvrdo v šabloně
+     * a doplňují se jen částky. Klíče odpovídají cenovým blokům v pořadí,
+     * v jakém stojí ve vzoru — pojmenování drží skript, který ze vzoru
+     * vyrobil šablonu (sablona_proj/vyrob_sablonu_proj.py).
+     *
+     * Neoceněná činnost NEDOSTANE nulu, ale větu „není součástí této
+     * nabídky": nula v nabídce znamená „uděláme zdarma", což nikdo nemyslel. */
+    PROJ_CENA_ZAMERENI: cenaSymbol('zamereni'),
+    PROJ_CENA_SP1: cenaSymbol('zamereni'),
+    PROJ_CENA_SP2: cenaSymbol('studie'),
+    PROJ_CENA_SP3: cenaSymbol('projednani'),
+    PROJ_CENA_DPZ: cenaSymbol('dpz'),
+    PROJ_CENA_IC: cenaSymbol('ic'),
+    PROJ_CENA_DPS: cenaSymbol('dps'),
+    PROJ_CENA_EZC: cenaSymbol('ezc'),
+    PROJ_CENA_KOLAUDACE: cenaSymbol('kolaudace'),
+    PROJ_CENA_GEODET: cenaSymbol('geodet'),
+    /* Paušály z ceníku nabídky — ve vzoru byly napsané natvrdo v textu. */
+    PROJ_CENA_VARIANTA: kc(NABIDKA_PROJ_SAZBY.variantaSpKc),
+    PROJ_CENA_AD: kc(NABIDKA_PROJ_SAZBY.autorskyDozorKcMesic),
     PROJ_CELKEM_BEZ_DPH: kc(celkemBezDph),
+    /* Rozpad slevy projekce. Prázdné, dokud žádná schválená sleva není —
+     * nula v dokumentu vypadá jako „slevu jsme dali a byla nulová". */
+    PROJ_CENA_PRED_SLEVOU: slevaKcNum ? kc(soucetSekci) : '',
+    PROJ_SLEVA_PROC: slevaKcNum ? (Math.round(slevaPodilProj * 10000) / 100).toLocaleString('cs-CZ') : '',
+    PROJ_SLEVA_KC: slevaKcNum ? kc(slevaKcNum) : '',
     PROJ_DPH_SAZBA: String(dphPct),
     PROJ_DPH_KC: kc(dphKc),
     PROJ_CELKEM_S_DPH: kc(celkemBezDph + dphKc),
-    /* Prázdné, dokud zaokrouhlení nic nezměnilo (viz nabidka.js). */
-    PROJ_ZAOKROUHLENI_KC: zaokrKcNum ? ((zaokrKcNum < 0 ? '− ' : '+ ') + kc(Math.abs(zaokrKcNum))) : '',
+    /* Symbol zůstává kvůli starším šablonám, ale je VŽDY prázdný (#135):
+     * zaokrouhlují se položky, takže žádný dorovnávací řádek nevzniká.
+     * Kdyby se klíč zrušil, zůstal by v takové šabloně viset text {{…}}. */
+    PROJ_ZAOKROUHLENI_KC: '',
   };
   if (typeof firmaPlaceholders === 'function')
     Object.assign(placeholders, firmaPlaceholders(
@@ -385,20 +451,23 @@ function nabidkaProjData(zak, varianta, lang) {
   /* Název a popisek úvodní fotky jako textové symboly — obrázek jde zvlášť
    * (viz `obrazky` níž), tohle je popisek pod něj. */
   if (typeof uvodniFotoSymboly === 'function')
-    Object.assign(placeholders, uvodniFotoSymboly(zak));
+    Object.assign(placeholders, uvodniFotoSymboly(zak, 'proj'));
 
   const nazevSouboru = ('NABÍDKA_PROJ_' + (placeholders.CISLO_NABIDKY || 'OVP-CN')
     + (varianta && varianta.zakaznik ? '_' + varianta.zakaznik : '')
     + (L !== 'cz' ? '_' + L.toUpperCase() : '')).replace(/[\\/:*?"<>|]+/g, '-');
 
   return { placeholders, bloky, rekapitulace, jazyk: L, nazevSouboru,
-    /* Úvodní fotka je vlastnost zakázky, ne kalkulace — projekční nabídka
-     * ji dostane stejně jako nabídka OCK. Když ji šablona PROJ nemá kam dát,
-     * nic se nestane: obrázek se vymění jen tam, kde je pro něj tvar. */
+    /* Úvodní fotka nabídky PROJ. Je to VLASTNÍ fotka projekční nabídky
+     * (zak.uvodniFotoProj), ne ta z nabídky OCK: obě nabídky odcházejí
+     * samostatně a projekce se často prodává bez šachty. Když ji šablona
+     * PROJ nemá kam dát, nic se nestane — obrázek se vymění jen tam, kde
+     * je pro něj tvar. */
     obrazky: Object.assign({},
       typeof zpracovatelObrazky === 'function' ? zpracovatelObrazky() : {},
-      typeof uvodniFotoObrazky === 'function' ? uvodniFotoObrazky(zak) : {}),
-    souhrn: { bezDph: celkemBezDph, bezDphPred: celkemPred, zaokrKc: zaokrKcNum,
+      typeof uvodniFotoObrazky === 'function' ? uvodniFotoObrazky(zak, 'proj') : {}),
+    souhrn: { bezDph: celkemBezDph, bezDphPred: soucetSekci, zaokrKc: 0,
+              soucetSekci, slevaPct: slevaPodilProj, slevaKc: slevaKcNum,
               dphPct: dphPct, dphKc: dphKc, sDph: celkemBezDph + dphKc } };
 }
 

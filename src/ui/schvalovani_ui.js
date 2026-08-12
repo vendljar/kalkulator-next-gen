@@ -48,7 +48,15 @@ function schvVypocty() {
   ((ZAK && ZAK.varianty) || []).forEach(v => {
     let r = null;
     try { r = vypocet(v.data.ock.zadani, v.data.cenik, JEKLY, v.data.ock.fixes); } catch (e) {}
-    if (r && r.souhrn) out[v.id] = { zakladCena: r.souhrn.zakladCena, zakladNaklad: r.souhrn.zakladNaklad };
+    /* Dvě části, dva základy (#134). Sleva projekce se počítá z ceny projekce
+     * včetně dopravy — cena ji obsahuje, tak ji musí obsahovat i náklad. */
+    let rp = null;
+    try { rp = vypocetProj(v.data.proj.zadani, v.data.proj.cenik); } catch (e) {}
+    out[v.id] = {
+      ock: (r && r.souhrn) ? { zakladCena: r.souhrn.zakladCena, zakladNaklad: r.souhrn.zakladNaklad } : null,
+      proj: (rp && rp.souhrn) ? { zakladCena: rp.souhrn.celkem,
+        zakladNaklad: rp.souhrn.naklad + (rp.souhrn.doprava || 0) } : null,
+    };
   });
   return out;
 }
@@ -59,20 +67,27 @@ function schvVypocty() {
  * doklad a nesmí se v ní nic přepisovat ani dopočítávat. */
 function schvPrepoctiVse(vypocty) {
   ((ZAK && ZAK.varianty) || []).forEach(v => {
-    const sl = v.data && v.data.sleva;
-    if (!sl) return;
+    if (!v.data) return;
     if (typeof variantaUzamcena === 'function' && variantaUzamcena(v)) return;
-    const z = vypocty[v.id];
-    schvalovaniPrepocti(sl, z ? slevaVyhodnot(z.zakladCena, z.zakladNaklad, sl, NAST.slevy) : null);
+    const z = schvalovaniZaklady(vypocty[v.id]);
+    const prepocti = (sl, zak) => {
+      if (!sl) return;
+      schvalovaniPrepocti(sl, zak ? slevaVyhodnot(zak.zakladCena, zak.zakladNaklad, sl, NAST.slevy) : null);
+    };
+    prepocti(v.data.sleva, z.ock);
+    prepocti(v.data.slevaProj, z.proj);      // #134: každá sleva nad svou cenou
   });
 }
 
 function schvSmiRozhodovat() { return smiZobrazit('sleva.schvalovani'); }
 
 /* Rozhodnutí o jedné žádosti. `co` = 'schvalit' | 'zamitnout' | 'vratit'. */
-function schvRozhodni(id, co) {
+function schvRozhodni(id, co, cast) {
   const v = ((ZAK && ZAK.varianty) || []).find(x => x.id === id);
-  if (!v || !v.data || !v.data.sleva) return;
+  /* Část se předává výslovně (#134). Kdyby se odvozovala, rozhodnutí o slevě
+   * na projekt by mohlo skončit u slevy na šachtu — a naopak. */
+  const sl = v && v.data && (cast === 'proj' ? v.data.slevaProj : v.data.sleva);
+  if (!v || !sl) return;
   if (!schvSmiRozhodovat()) {
     alert('O slevách rozhoduje vedoucí nebo administrátor.\n\n'
       + 'Právo „Schvalování slevy nad strop role" přiděluje administrátor '
@@ -85,7 +100,7 @@ function schvRozhodni(id, co) {
       + 'Pro jinou slevu založte novou variantu.');
     return;
   }
-  const pct = +v.data.sleva.procenta || 0;
+  const pct = +sl.procenta || 0;
   const role = (typeof zobrazeniRole === 'function') ? zobrazeniRole() : 'Obchodník';
   if (co !== 'vratit' && !schvalovaniSmiRozhodnout(role, pct, NAST.slevy)) {
     const kdo = schvalovaniKdoMuze(pct, NAST.slevy, NAST.role);
@@ -95,9 +110,10 @@ function schvRozhodni(id, co) {
                       + 'zkontrolujte Nastavení → Slevy.'));
     return;
   }
-  if (co === 'schvalit') schvalovaniSchval(v.data.sleva, schvKdoJsem());
-  else if (co === 'zamitnout') schvalovaniZamitni(v.data.sleva, schvKdoJsem(), null, SCHV_DUVODY[id] || '');
-  else schvalovaniVrat(v.data.sleva);
+  const klic = id + '|' + (cast === 'proj' ? 'proj' : 'ock');
+  if (co === 'schvalit') schvalovaniSchval(sl, schvKdoJsem());
+  else if (co === 'zamitnout') schvalovaniZamitni(sl, schvKdoJsem(), null, SCHV_DUVODY[klic] || SCHV_DUVODY[id] || '');
+  else schvalovaniVrat(sl);
   render();
 }
 
@@ -134,11 +150,11 @@ function schvRadek(z, muzeVidetMarzi) {
   const tlacitka = [];
   if (smiTeď) {
     if (z.kategorie === 'ceka' || z.kategorie === 'zamitnuto')
-      tlacitka.push(`<button class="primary mini" onclick="schvRozhodni('${escJs(z.id)}','schvalit')">Schválit</button>`);
+      tlacitka.push(`<button class="primary mini" onclick="schvRozhodni('${escJs(z.id)}','schvalit','${escJs(z.cast || 'ock')}')">Schválit</button>`);
     if (z.kategorie === 'ceka' || z.kategorie === 'schvaleno' || z.kategorie === 'auto')
-      tlacitka.push(`<button class="mini" onclick="schvRozhodni('${escJs(z.id)}','zamitnout')">Zamítnout</button>`);
+      tlacitka.push(`<button class="mini" onclick="schvRozhodni('${escJs(z.id)}','zamitnout','${escJs(z.cast || 'ock')}')">Zamítnout</button>`);
     if (z.kategorie === 'schvaleno' || z.kategorie === 'zamitnuto')
-      tlacitka.push(`<button class="mini" onclick="schvRozhodni('${escJs(z.id)}','vratit')">Vrátit rozhodnutí</button>`);
+      tlacitka.push(`<button class="mini" onclick="schvRozhodni('${escJs(z.id)}','vratit','${escJs(z.cast || 'ock')}')">Vrátit rozhodnutí</button>`);
   }
   tlacitka.push(`<button class="mini" onclick="schvOtevriVariantu('${escJs(z.id)}')">Otevřít v kalkulaci</button>`);
 
@@ -171,17 +187,19 @@ function schvRadek(z, muzeVidetMarzi) {
     podrobnosti.push('Sleva by srazila marži pod firemní minimum'
       + (z.minMarze != null ? ' (' + schvPct(z.minMarze) + ')' : '') + '. Schválit ji nelze nikým.');
   if (!z.spocteno)
-    podrobnosti.push('Výpočet OCK této varianty se nepodařil – dopad slevy v Kč proto nelze ukázat.');
+    podrobnosti.push('Výpočet ' + (z.cast === 'proj' ? 'projekce' : 'OCK')
+      + ' této varianty se nepodařil – dopad slevy v Kč proto nelze ukázat.');
   if (proc) podrobnosti.push('<span class="note">' + proc + '</span>');
 
   const duvod = smiTeď && (z.kategorie === 'ceka' || z.kategorie === 'schvaleno' || z.kategorie === 'auto')
     ? `<div class="row" style="max-width:520px;margin-top:4px"><label>Důvod zamítnutí <span class="note">(nepovinný)</span></label>
-         <input type="text" value="${esc(SCHV_DUVODY[z.id] || '')}" placeholder="proč slevu nepustit…"
-           onchange="schvDuvod('${escJs(z.id)}', this.value)"></div>`
+         <input type="text" value="${esc(SCHV_DUVODY[z.klic || z.id] || '')}" placeholder="proč slevu nepustit…"
+           onchange="schvDuvod('${escJs(z.klic || z.id)}', this.value)"></div>`
     : '';
 
   return `<tr>
-      <td>${esc(z.nazev)}${z.ridici ? ' <span class="pill">řídící</span>' : ''}${z.zamceno ? ' <span class="pill mut">uzamčená</span>' : ''}</td>
+      <td>${esc(z.nazev)}${z.ridici ? ' <span class="pill">řídící</span>' : ''}${z.zamceno ? ' <span class="pill mut">uzamčená</span>' : ''}
+        <div class="note">${esc(z.castNazev || 'Výtahová šachta (OCK)')}</div></td>
       <td style="text-align:right">${esc(String(z.procenta))} %</td>
       <td style="text-align:right">${z.spocteno ? fmt0(z.slevaKc) : '—'}</td>
       <td style="text-align:right">${z.spocteno ? fmt0(z.cenaPoSleve) : '—'}</td>

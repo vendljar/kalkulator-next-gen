@@ -38,14 +38,14 @@ function sluzbaVarianta(zak, v, nast, jekly) {
    * u starších dat se PROJ spadne na dosavadní společné pole. */
   const zaokrP = (typeof zaokrProjZ === 'function') ? zaokrProjZ(d) : d.zaokr;
   try { cenaProj = (proj && typeof cenaNabidkyProj === 'function')
-    ? cenaNabidkyProj(proj, zaokrP) : null; } catch (e) {}
+    ? cenaNabidkyProj(proj, d.slevaProj, zaokrP) : null; } catch (e) {}
   try { marze = (typeof marzePrehled === 'function')
-    ? marzePrehled(jenProj ? null : ock, proj, jenProj ? null : d.sleva, nast, d.zaokr, zaokrP) : null; } catch (e) {}
+    ? marzePrehled(jenProj ? null : ock, proj, jenProj ? null : d.sleva, nast, d.zaokr, zaokrP, d.slevaProj) : null; } catch (e) {}
   try { kontroly = (typeof kontrolyProved === 'function')
     ? kontrolyProved({ zadani: d.ock ? d.ock.zadani : null, vysledek: ock,
         projZadani: d.proj ? d.proj.zadani : null, projVysledek: proj,
         cenik: d.cenik, cenikProj: d.proj ? d.proj.cenik : null,
-        sleva: d.sleva, nast, zak, zaokr: d.zaokr, zaokrProj: zaokrP, jenProj }) : null; } catch (e) {}
+        sleva: d.sleva, slevaProj: d.slevaProj, nast, zak, zaokr: d.zaokr, zaokrProj: zaokrP, jenProj }) : null; } catch (e) {}
 
   return { id: v.id, nazev: v.nazev, ridici: !!v.ridici,
            ock, proj, cenaOck, cenaProj, marze, kontroly };

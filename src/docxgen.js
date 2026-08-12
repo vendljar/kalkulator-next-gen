@@ -339,6 +339,41 @@ function upravRozmeryTvaru(tag, rozmery) {
   return tag.slice(0, m.index) + 'style="' + novy + '"' + tag.slice(m.index + m[0].length);
 }
 
+/* Totéž pro novější způsob vložení obrázku (DrawingML). Rámeček tu není
+ * ve stylu, ale v atributech `cx`/`cy` (EMU – 914 400 na palec): `<wp:extent>`
+ * je velikost, kterou Word vykreslí, `<a:ext>` uvnitř tvaru totéž. Word
+ * obrázek do rámečku SÁM nevepíše — nakreslí ho přesně na zadané rozměry —
+ * takže fotka na výšku vložená do rámečku na šířku by se roztáhla. Proto se
+ * rozměry dopočítávají stejně jako u VML: obrázek se do původního rámečku
+ * vepíše se zachovaným poměrem stran.
+ *
+ * `poz` ukazuje na alternativní text uvnitř `<wp:docPr>`, hledá se tedy
+ * odtud nahoru začátek `<wp:inline>` / `<wp:anchor>` a dolů jeho konec —
+ * mimo tenhle rozsah se nesahá, aby se nepřepsal jiný obrázek na stránce. */
+function upravRozmeryDrawing(xml, poz, rozmery) {
+  if (!rozmery || !(rozmery.sirka > 0 && rozmery.vyska > 0)) return xml;
+  const zac = Math.max(xml.lastIndexOf('<wp:inline', poz), xml.lastIndexOf('<wp:anchor', poz));
+  if (zac < 0) return xml;
+  const konI = xml.indexOf('</wp:inline>', poz), konA = xml.indexOf('</wp:anchor>', poz);
+  const kon = Math.min(konI < 0 ? Infinity : konI, konA < 0 ? Infinity : konA);
+  if (!isFinite(kon)) return xml;
+
+  const usek = xml.slice(zac, kon);
+  const ram = /<wp:extent\b[^>]*\bcx="(\d+)"[^>]*\bcy="(\d+)"/.exec(usek);
+  if (!ram) return xml;
+  const ramS = Number(ram[1]), ramV = Number(ram[2]);
+  if (!(ramS > 0 && ramV > 0)) return xml;
+
+  const pomer = rozmery.sirka / rozmery.vyska;
+  let s = ramS, v = Math.round(ramS / pomer);
+  if (v > ramV) { v = ramV; s = Math.round(ramV * pomer); }
+  const nahrad = (t, tag) => t.replace(new RegExp('<' + tag + '\\b[^>]*>', 'g'), m2 =>
+    m2.replace(/\bcx="\d+"/, 'cx="' + s + '"').replace(/\bcy="\d+"/, 'cy="' + v + '"'));
+  /* `a:ext` je uvnitř tvaru (pic:spPr → a:xfrm) a musí jít s rámečkem –
+   * jinak Word vykreslí obrázek v jedné velikosti a ořízne ho podle druhé. */
+  return xml.slice(0, zac) + nahrad(nahrad(usek, 'wp:extent'), 'a:ext') + xml.slice(kon);
+}
+
 /* Vymění obrázky označené alternativním textem {{KLÍČ}} za obrázky z mapy
  * `obrazky` ({ KLÍČ: 'data:image/png;base64,…' }). Mění položky archivu na
  * místě a vrací počet zásahů (aby volající poznal, že se šablona změnila,
@@ -352,14 +387,25 @@ function docxVlozObrazky(polozky, obrazky) {
     const m = /^word\/((document|header\d*|footer\d*)\.xml)$/.exec(p.nazev);
     if (!m) continue;
     let xml = dekoder.decode(p.data);
-    if (xml.indexOf('o:title="{{') < 0) continue;
+    /* DVA ZPŮSOBY, JAK JE OBRÁZEK V DOKUMENTU (12. 8. 2026).
+     *
+     * Starší Word ukládá plovoucí obrázky jako VML (`<v:shape>` s
+     * `<v:imagedata o:title="…">`), novější jako DrawingML (`<w:drawing>`
+     * s `<wp:docPr descr="…">` a `<a:blip r:embed="…">`). Alternativní text,
+     * kterým se v šabloně označuje místo pro fotku, sedí pokaždé v jiném
+     * atributu — a šablona nabídky PROJ je celá v tom novějším způsobu.
+     *
+     * Hledají se proto obě značky najednou; zbytek postupu (dohledat cíl
+     * v .rels, přepsat bajty média, dorovnat rozměry) je společný. */
+    if (xml.indexOf('o:title="{{') < 0 && !/(?:descr|title)="\{\{/.test(xml)) continue;
     const relsNazev = 'word/_rels/' + m[1] + '.rels';
 
     // od konce, aby se pozice dřívějších výskytů nerozházely mazáním
     const pozice = [];
-    const re = /o:title="\{\{([A-Z0-9_]+)\}\}"/g;
+    const re = /(?:o:title|descr|title)="\{\{([A-Z0-9_]+)\}\}"/g;
     let x;
-    while ((x = re.exec(xml))) pozice.push({ poz: x.index, klic: x[1], cely: x[0] });
+    while ((x = re.exec(xml))) pozice.push({ poz: x.index, klic: x[1], cely: x[0],
+                                             vml: x[0].indexOf('o:title=') === 0 });
 
     for (let i = pozice.length - 1; i >= 0; i--) {
       const { poz, klic, cely } = pozice[i];
@@ -367,7 +413,12 @@ function docxVlozObrazky(polozky, obrazky) {
       if (!obr) { xml = odstranRunSTvarem(xml, poz); zasahu++; continue; }
 
       const tag = obalTagu(xml, poz);
-      const mId = tag && /r:id="([^"]+)"/.exec(tag.text);
+      /* VML nese odkaz na médium přímo v tomtéž tagu (`r:id`), DrawingML ho má
+       * až v `<a:blip r:embed="…">` o kus dál — proto se u něj hledá dopředu.
+       * Rozsah je omezený, aby se nechytil obrázek z úplně jiného odstavce. */
+      const mId = pozice[i].vml
+        ? (tag && /r:id="([^"]+)"/.exec(tag.text))
+        : /<a:blip[^>]*r:embed="([^"]+)"/.exec(xml.slice(poz, poz + 4000));
       const rels = najdi(relsNazev);
       let relsXml = rels ? dekoder.decode(rels.data) : '';
       const mRel = mId && new RegExp('<Relationship[^>]*Id="' + mId[1] + '"[^>]*>').exec(relsXml);
@@ -402,12 +453,17 @@ function docxVlozObrazky(polozky, obrazky) {
       /* Úklid značky (aby v odeslaném souboru nezůstal {{…}}) děláme dřív než
        * velikost: tvar začíná před značkou, takže se jeho pozice tímhle
        * zásahem neposune a nemusíme nic přepočítávat. */
-      xml = xml.slice(0, poz) + 'o:title=""' + xml.slice(poz + cely.length);
-      const shp = xml.lastIndexOf('<v:shape', poz);
-      if (shp >= 0) {
-        const konShp = xml.indexOf('>', shp) + 1;
-        const upraveny = upravRozmeryTvaru(xml.slice(shp, konShp), rozmeryObrazku(obr.data));
-        xml = xml.slice(0, shp) + upraveny + xml.slice(konShp);
+      const prazdna = pozice[i].vml ? 'o:title=""' : cely.replace(/"\{\{[A-Z0-9_]+\}\}"/, '""');
+      xml = xml.slice(0, poz) + prazdna + xml.slice(poz + cely.length);
+      if (pozice[i].vml) {
+        const shp = xml.lastIndexOf('<v:shape', poz);
+        if (shp >= 0) {
+          const konShp = xml.indexOf('>', shp) + 1;
+          const upraveny = upravRozmeryTvaru(xml.slice(shp, konShp), rozmeryObrazku(obr.data));
+          xml = xml.slice(0, shp) + upraveny + xml.slice(konShp);
+        }
+      } else {
+        xml = upravRozmeryDrawing(xml, poz, rozmeryObrazku(obr.data));
       }
       zasahu++;
     }

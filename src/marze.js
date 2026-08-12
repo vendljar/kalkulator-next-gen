@@ -101,13 +101,16 @@ function marzeStavOck(vysl, sleva, nast, zaokr) {
  * dělala z dopravy čistý zisk – hlídání pak mlčelo i na nabídce, kde cena
  * dopravu neuhradí. KPI hlavičky PROJ počítá náklad + doprava odjakživa;
  * teď obě místa tvrdí totéž číslo (hlídá test_marze.js, sada 6). */
-function marzeStavProj(vysl, nast, zaokr) {
+/* Od 12. 8. 2026 (#134) má projekce vlastní slevu, takže i tady se marže
+ * poměřuje s cenou PO SLEVĚ — stejně jako u OCK. Bez toho by hlídání marže
+ * mlčelo právě u nabídek, kde se slevovalo nejvíc. */
+function marzeStavProj(vysl, sleva, nast, zaokr) {
   if (!vysl || !vysl.souhrn) return null;
   const min = marzeMin(nast);
   const sekce = (vysl.sekce || [])
     .filter(s => (s.celkem > 0 || s.naklad > 0 || s.dopravaKc > 0))
     .map(s => marzeStav('PROJ', s.nazev, s.celkem, s.naklad + (s.dopravaKc || 0), min));
-  const cn = (typeof cenaNabidkyProj === 'function') ? cenaNabidkyProj(vysl, zaokr) : null;
+  const cn = (typeof cenaNabidkyProj === 'function') ? cenaNabidkyProj(vysl, sleva, zaokr) : null;
   const celek = marzeStav('PROJ', 'Kalkulace PROJ', cn ? cn.cena : vysl.souhrn.celkem,
                           vysl.souhrn.naklad + (vysl.souhrn.doprava || 0), min);
   const pod = sekce.filter(s => s.podMin);
@@ -120,10 +123,13 @@ function marzeStavProj(vysl, nast, zaokr) {
 /* zaokrProj je nepovinný: od 4. 8. 2026 má každá část nabídky vlastní
  * obchodní zaokrouhlení. Když se nepředá (starší volání, starší data),
  * platí pro obě části totéž nastavení jako dřív. */
-function marzePrehled(ock, proj, sleva, nast, zaokr, zaokrProj) {
+function marzePrehled(ock, proj, sleva, nast, zaokr, zaokrProj, slevaProj) {
   const min = marzeMin(nast);
   const o = marzeStavOck(ock, sleva, nast, zaokr);
-  const p = marzeStavProj(proj, nast, zaokrProj === undefined ? zaokr : zaokrProj);
+  /* `slevaProj` je dobrovolný sedmý parametr, ne sedmý sloupec téhož: sleva
+   * OCK se sem podat nesmí. Kdo ho nepředá, počítá marži projekce z ceny bez
+   * slevy — to je horší odhad, ale nikdy ne cizí číslo. */
+  const p = marzeStavProj(proj, slevaProj, nast, zaokrProj === undefined ? zaokr : zaokrProj);
   const pod = [];
   if (o && o.podMin) pod.push(o);
   if (p) p.pod.forEach(s => pod.push(s));

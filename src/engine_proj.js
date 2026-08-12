@@ -36,7 +36,11 @@ const DEFAULT_CENIK_PROJ = {  // HODNOTY VYNULOVÁNY pro GitHub (pripravit_githu
 
 // Definice sekcí a položek (hodnoty hodin/fixů = výchozí z předlohy, vše editovatelné)
 const DEFAULT_ZADANI_PROJ = {
-  slevaPct: 0,                       // globální sleva(−)/přirážka(+) v % (L2)
+  /* `slevaPct` tu do 12. 8. 2026 bývalo — globální sleva projekce zamíchaná
+   * přímo do procenta každé sekce. Je pryč (#134): sleva projekce má vlastní
+   * kartu se schvalováním jako sleva OCK a odečítá se až od hotové ceny.
+   * Migrace v zakazka.js hodnotu ze starých zakázek převezme, aby se cena
+   * nezměnila ani o korunu. */
   sekce: [
     { key: 'zamereni', nazev: 'ZAMĚŘENÍ', doprava: { km: 0, pausal: 0 }, prirazkaPct: null,
       polozky: [
@@ -114,7 +118,12 @@ function presunPolozku(polozky, from, to) {
 
 function vypocetProj(zadani, cenik) {
   const c = cenik;
-  const globalPct = (zadani.slevaPct || 0) / 100;
+  /* SLEVA TU UŽ NENÍ (#134, 12. 8. 2026). Do 12. 8. 2026 se do každé sekce
+   * přimíchávala „globální sleva projekce" ze zadání, takže sleva byla
+   * zabudovaná uvnitř ceny a nešla z ní zpátky vyčíst. Nově se sleva
+   * projekce — stejně jako u OCK — odečítá až od hotové ceny
+   * (cenaNabidkyProj) a v nabídce i v krycím listu je vidět jako vlastní
+   * řádek. Výpočet tedy zná jen náklady a přirážky. */
 
   const sekce = zadani.sekce.map(s => {
     const polozky = s.polozky.map(p => {
@@ -166,21 +175,20 @@ function vypocetProj(zadani, cenik) {
      * konkrétní sekce ručně přepsat. Zvláštní ceníkové pole pro tohle není
      * potřeba a nemá ho ani ceník: jedno číslo, jedno místo.
      *
-     * Globální SLEVA nabídky (zadani.slevaPct, v datech záporně) se přičítá.
-     * Přirážka a sleva jsou dvě oddělené veličiny — přirážka říká, kolik si
-     * účtujeme, sleva kolik z toho zákazníkovi odpustíme. Dřív sleva doléhala
-     * jen na sekce bez vlastního procenta, takže zaměření ji celé ignorovalo;
-     * teď doléhá na všechny stejně. Protože se procento násobí základem každé
-     * sekce, je to totéž, jako by se sleva odečetla z celé nabídky najednou.
+     * Sleva se sem NEPLETE — odečítá se až od hotové ceny projekce
+     * (cenaNabidkyProj). Přirážka říká, kolik si účtujeme; sleva kolik z toho
+     * zákazníkovi odpustíme, a to je jiná otázka i jiný řádek v nabídce.
      *
      * „Prázdno není nula" i tady: nula u sekce znamená „nepřirážíme nic"
      * a přebije ceník, kdežto prázdno znamená „platí globální přirážka". */
-    const pct = (s.prirazkaPct != null ? s.prirazkaPct / 100 : (+c.marze || 0)) + globalPct;
-    const slevaKc = cenaSDopravou * pct;              // T – sleva/přirážka v Kč
-    const celkem = cenaSDopravou + slevaKc;           // V – celková cena sekce
+    const pct = (s.prirazkaPct != null ? s.prirazkaPct / 100 : (+c.marze || 0));
+    /* Pole se do 12. 8. 2026 jmenovalo `slevaKc`, protože tudy tekla i sleva.
+     * Sleva je pryč (#134), takže je to čistě přirážka a jmenuje se tak. */
+    const prirazkaKc = cenaSDopravou * pct;           // T – přirážka sekce v Kč
+    const celkem = cenaSDopravou + prirazkaKc;        // V – celková cena sekce
     return { key: s.key, nazev: s.nazev, polozky, naklad, marze, cena, dopravaKc,
              cenaSDopravou, prirazkaPct: s.prirazkaPct == null ? null : s.prirazkaPct,
-             pouzitePct: pct * 100, slevaKc, celkem };
+             pouzitePct: pct * 100, prirazkaKc, celkem };
   });
 
   const sum = f => sekce.reduce((a, s) => a + s[f], 0);
@@ -191,7 +199,7 @@ function vypocetProj(zadani, cenik) {
       marze: sum('marze'),             // M61
       doprava: sum('dopravaKc'),
       cena: sum('cenaSDopravou'),      // O61
-      sleva: sum('slevaKc'),           // T61
+      prirazka: sum('prirazkaKc'),     // T61 – přirážka sekcí, ne sleva
       celkem: sum('celkem'),           // V61 – celková nabídková cena
     },
   };

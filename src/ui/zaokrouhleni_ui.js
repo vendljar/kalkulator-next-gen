@@ -32,7 +32,7 @@ function zaokrDopadOck() {
   try { return cenaNabidkyOck(vypocet(Z, C, JEKLY, OCK.fixes), SL, ZO); } catch (e) { return null; }
 }
 function zaokrDopadProj() {
-  try { return cenaNabidkyProj(vypocetProj(PJ, PC), ZOP); } catch (e) { return null; }
+  try { return cenaNabidkyProj(vypocetProj(PJ, PC), SLP, ZOP); } catch (e) { return null; }
 }
 
 /* Karta se vykresluje na dvou místech – pod výpočtem OCK a pod výpočtem PROJ.
@@ -64,18 +64,23 @@ function zaokrKarta(kontext) {
   const jinde = proj
     ? 'Zaokrouhlení ceny výtahové šachty se nastavuje v <b>Kalkulaci OCK</b>.'
     : 'Zaokrouhlení ceny projekčních prací se nastavuje v <b>Kalkulaci PROJ</b>.';
+  /* Od 12. 8. 2026 (#135) se zaokrouhlují POLOŽKY, ne až součet, a v nabídce
+   * proto žádný dorovnávací řádek „obchodní zaokrouhlení" není. Karta ho
+   * ukazuje dál – obchodník má vidět, o kolik se cena pohnula – ale nesmí
+   * slibovat řádek, který zákazník v dokumentu nenajde. */
   const cojeste = proj
-    ? 'Ceny jednotlivých činností PROJ se nezaokrouhlují, jen jejich součet.'
-    : 'Ceny jednotlivých položek kalkulace zůstávají beze změny.';
+    ? 'Zaokrouhluje se cena <b>každé činnosti PROJ zvlášť</b> (po slevě), takže jejich součet vychází zaokrouhleně sám od sebe.'
+    : 'Ceny jednotlivých položek kalkulace zůstávají beze změny; základ i koncová cena jdou do nabídky zaokrouhlené.';
+  const vDokumentu = 'V nabídce ani v krycím listu se rozdíl <b>neuvádí vlastním řádkem</b> – '
+    + 'zákazník čte ceny, ne naše zaokrouhlovací pravidlo. Dohledatelný zůstává tady a v protokolu o kalkulaci.';
   const dopad = c
     ? `<table class="sd-tbl" style="max-width:640px;margin-top:6px">
          <tr><th style="text-align:left">Část nabídky</th><th style="text-align:right">Spočtená cena</th>
              <th style="text-align:right">Zaokrouhlení</th><th style="text-align:right">Cena nabídky</th></tr>
          ${radek()}
        </table>
-       <div class="note">Rozdíl je v nabídce i v krycím listu uveden vlastním řádkem – cena tak
-         zůstane dohledatelná. ${cojeste} ${jinde}</div>`
-    : `<div class="note">Zaokrouhluje se ${proj ? 'celková cena nabídky PROJ' : 'koncová cena nabídky OCK (po schválené slevě)'}.
+       <div class="note">${vDokumentu} ${cojeste} ${jinde}</div>`
+    : `<div class="note">Zaokrouhluje se ${proj ? 'cena jednotlivých činností PROJ' : 'koncová cena nabídky OCK (po schválené slevě)'}.
          ${cojeste} Zaokrouhlením dolů se nikdy nenabídne nula. ${jinde}</div>`;
 
   const setKrok = proj ? 'zaokrProjSetKrok' : 'zaokrSetKrok';

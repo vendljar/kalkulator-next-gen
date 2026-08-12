@@ -178,19 +178,64 @@ function cenaNabidkyOck(vysl, sleva, zaokr) {
   const slevaKc = zaklad * p;
   const pred = zaklad - slevaKc;
   const cena = zaokrouhli(pred, zaokr);
+  /* ZAOKROUHLENÉ ÚDAJE PRO DOKUMENT (#135, 12. 8. 2026).
+   * V nabídce se od 12. 8. 2026 neuvádí řádek „obchodní zaokrouhlení" —
+   * zaokrouhlují se rovnou položky. Aby v dokumentu platilo
+   * „cena před slevou − sleva = cena" na korunu, musí být obě čísla ze
+   * stejného světa: zaokrouhlený základ a zaokrouhlená koncová cena.
+   * `slevaKcVykaz` je proto ROZDÍL těch dvou, ne procento z hrubého základu. */
+  const zakladZaokr = zaokrouhli(zaklad, zaokr);
   return { zaklad, slevaPct: p, slevaKc, pred, cena,
+           zakladZaokr, slevaKcVykaz: Math.round((zakladZaokr - cena) * 100) / 100,
            zaokrKc: Math.round((cena - pred) * 100) / 100,
            naklad: vysl.souhrn.zakladNaklad };
 }
 
 /* ---------- koncová cena PROJ ----------
- * Zaokrouhluje se jen celek, ne jednotlivé sekce: ceny sekcí jsou v nabídce
- * vypsané a musely by se pak dorovnávat, aby dávaly součet. */
-function cenaNabidkyProj(vysl, zaokr) {
+ * Zrcadlo cenaNabidkyOck, jen nad cenou projekce: základ → schválená sleva
+ * projekce → obchodní zaokrouhlení.
+ *
+ * ZAOKROUHLUJÍ SE JEDNOTLIVÉ ČINNOSTI, ne až součet (#135, 12. 8. 2026).
+ * Nabídka PROJ vypisuje cenu každé činnosti zvlášť. Když se zaokrouhloval
+ * jen součet, musel pod ním stát dorovnávací řádek „obchodní zaokrouhlení" —
+ * a ten podle zadání J. V. z dokumentu mizí („místo toho zaokrouhluj už
+ * jednotlivé položky"). Součet zaokrouhlených činností je zaokrouhlený sám
+ * od sebe, takže dorovnávat není co a nabídka dává součet i bez něj.
+ *
+ * Zaokrouhluje se cena činnosti PO slevě — jinak by po odečtení slevy
+ * vznikla zase neokrouhlá čísla přesně tam, kde je zákazník čte.
+ *
+ * SLEVA PROJEKCE JE VLASTNÍ (12. 8. 2026, #134). Do té doby měla projekce
+ * „globální slevu" schovanou uvnitř výpočtu sekcí a v kartě pod výpočtem
+ * se přitom ukazovala sleva spočtená z ceny výtahové šachty. Obojí je pryč:
+ * projekce má vlastní slevu, počítá se z vlastní ceny a s cenou OCK nemá
+ * společného nic. Parametr `sleva` je proto na stejném místě jako u OCK —
+ * kdo by sem omylem podal slevu z druhé části, spočítá špatnou cenu, ale
+ * aspoň to bude vidět v podpisu funkce. */
+function cenaNabidkyProj(vysl, sleva, zaokr) {
   if (!vysl || !vysl.souhrn) return null;
-  const pred = vysl.souhrn.celkem;
-  const cena = zaokrouhli(pred, zaokr);
-  return { pred, cena, zaokrKc: Math.round((cena - pred) * 100) / 100,
+  const zaklad = vysl.souhrn.celkem;
+  const podil = (typeof slevaPodil === 'function') ? slevaPodil(sleva || {}) : 0;
+  const p = Math.max(0, Math.min(1, +podil || 0));
+  const slevaKc = zaklad * p;
+  const pred = zaklad - slevaKc;
+  /* Bez seznamu sekcí (starší uložený výpočet, nouzové volání) se chováme
+   * jako dřív a zaokrouhlí se celek — cena se nikdy nevrací nespočítaná. */
+  const sekce = Array.isArray(vysl.sekce) ? vysl.sekce : null;
+  const cena = sekce
+    ? sekce.reduce((a, s) => a + zaokrouhli((+s.celkem || 0) * (1 - p), zaokr), 0)
+    : zaokrouhli(pred, zaokr);
+  const zakladZaokr = sekce
+    ? sekce.reduce((a, s) => a + zaokrouhli(+s.celkem || 0, zaokr), 0)
+    : zaokrouhli(zaklad, zaokr);
+  return { zaklad, slevaPct: p, slevaKc, pred, cena,
+           /* Pro dokument: obě čísla ze stejného světa, aby platilo
+            * „cena před slevou − sleva = cena" na korunu i bez dorovnání. */
+           zakladZaokr, slevaKcVykaz: Math.round((zakladZaokr - cena) * 100) / 100,
+           /* Rozdíl proti spočtené ceně. V dokumentu se neuvádí, ale karta
+            * zaokrouhlení v aplikaci ho ukazuje — obchodník má vidět, o kolik
+            * se cena zaokrouhlením pohnula. */
+           zaokrKc: Math.round((cena - pred) * 100) / 100,
            /* náklad včetně dopravy – cena ji obsahuje, tak ji musí obsahovat
             * i náklad, se kterým se cena poměřuje (audit 1. 8. 2026, N2) */
            naklad: vysl.souhrn.naklad + (vysl.souhrn.doprava || 0) };

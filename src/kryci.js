@@ -26,6 +26,21 @@ function kryciObchodnikKontakt(f) {
  * Sdílí ji krycí list OCK i PROJ, aby se sazby nerozešly mezi dvěma seznamy. */
 const KRYCI_POKUTY = ['0', '0,05 % / den', '0,1 % / den'];
 
+/* Nabídka záloh (12. 8. 2026, rozhodnutí J. V.: „vybírání zálohy by mělo
+ * fungovat z rolovacího seznamu"). U výtahové šachty nese každá volba i
+ * milník, ke kterému se záloha váže — v podmínkách nestačí procento, musí
+ * být jasné, kdy se fakturuje. Poslední volbu („jiné znění…") přidává
+ * rozbalovátko samo, takže vlastní dohoda jde zapsat vždycky. */
+const KRYCI_ZALOHY = ['Bez zálohy', '30 % – po podpisu smlouvy',
+                      '50 % – po podpisu smlouvy', '70 % – po podpisu smlouvy'];
+
+/* Limit smluvních pokut (12. 8. 2026). Do té doby volné pole s jediným
+ * předvyplněným zněním. Obě varianty se v praxi používají a pletly se —
+ * rozdíl mezi „UPLATNĚN" a „NEUPLATNĚN" je jedno slovo a znamená opak.
+ * Výchozí je uplatněný limit: strop odpovědnosti chrání nás, ne zákazníka,
+ * a vypustit ho má být vědomé rozhodnutí. */
+const KRYCI_LIMIT_POKUT = ['Uplatněn limit 10 %', 'NEUPLATNĚN limit 10 %'];
+
 const KRYCI_SEKCE = [
   { sekce: 'Základní údaje', pole: [
     /* KL-4: obchodníka aplikace zná – od 5. 8. 2026 je to přihlášený uživatel
@@ -88,7 +103,8 @@ const KRYCI_SEKCE = [
     { id: 'zpusobFakturace', label: 'Způsob fakturace', verze: ['bo'],
       prefill: c => firmaHodnota(c.firma, 'zpusobFakturaceOck') || 'Náš standard / měsíční',
       src: 'Nastavení → Firma' },
-    { id: 'zaloha1', label: 'Záloha / dílčí faktura č. 1', verze: ['bo'], prefill: () => '50 % – po podpisu smlouvy', src: 'výchozí' },
+    { id: 'zaloha1', label: 'Záloha / dílčí faktura č. 1', verze: ['bo'],
+      typ: 'vyber', o: KRYCI_ZALOHY, prefill: () => KRYCI_ZALOHY[2], src: 'výchozí' },
     { id: 'faktura2', label: 'Dílčí faktura č. 2', verze: ['bo'], prefill: () => '40 % – po zahájení montáže', src: 'výchozí' },
     { id: 'fakturaKonc', label: 'Konečná faktura', verze: ['bo'], prefill: () => '10 % – po předání', src: 'výchozí' },
     /* KL-5: ve formuláři jsou dva samostatné řádky, každý s vlastním procentem
@@ -109,8 +125,13 @@ const KRYCI_SEKCE = [
     { id: 'pokutaDodavka', label: 'Smluvní pokuta – prodlení dodávky', verze: ['bo', 'techdata'],
       typ: 'vyber', o: KRYCI_POKUTY, prefill: () => KRYCI_POKUTY[0], src: 'výchozí' },
     { id: 'pokutaSplatnost', label: 'Smluvní pokuta – prodlení splatnosti', verze: ['bo', 'techdata'],
-      typ: 'vyber', o: KRYCI_POKUTY, prefill: () => KRYCI_POKUTY[0], src: 'výchozí' },
-    { id: 'pokutaLimit', label: 'Limit smluvních pokut', verze: ['bo', 'techdata'], prefill: () => 'NEUPLATNĚN limit 10 %', src: 'výchozí' },
+      /* Předvyplněných 0,05 % / den od 12. 8. 2026 (rozhodnutí J. V.). Do té
+       * doby nula, tedy bez pokuty — jenže prodlení se splatností je jediné
+       * prodlení, které nezpůsobíme my, a nechávat ho bez sankce znamenalo
+       * odesílat nabídky, kde na pozdní platbu není žádná páka. */
+      typ: 'vyber', o: KRYCI_POKUTY, prefill: () => KRYCI_POKUTY[1], src: 'výchozí' },
+    { id: 'pokutaLimit', label: 'Limit smluvních pokut', verze: ['bo', 'techdata'],
+      typ: 'vyber', o: KRYCI_LIMIT_POKUT, prefill: () => KRYCI_LIMIT_POKUT[0], src: 'výchozí' },
     { id: 'pokutyJine', label: 'Jiné', verze: ['bo'], typ: 'textarea' },
     { id: 'platceDph', label: 'Plátce DPH', verze: ['bo'], typ: 'radio', o: ['Ano', 'Ne'], prefill: () => 'Ano', src: 'výchozí' },
     /* KL-7 (hlášení 5. 8. 2026): „Sazba DPH nemůže být přepisovatelná, ale musí

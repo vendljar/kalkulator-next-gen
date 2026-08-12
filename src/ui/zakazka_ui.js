@@ -649,13 +649,28 @@ function nabidkaNahled() {
 }
 
 /* ============================================================================
- * ÚVODNÍ FOTKA CENOVÉ NABÍDKY OCK
+ * ÚVODNÍ FOTKA CENOVÉ NABÍDKY (OCK i PROJ)
  *
  * Fotka objektu (nebo vizualizace) na úvod nabídky. Ukládá se jako data URL
- * přímo do zakázky (ZAK.uvodniFoto), takže se přenese spolu se souborem
- * zakázky a nabídka jde vytisknout i na jiném počítači.
+ * přímo do zakázky, takže se přenese spolu se souborem zakázky a nabídka jde
+ * vytisknout i na jiném počítači.
+ *
+ * Od 12. 8. 2026 má KAŽDÁ z obou nabídek vlastní fotku (`cast` = 'ock' /
+ * 'proj', pole drží zakazka.js → uvodniFotoPole). Důvod je stejný jako
+ * u hlaviček: nabídka na šachtu a nabídka na projekci odcházejí samostatně
+ * a projekce se často prodává bez šachty. Jedno sdílené pole by znamenalo,
+ * že výměna fotky v jedné nabídce potichu změní titulní stranu druhé —
+ * a všimne si toho až zákazník. Přenést fotku mezi částmi jde tlačítkem.
  * ============================================================================ */
-function nabidkaFotoNahraj() {
+function nabidkaFotoPole(cast) {
+  return (typeof uvodniFotoPole === 'function')
+    ? uvodniFotoPole(cast)
+    : { foto: 'uvodniFoto', nazev: 'uvodniFotoNazev', popis: 'uvodniFotoPopis' };
+}
+const NABIDKA_FOTO_NAZVY = { ock: 'OCK', proj: 'PROJ' };
+
+function nabidkaFotoNahraj(cast) {
+  const p = nabidkaFotoPole(cast);
   const inp = document.createElement('input');
   inp.type = 'file'; inp.accept = 'image/png,image/jpeg,image/webp';
   inp.onchange = () => {
@@ -664,46 +679,69 @@ function nabidkaFotoNahraj() {
       + ' kB). Použijte obrázek do 2 MB – ukládá se přímo do souboru zakázky.');
     const fr = new FileReader();
     fr.onload = () => {
-      ZAK.uvodniFoto = fr.result; ZAK.uvodniFotoNazev = f.name;
+      ZAK[p.foto] = fr.result; ZAK[p.nazev] = f.name;
       render();
     };
     fr.readAsDataURL(f);
   };
   inp.click();
 }
-function nabidkaFotoSmaz() {
-  if (!confirm('Odebrat úvodní fotku z cenové nabídky OCK?')) return;
-  ZAK.uvodniFoto = ''; ZAK.uvodniFotoNazev = '';
+function nabidkaFotoSmaz(cast) {
+  const p = nabidkaFotoPole(cast);
+  if (!confirm('Odebrat úvodní fotku z cenové nabídky ' + (NABIDKA_FOTO_NAZVY[cast] || 'OCK') + '?')) return;
+  ZAK[p.foto] = ''; ZAK[p.nazev] = '';
+  render();
+}
+/* Přenos fotky mezi nabídkami – vědomý, na tlačítko, jako u hlaviček.
+ * Přepisuje se cíl, zdroj zůstává; obě nabídky tak můžou mít i nadále
+ * každá svou. */
+function nabidkaFotoPrevezmi(cast) {
+  const cil = nabidkaFotoPole(cast);
+  const zdroj = nabidkaFotoPole(cast === 'proj' ? 'ock' : 'proj');
+  if (!ZAK[zdroj.foto]) return alert('Druhá nabídka žádnou úvodní fotku nahranou nemá.');
+  if (ZAK[cil.foto] && !confirm('Nahradit fotku této nabídky fotkou z druhé nabídky?')) return;
+  ZAK[cil.foto] = ZAK[zdroj.foto];
+  ZAK[cil.nazev] = ZAK[zdroj.nazev];
+  ZAK[cil.popis] = ZAK[zdroj.popis];
   render();
 }
 /* popisek pod fotkou – bez překreslení, aby při psaní neutíkal kurzor */
-function nabidkaFotoPopis(val) { ZAK.uvodniFotoPopis = val; }
+function nabidkaFotoPopis(val, cast) { ZAK[nabidkaFotoPole(cast).popis] = val; }
 
 /* Fotka do tiskového dokumentu (prázdné, není-li nahraná). */
-function nabidkaFotoHtml() {
-  if (!ZAK.uvodniFoto) return '';
-  const popis = (ZAK.uvodniFotoPopis || '').trim();
-  return `<figure class="uvod-foto"><img src="${esc(ZAK.uvodniFoto)}" alt="">`
+function nabidkaFotoHtml(cast) {
+  const p = nabidkaFotoPole(cast);
+  if (!ZAK[p.foto]) return '';
+  const popis = (ZAK[p.popis] || '').trim();
+  return `<figure class="uvod-foto"><img src="${esc(ZAK[p.foto])}" alt="">`
     + (popis ? `<figcaption>${esc(popis)}</figcaption>` : '') + `</figure>`;
 }
 
-/* Ovládání úvodní fotky v kartě nabídky (Kalkulace OCK). */
-function nabidkaFotoKarta() {
-  const nahled = ZAK.uvodniFoto
-    ? `<img src="${esc(ZAK.uvodniFoto)}" alt="úvodní fotka"
+/* Ovládání úvodní fotky v kartě nabídky (Kalkulace OCK / Kalkulace PROJ). */
+function nabidkaFotoKarta(cast) {
+  const c = cast === 'proj' ? 'proj' : 'ock';
+  const p = nabidkaFotoPole(c);
+  const arg = `'${c}'`;
+  const druha = nabidkaFotoPole(c === 'proj' ? 'ock' : 'proj');
+  const druhaNazev = c === 'proj' ? 'OCK' : 'PROJ';
+  const nahled = ZAK[p.foto]
+    ? `<img src="${esc(ZAK[p.foto])}" alt="úvodní fotka"
          style="max-height:120px;max-width:260px;border:1px solid var(--line);border-radius:6px;padding:3px">`
     : '<span class="note">Fotka zatím nenahraná – nabídka se vytiskne bez ní.</span>';
-  return `<div class="note" style="font-weight:600;margin-top:10px">Úvodní fotka nabídky:</div>
+  return `<div class="note" style="font-weight:600;margin-top:10px">Úvodní fotka nabídky
+      ${NABIDKA_FOTO_NAZVY[c]}:</div>
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:4px">
       ${nahled}
-      <div class="btns"><button onclick="nabidkaFotoNahraj()">${ZAK.uvodniFoto ? 'Vyměnit fotku' : 'Nahrát fotku'}</button>
-        ${ZAK.uvodniFoto ? '<button class="mini" onclick="nabidkaFotoSmaz()">Odebrat</button>' : ''}</div>
-      ${ZAK.uvodniFotoNazev ? `<span class="note">${esc(ZAK.uvodniFotoNazev)}</span>` : ''}
+      <div class="btns"><button onclick="nabidkaFotoNahraj(${arg})">${ZAK[p.foto] ? 'Vyměnit fotku' : 'Nahrát fotku'}</button>
+        ${ZAK[p.foto] ? `<button class="mini" onclick="nabidkaFotoSmaz(${arg})">Odebrat</button>` : ''}
+        ${ZAK[druha.foto] ? `<button class="mini" onclick="nabidkaFotoPrevezmi(${arg})">⇦ Převzít fotku z nabídky ${druhaNazev}</button>` : ''}</div>
+      ${ZAK[p.nazev] ? `<span class="note">${esc(ZAK[p.nazev])}</span>` : ''}
     </div>
     <input type="text" style="width:100%;margin-top:6px;text-align:left" placeholder="Popisek pod fotkou (nepovinné) – např. Bytový dům Dlouhá 12, stávající stav"
-      value="${esc(ZAK.uvodniFotoPopis || '')}" oninput="nabidkaFotoPopis(this.value)">
+      value="${esc(ZAK[p.popis] || '')}" oninput="nabidkaFotoPopis(this.value, ${arg})">
     <div class="note" style="margin-top:4px">JPG / PNG / WEBP do 2 MB. Ukládá se přímo do souboru zakázky,
-      takže se přenese i na jiný počítač. Tiskne se hned pod hlavičkou nabídky.</div>`;
+      takže se přenese i na jiný počítač. Tiskne se hned pod hlavičkou nabídky.
+      Nabídka ${NABIDKA_FOTO_NAZVY[c]} má <b>vlastní</b> fotku – nabídka ${druhaNazev} tím zůstává nedotčená.</div>`;
 }
 
 /* ============================================================================
@@ -743,15 +781,11 @@ function nabidkaOckDokument() {
   const slevaRadky = (p.SLEVA_PROC && p.SLEVA_PROC !== '0')
     ? `<tr><td>${esc(P('Cena před slevou'))}</td><td class="castka">${esc(p.CENA_PRED_SLEVOU)}</td></tr>
        <tr><td>${esc(P('Sleva'))} ${esc(p.SLEVA_PROC)} %</td><td class="castka">− ${esc(p.SLEVA_KC)}</td></tr>` : '';
-  /* Obchodní zaokrouhlení (#38) má vlastní řádek, aby čísla v nabídce dávala
-   * součet. Bez slevy chybí řádek „cena před slevou", takže se doplní jako
-   * spočtená cena – jinak by rozdíl visel ve vzduchu. */
-  const zaokrRadky = p.ZAOKROUHLENI_KC
-    ? (slevaRadky ? '' : `<tr><td>${esc(P('Spočtená cena'))}</td><td class="castka">${esc(p.CENA_PRED_SLEVOU)}</td></tr>`)
-      + `<tr><td>${esc(P('Obchodní zaokrouhlení'))}</td><td class="castka">${esc(p.ZAOKROUHLENI_KC)}</td></tr>`
-    : '';
+  /* Řádek „obchodní zaokrouhlení" v nabídce od 12. 8. 2026 NENÍ (#135):
+   * zaokrouhlují se rovnou položky, takže součet vychází sám. Zákazník čte
+   * položky, ne naše zaokrouhlovací pravidlo. */
   const cenaHtml = `<table class="rekap">
-      ${slevaRadky}${zaokrRadky}
+      ${slevaRadky}
       <tr class="tot"><td><b>${esc(P('Výtahová šachta (bez DPH)'))}</b></td><td class="castka"><b>${esc(p.CENA_BEZ_DPH)}</b></td></tr>
       <tr><td>${esc(P('DPH'))} ${esc(p.DPH_SAZBA)} % (${esc(p.DPH_NAZEV)} ${esc(P('sazba'))})</td><td class="castka">${esc(p.DPH_KC)}</td></tr>
       <tr class="tot"><td><b>${esc(P('CELKEM za nabídku (včetně DPH)'))}</b></td><td class="castka"><b>${esc(p.CENA_S_DPH)}</b></td></tr>

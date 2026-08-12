@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Favicon aplikace (12. 8. 2026): tučný tmavě modrý znak dolaru na
+       průhledném pozadí. Bez podkladu schválně — na světlém i tmavém panelu
+       prohlížeče se pozná tvar, ne barevný čtvereček.
+
+       Znak je vysázený písmem, ne křivkou: v jednosouborovém HTML není kam
+       vložit font, ale sans-serif má dolar ve všech běžných systémech a
+       tvarově se liší jen v detailu. `text-anchor` a `dominant-baseline`
+       drží znak na středu i tam, kde se metriky písma trochu liší; pro
+       jistotu je pod nimi ještě posun o pár setin výšky.
+
+       Ikonu aplikace (logo v hlavičce) tohle nemění — ta zůstává v ikona.svg. -->
+  <text x="32" y="34" text-anchor="middle" dominant-baseline="central"
+        font-family="Arial, Helvetica, sans-serif" font-size="56" font-weight="700"
+        fill="#0B2E6B">$</text>
+</svg>

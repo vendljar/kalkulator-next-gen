@@ -171,7 +171,11 @@ function odemkniVariantu(v, opts) {
 /* DPH v otisku po částech (audit 1. 8. 2026, N3) – stejné klíče jako
  * v POROVNANI_METRIKY. Starší zámky nesou dphSazba/dphKc z doby jediné
  * sazby; zůstávají, jak byly pořízeny – otisk se zpětně nepřepisuje. */
+/* Do otisku patří obě slevy zvlášť (#134, 12. 8. 2026): kdyby se hlídala jen
+ * jedna, dalo by se u odeslané nabídky přepsat procento u té druhé a otisk by
+ * mlčel. */
 const ZAMEK_OTISK_POLE = ['ockZaklad', 'slevaPct', 'slevaKc', 'ockPoSleve',
+                          'projZaklad', 'slevaProjPct', 'slevaProjKc',
                           'projCelkem', 'celkemBezDph',
                           'dphOckSazba', 'dphOckKc', 'dphProjSazba', 'dphProjKc',
                           'celkemSDph', 'priplatky'];

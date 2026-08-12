@@ -43,10 +43,10 @@ const ZAMEK_CHRANENE = [
   // rozhoduje o libovolné – zámek si proto hlídá schvRozhodni samo na cílové
   // variantě, jinak by uzamčená otevřená varianta blokovala schválení všech
   // ostatních.
-  'slevaSetProc', 'slevaSetRole', 'slevaSetSchema', 'slevaSetPozn', 'slevaZrus',
-  // Globální sleva PROJ – set() uvnitř zámek hlídá taky; obal je tu proto,
-  // aby obsluha zůstala chráněná, i kdyby set() někdy o svou pojistku přišel
-  'pjSlevaGlobal',
+  // Od 12. 8. 2026 (#134) jsou slevy dvě – na výtahovou šachtu a na projekci.
+  // Chráněné musí být obě, jinak by zamčenou variantu šlo přecenit tou druhou.
+  // Pole „Globální sleva PROJ" (pjSlevaGlobal) tou změnou zaniklo.
+  'slevaSet', 'slevaZrus', 'slevaProjSet', 'slevaProjZrus',
   // Obchodní zaokrouhlení (#38) – také mění koncovou cenu nabídky
   // Od 4. 8. 2026 je karta rozdělená na část OCK a část PROJ – chráněné
   // musí být obě, jinak by zamčenou variantu šlo přecenit přes Kalkulaci PROJ.

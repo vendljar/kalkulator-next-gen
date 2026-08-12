@@ -184,8 +184,14 @@ function schvalovaniVrat(sleva) {
  * ze spocitejVariantu(), testy si ji nastaví ručně. Chybí-li výpočet, žádost
  * ze seznamu NEZMIZÍ — jen u ní nejsou koruny. Ztratit žádost kvůli rozbitému
  * zadání by znamenalo, že o slevě nikdo neví. */
-function schvalovaniZaznam(varianta, vypocet, nast, role) {
-  const sl = (varianta && varianta.data && varianta.data.sleva) || null;
+/* `cast` říká, o kterou slevu jde: 'ock' = výtahová šachta, 'proj' = projekce.
+ * Od 12. 8. 2026 (#134) má každá kalkulace vlastní slevu nad vlastní cenou,
+ * takže jedna varianta může poslat do fronty až dvě žádosti — a u každé musí
+ * být vidět, čeho se týká. `vypocet` je vždy základ TÉ ČÁSTI, ne obou. */
+function schvalovaniZaznam(varianta, vypocet, nast, role, cast) {
+  const proj = cast === 'proj';
+  const sl = (varianta && varianta.data
+              && (proj ? varianta.data.slevaProj : varianta.data.sleva)) || null;
   const procenta = Math.max(0, +(sl && sl.procenta) || 0);
   const spocteno = !!(vypocet && typeof vypocet.zakladCena === 'number');
   const d = (spocteno && typeof slevaVyhodnot === 'function')
@@ -196,6 +202,11 @@ function schvalovaniZaznam(varianta, vypocet, nast, role) {
   const kat = schvalovaniKategorie(sl);
   return {
     id: varianta.id,
+    /* `klic` je adresa žádosti (varianta + část). Samotné `id` zůstává, aby
+     * se dalo přepnout na variantu; rozhoduje se ale vždy o jedné části. */
+    klic: varianta.id + '|' + (proj ? 'proj' : 'ock'),
+    cast: proj ? 'proj' : 'ock',
+    castNazev: proj ? 'Projekční práce (PROJ)' : 'Výtahová šachta (OCK)',
     nazev: String(varianta.nazev || ''),
     ridici: !!varianta.ridici,
     zamceno,
@@ -229,12 +240,31 @@ function schvalovaniZaznam(varianta, vypocet, nast, role) {
 const SCHV_ROLE_VYCHOZI = (typeof ROLE_VYCHOZI !== 'undefined')
   ? ROLE_VYCHOZI : ['Obchodník', 'Vedoucí', 'Administrátor'];
 
+/* Základy pro obě části. Přijímá i starší tvar `{zakladCena, zakladNaklad}`,
+ * kdy fronta znala jen slevu OCK — bez toho by se po aktualizaci přestaly
+ * u rozpracovaných žádostí ukazovat částky. */
+function schvalovaniZaklady(zaznam) {
+  const z = zaznam || {};
+  if (z.ock || z.proj) return { ock: z.ock || null, proj: z.proj || null };
+  return { ock: (typeof z.zakladCena === 'number') ? z : null, proj: null };
+}
+
 function schvalovaniSeznam(zak, vypocty, nast, role) {
   const varianty = (zak && Array.isArray(zak.varianty)) ? zak.varianty : [];
   const mapa = vypocty || {};
-  return varianty
-    .filter(v => v && v.data && v.data.sleva && +v.data.sleva.procenta > 0)
-    .map(v => schvalovaniZaznam(v, mapa[v.id], nast, role))
+  const zadosti = [];
+  varianty.forEach(v => {
+    if (!v || !v.data) return;
+    const z = schvalovaniZaklady(mapa[v.id]);
+    /* Dvě samostatné žádosti, ne jedna se dvěma čísly: vedoucí schvaluje
+     * slevu na šachtu a slevu na projekt zvlášť a může jednu povolit
+     * a druhou ne. */
+    if (v.data.sleva && +v.data.sleva.procenta > 0)
+      zadosti.push(schvalovaniZaznam(v, z.ock, nast, role, 'ock'));
+    if (v.data.slevaProj && +v.data.slevaProj.procenta > 0)
+      zadosti.push(schvalovaniZaznam(v, z.proj, nast, role, 'proj'));
+  });
+  return zadosti
     .sort((a, b) => {
       const pa = SCHV_PORADI[a.kategorie], pb = SCHV_PORADI[b.kategorie];
       if (pa !== pb) return pa - pb;
@@ -256,8 +286,12 @@ function schvalovaniZaznamRejstrik(polozka) {
   const p = polozka || {};
   const sl = p.sleva || {};
   const kat = schvalovaniKategorie(sl);
+  const proj = p.cast === 'proj';
   return {
     id: p.variantaId,
+    klic: String(p.variantaId || '') + '|' + (proj ? 'proj' : 'ock'),
+    cast: proj ? 'proj' : 'ock',
+    castNazev: proj ? 'Projekční práce (PROJ)' : 'Výtahová šachta (OCK)',
     nazev: String(p.variantaNazev || ''),
     ridici: !!p.ridici,
     zamceno: !!p.zamceno,
@@ -301,7 +335,7 @@ function schvalovaniSeznamRejstrik(zadosti) {
 /* Pojistka pro rejstřík: v odpovědi serveru nesmí být nic, co vypadá jako
  * částka. Kontroluje se tvar dat, ne jejich obsah — nová položka s cenou by
  * se sem musela doslova propašovat pod jménem, které neznáme. */
-const SCHV_REJSTRIK_POVOLENO = ['klic', 'cislo', 'nazevAkce', 'variantaId', 'variantaNazev',
+const SCHV_REJSTRIK_POVOLENO = ['klic', 'cast', 'cislo', 'nazevAkce', 'variantaId', 'variantaNazev',
   'ridici', 'zamceno', 'upraveno', 'sleva'];
 const SCHV_REJSTRIK_SLEVA_POVOLENO = ['procenta', 'role', 'schema', 'poznamka', 'stav',
   'schvalil', 'schvalilKdy', 'schvalenoProc', 'zamitl', 'zamitlKdy', 'zamitnutoProc',

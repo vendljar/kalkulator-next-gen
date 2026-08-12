@@ -440,7 +440,9 @@ function nastSablony() {
   return `<div class="note">Nahraj vlastní <b>.docx</b> šablony přímo do aplikace. Generátor je použije místo výběru souboru
     při každém generování. Šablony se plní zástupnými symboly <code>{{KLÍČ}}</code>.
     <b>Zatím platí pro relaci</b>; trvalé uložení přijde s nasazením (viz <code>SET-6</code>).</div>
-    ${radek('nabidka', 'Šablona cenové nabídky', 'používá se pro „Vytvořit nabídku (Word)"')}
+    ${radek('nabidka', 'Šablona cenové nabídky OCK', 'používá se pro „Vytvořit nabídku (Word)" v Kalkulaci OCK')}
+    ${radek('nabidkaProj', 'Šablona cenové nabídky PROJ (OVP-CN)',
+      'používá se pro „Vytvořit nabídku PROJ (Word)" v Kalkulaci PROJ – je to jiný dokument než nabídka OCK')}
     ${radek('sod', 'Šablona smlouvy o dílo (SoD)', 'připraveno pro generování SoD – čeká na právní znění')}
     <div class="note" style="margin-top:10px">Mutace vzniká překladem <b>pevného textu</b> šablony; nepřeložené fráze
       zůstanou česky a jsou v CSV k doplnění. <b>Hodnoty</b> dosazované do <code>{{…}}</code> se překládají zvlášť podle

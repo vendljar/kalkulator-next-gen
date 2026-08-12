@@ -80,11 +80,18 @@ html = (root / 'src/app_template.html').read_text()
 import base64
 ikona_svg = (root / 'src' / 'ikona.svg')
 ikona_b64 = base64.b64encode(ikona_svg.read_bytes()).decode('ascii') if ikona_svg.exists() else ''
+# Favicon je od 12. 8. 2026 vlastní obrázek (znak dolaru), ne zmenšenina loga:
+# v liště prohlížeče se z 16 px loga stejně nic nepozná. Když soubor chybí,
+# spadne se zpátky na ikonu aplikace, ať karta nikdy nezůstane bez obrázku.
+favicon_svg = (root / 'src' / 'favicon.svg')
+favicon_b64 = (base64.b64encode(favicon_svg.read_bytes()).decode('ascii')
+               if favicon_svg.exists() else ikona_b64)
 
 html = (html.replace('/*__CORE__*/', core).replace('/*__JEKLY__*/', jekly)
             .replace('/*__UI__*/', ui).replace('__VERZE__', 'v' + ver)
             .replace('__SESTAVENO__', datetime.date.today().isoformat())
-            .replace('__IKONA_B64__', ikona_b64))
+            .replace('__IKONA_B64__', ikona_b64)
+            .replace('__FAVICON_B64__', favicon_b64))
 
 (root / 'dist').mkdir(exist_ok=True)
 (root / 'dist/kalkulacka.html').write_text(html)
