@@ -169,6 +169,27 @@ const MUTACE = [
     nahrad: '      try { if (false) await (await uloziste(PODPIS_ULOZISTE)).zapis(email, null); }',
     proc: 'na serveru by ležel sken podpisu člověka, který v aplikaci není — a zdědil by ho ten, kdo dostane stejný e-mail' },
 
+  /* ---------- centrální šablony dokumentů (#139) ---------- */
+  { nazev: 'šablony může zveřejnit kdokoli přihlášený', soubor: 'functions/sablony.mjs',
+    hledej: "  const { chyba, relace } = await vyzadujRoli(req, 'Administrátor');",
+    nahrad: "  const { chyba, relace } = await vyzadujRoli(req);",
+    proc: 'obchodník by si vyměnil šablonu celé firmy — centrální řízení by nic neřídilo' },
+
+  { nazev: 'šablony si přečte i nepřihlášený', soubor: 'functions/sablony.mjs',
+    hledej: "    const { chyba } = await vyzadujRoli(req);          // stačí být přihlášen",
+    nahrad: "    const { chyba } = { chyba: null };",
+    proc: 'kdokoli zvenčí by si stáhl firemní šablonu nabídky i se zněním podmínek' },
+
+  { nazev: 'zveřejnění šablony přijme i ne-Word', soubor: 'functions/sablony.mjs',
+    hledej: "    if (!g.sablonaJeDocxB64(data))",
+    nahrad: "    if (false)",
+    proc: 'omylem nahrané PDF by spadlo až obchodníkovi při tisku nabídky' },
+
+  { nazev: 'záloha přestane vozit šablony', soubor: 'functions/zaloha.mjs',
+    hledej: "  const sab = await uloziste('sablony');",
+    nahrad: "  const sab = { async seznam() { return []; }, async cti() { return null; } };",
+    proc: 'po obnově ze zálohy by v přísném režimu nešla vytisknout jediná nabídka' },
+
   /* ---------- sdílený rejstřík žádostí o slevu (#102) ---------- */
   { nazev: 'rejstřík žádostí je veřejný', soubor: 'functions/schvalovani.mjs',
     hledej: '  const { chyba } = await vyzadujRoli(req);      // stačí být přihlášen',

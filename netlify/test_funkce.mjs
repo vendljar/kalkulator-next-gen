@@ -299,5 +299,81 @@ const uiKod = readFileSync(join(KOREN_PROJEKTU, 'src', 'ui', 'online_ui.js'), 'u
 test('prohlížeč hlavní účet nepoznává podle e-mailu, ale podle příznaku ze serveru',
   /const hlavni = !!u\.hlavni/.test(uiKod));
 
+/* ---------- centrální šablony dokumentů (#139, 13. 8. 2026) ----------
+ *
+ * Celý životní cyklus: zveřejnění administrátorem → verze 1 → stažení
+ * obchodníkem → nová verze → historie → režim → záloha. Kdyby kterýkoli
+ * krok tiše selhal, obchodník by tiskl ze staré šablony a nikdo by to
+ * nepoznal — přesně to, kvůli čemu centrální šablony vznikly. */
+const sablonyFn = (await import('./functions/sablony.mjs')).default;
+const DOCX1 = 'UEsDBBQABgAIAAAAIQ' + 'A'.repeat(400);   // „soubor" verze 1 (ZIP hlavička)
+const DOCX2 = 'UEsDBBQABgAIAAAAIQ' + 'B'.repeat(400);   // jiná data = jiný otisk
+
+{
+  const cObch2 = (r2.headers.get('set-cookie') || '').split(';')[0];
+
+  test('šablony: PDF se odmítne už při zveřejnění',
+    (await post(sablonyFn, 'http://x/api/sablony',
+      { akce: 'zverejnit', typ: 'nabidka', nazev: 'x.pdf', data: 'JVBERi0xLjQK' }, cookie)).status === 400);
+  test('šablony: neznámý typ se odmítne',
+    (await post(sablonyFn, 'http://x/api/sablony',
+      { akce: 'zverejnit', typ: 'faktura', nazev: 'x.docx', data: DOCX1 }, cookie)).status === 400);
+
+  const z1 = await (await post(sablonyFn, 'http://x/api/sablony',
+    { akce: 'zverejnit', typ: 'nabidka', nazev: 'Sablona_v8.docx', data: DOCX1, poznamka: 'první' }, cookie)).json();
+  test('šablony: zveřejnění vrací verzi 1', z1.ok === true && z1.verze === 1, JSON.stringify(z1));
+
+  test('šablony: tatáž data podruhé neprojdou (beze změny)',
+    (await post(sablonyFn, 'http://x/api/sablony',
+      { akce: 'zverejnit', typ: 'nabidka', nazev: 'Sablona_v8.docx', data: DOCX1 }, cookie)).status === 400);
+
+  const rejstrik = await (await get(sablonyFn, 'http://x/api/sablony', cObch2)).json();
+  test('šablony: obchodník vidí v rejstříku platnou verzi 1',
+    rejstrik.ok && rejstrik.rejstrik.typy.nabidka.platna.verze === 1);
+  test('šablony: rejstřík nenese data souborů',
+    !JSON.stringify(rejstrik).includes(DOCX1.slice(0, 60)));
+  test('šablony: výchozí režim je přísný', rejstrik.rejstrik.rezim === 'prisny');
+
+  const stazeni = await (await get(sablonyFn, 'http://x/api/sablony?typ=nabidka', cObch2)).json();
+  test('šablony: obchodník si stáhne přesně nahraná data',
+    stazeni.ok && stazeni.data === DOCX1 && stazeni.verze === 1 && stazeni.nazev === 'Sablona_v8.docx');
+
+  const z2 = await (await post(sablonyFn, 'http://x/api/sablony',
+    { akce: 'zverejnit', typ: 'nabidka', nazev: 'Sablona_v9.docx', data: DOCX2 }, cookie)).json();
+  test('šablony: nová verze dostane číslo 2', z2.verze === 2);
+  test('šablony: stažení bez verze vrací novou platnou',
+    (await (await get(sablonyFn, 'http://x/api/sablony?typ=nabidka', cObch2)).json()).verze === 2);
+  const historie = await (await get(sablonyFn, 'http://x/api/sablony?typ=nabidka&verze=1', cObch2)).json();
+  test('šablony: stará verze zůstává dostupná z historie (doložitelnost)',
+    historie.ok && historie.data === DOCX1 && historie.verze === 1);
+  test('šablony: vymyšlená verze se nevydá',
+    (await get(sablonyFn, 'http://x/api/sablony?typ=nabidka&verze=99', cObch2)).status === 404);
+
+  const rz = await (await post(sablonyFn, 'http://x/api/sablony', { akce: 'rezim', rezim: 'mekky' }, cookie)).json();
+  test('šablony: administrátor přepne režim na měkký', rz.ok && rz.rezim === 'mekky');
+  test('šablony: nesmyslný režim se odmítne',
+    (await post(sablonyFn, 'http://x/api/sablony', { akce: 'rezim', rezim: 'vypnuto' }, cookie)).status === 400);
+  test('šablony: přepnutí je vidět v rejstříku',
+    (await (await get(sablonyFn, 'http://x/api/sablony', cObch2)).json()).rejstrik.rezim === 'mekky');
+  await post(sablonyFn, 'http://x/api/sablony', { akce: 'rezim', rezim: 'prisny' }, cookie);
+
+  /* Zálohy: obě cesty (ke stažení i noční otisk) musí šablony nést celé. */
+  const zal = await (await get(zaloha, 'http://x/api/zaloha', cookie)).json();
+  test('záloha ke stažení nese rejstřík šablon',
+    zal.zaloha.sablony && zal.zaloha.sablony.rejstrik
+    && zal.zaloha.sablony.rejstrik.typy.nabidka.platna.verze === 2);
+  test('záloha ke stažení nese i soubory šablon (obě verze)',
+    zal.zaloha.sablony['data/nabidka/1'] && zal.zaloha.sablony['data/nabidka/1'].data === DOCX1
+    && zal.zaloha.sablony['data/nabidka/2'] && zal.zaloha.sablony['data/nabidka/2'].data === DOCX2);
+
+  const { porizOtisk } = await import('./lib/zalohovani.mjs');
+  await porizOtisk('test', ADMIN_EMAIL);
+  const den = new Date().toISOString().slice(0, 10);
+  const otisk = await (await (await import('./lib/sdilene.mjs')).uloziste('zalohy')).cti(den);
+  test('noční otisk nese šablony včetně souborů',
+    otisk && otisk.sablony && otisk.sablony['data/nabidka/2']
+    && otisk.sablony['data/nabidka/2'].data === DOCX2);
+}
+
 console.log(`\n${ok} prošlo, ${fail} selhalo`);
 process.exit(fail ? 1 : 0);

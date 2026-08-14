@@ -72,9 +72,9 @@ function nabidkaProjKarta() {
     </div>
     <div class="note nabidkaProjStav" style="margin-top:6px"></div>
     <div class="note">Word se plní <b>šablonou <code>Sablona_NABIDKA_PROJ.docx</code></b> – stejnou cestou jako nabídka OCK.
-      Šablonu buď nahrajte jednou v <b>Nastavení → Šablony</b> (pak se použije při každém generování), nebo ji vyberete
-      při prvním kliknutí na tlačítko. Ceny, hlavička, platební podmínky i úvodní fotka se do ní dosadí ze symbolů
-      <code>{{…}}</code>; pevný text zůstává tak, jak je v šabloně napsaný.</div>
+      Po přihlášení se bere <b>platná centrální šablona ze serveru</b> (#139) – verzi vidíte v Nastavení → Šablony;
+      místní soubor je jen nouzová cesta pro práci bez serveru. Ceny, hlavička, platební podmínky i úvodní fotka
+      se dosadí ze symbolů <code>{{…}}</code>; pevný text zůstává tak, jak je v šabloně napsaný.</div>
     <div class="note" style="margin-top:6px">V náhledu lze zaškrtnout <b>✏️ Upravit text před tiskem</b> a nabídku ručně doladit
       (dopsat větu, přeformulovat, škrtnout odstavec) ještě před uložením do PDF. Tlačítko <b>↺ Vrátit původní znění</b>
       vrátí text vygenerovaný z kalkulace. Ruční úpravy platí <b>jen pro daný výtisk</b> – do zakázky ani do kalkulace
@@ -100,27 +100,38 @@ function nabidkaProjStavText(txt) {
 }
 
 function nabidkaProjWord() {
-  // přednost má šablona nahraná v Nastavení → Šablony (SET-6)
-  if (typeof SABLONY !== 'undefined' && SABLONY.nabidkaProj) SABLONA_PROJ_DOCX = SABLONY.nabidkaProj;
-  if (SABLONA_PROJ_DOCX) { nabidkaProjWordGeneruj(); return; }
-  const inp = document.createElement('input');
-  inp.type = 'file'; inp.accept = '.docx';
-  inp.onchange = () => {
-    const f = inp.files[0]; if (!f) return;
-    f.arrayBuffer().then(buf => {
-      SABLONA_PROJ_DOCX = { nazev: f.name, data: buf };
-      if (typeof SABLONY !== 'undefined') SABLONY.nabidkaProj = SABLONA_PROJ_DOCX;   // zapamatuj pro další generování
-      nabidkaProjWordGeneruj();
-    });
-  };
-  inp.click();
+  /* Stejná cesta jako u nabídky OCK (#139): napřed serverová šablona,
+   * místní soubor jen v měkkém režimu nebo bez serveru. */
+  const L = (typeof jazyk === 'function') ? jazyk() : 'cz';
+  sablonaProTisk('nabidkaProj', L).then(srv => {
+    if (srv) { nabidkaProjWordGeneruj(srv); return; }
+    // místní cesta – přednost má šablona nahraná v Nastavení → Šablony (SET-6)
+    if (typeof SABLONY !== 'undefined' && SABLONY.nabidkaProj) SABLONA_PROJ_DOCX = SABLONY.nabidkaProj;
+    if (SABLONA_PROJ_DOCX) { nabidkaProjWordGeneruj(null); return; }
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = '.docx';
+    inp.onchange = () => {
+      const f = inp.files[0]; if (!f) return;
+      f.arrayBuffer().then(buf => {
+        SABLONA_PROJ_DOCX = { nazev: f.name, data: buf };
+        if (typeof SABLONY !== 'undefined') SABLONY.nabidkaProj = SABLONA_PROJ_DOCX;   // zapamatuj pro další generování
+        nabidkaProjWordGeneruj(null);
+      });
+    };
+    inp.click();
+  }).catch(err => nabidkaProjStavText('Chyba: ' + err.message));
 }
 
-function nabidkaProjWordGeneruj() {
+function nabidkaProjWordGeneruj(srv) {
   const L = (typeof jazyk === 'function') ? jazyk() : 'cz';
-  const mutace = (L !== 'cz' && typeof SABLONY !== 'undefined') ? SABLONY['nabidkaProj_' + L] : null;
-  const sablona = mutace ? mutace.data : SABLONA_PROJ_DOCX.data;
-  nabidkaProjStavText('Vyplňuji šablonu…' + (L !== 'cz' ? ' (' + L.toUpperCase() + ')' : ''));
+  const mutace = (!srv && L !== 'cz' && typeof SABLONY !== 'undefined') ? SABLONY['nabidkaProj_' + L] : null;
+  const sablona = srv ? srv.data : (mutace ? mutace.data : SABLONA_PROJ_DOCX.data);
+  const mutaceChybi = srv ? srv.mutaceChybi : (L !== 'cz' && !mutace);
+  const sablonaInfo = srv
+    ? { zdroj: 'server', typ: srv.typ, verze: srv.verze, otisk: srv.otisk, nazev: srv.nazev }
+    : { zdroj: 'mistni', nazev: (mutace || SABLONA_PROJ_DOCX).nazev || '' };
+  nabidkaProjStavText('Vyplňuji šablonu…' + (L !== 'cz' ? ' (' + L.toUpperCase() + ')' : '')
+    + (srv ? ' [serverová verze ' + srv.verze + ']' : ''));
   /* Varianta se určuje jednou dopředu – potřebujeme ji i pro zámek (#34).
    * Otázka „otevřená, nebo řídící varianta?" je stejná jako u OCK, proto se
    * používá tatáž funkce; nabídka se tak nikdy nevytiskne z něčeho jiného,
@@ -137,13 +148,15 @@ function nabidkaProjWordGeneruj() {
       // stažený .docx je hotová nabídka pro zákazníka → varianta se uzamyká
       let zamcenoText = '';
       if (typeof zamekPoTisku === 'function') {
-        const z = zamekPoTisku('nabidkaProj', varianta.id);
+        const z = zamekPoTisku('nabidkaProj', varianta.id, sablonaInfo);
         if (z) zamcenoText = ' Varianta ' + (z.cislo || '') + ' je nyní uzamčená jako odeslaná nabídka; '
           + 'pokračujte jejím klonem.';
       }
       nabidkaProjStavText('Hotovo – soubor ' + res.nazevSouboru + '.docx je ve Stažených. '
         + 'Uložte jej do složky _CN, doupravte ve Wordu a vytiskněte do PDF.'
-        + (L !== 'cz' && !mutace ? ' Pozor: pevný text šablony zůstal český – jazykovou mutaci šablony '
+        + (srv ? ' Použita centrální šablona (verze ' + srv.verze + ').'
+               : (sablonyOnlineAktivni() ? ' POZOR: použita MÍSTNÍ šablona (měkký režim) – do zámku se to zapsalo.' : ''))
+        + (mutaceChybi ? ' Pozor: pevný text šablony zůstal český – jazykovou mutaci šablony '
           + 'vyrobíte v Nastavení → Šablony.' : '')
         + zamcenoText);
     })

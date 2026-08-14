@@ -1,0 +1,63 @@
+# ============================================================
+# Co se NIKDY nesmí dostat do repozitáře.
+#
+# Program je záměrně očištěný: v src/ jsou jen ukázkové ceny a ukázková
+# firma. Skutečné ceníky, náklady a firemní údaje žijí ve složce _DB na
+# disku (soubory _program.json a _nastaveni.json) a při vývoji v _soukrome/.
+# Kdyby se sem některý z nich dostal, je v historii Gitu napořád.
+# ============================================================
+
+# Pracovní kopie skutečných dat (ceníky, náklady, firemní údaje)
+_soukrome/
+_DB/
+test_data/
+src/test_data/
+cenik_skutecny.json
+_program.json
+_nastaveni.json
+_rejstrik.json
+
+# Výpisy z CRM. Při mapování struktury Pipedrive (9. 8. 2026) vznikly
+# v pracovní složce soubory se VŠEMI dealy, organizacemi a osobami — tedy
+# jména zákazníků, adresy staveb i částky. Chytila je až kontrola před
+# gitem; kdyby nebyla, odjelo by to celé na GitHub. Pracovní výpisy patří
+# do _soukrome/, ne vedle zdrojáků.
+pd/
+pd_*.json
+*_deals.json
+*_orgs.json
+*_persons.json
+
+# Zakázky – obsahují jména zákazníků i ceny
+*.zakazka.json
+zakazky/
+
+# Sestavené výstupy (vznikají z src/ příkazem python3 build.py)
+dist/
+
+# Snímky obrazovky. Vypadají nevinně, ale ukazují ceníkové řádky – a kdo
+# spustí overit_lista.mjs s připojenou složkou _DB, vyfotí skutečné ceny.
+# Jednou už se to stalo (snímky z 29. 7. 2026). Do repozitáře nepatří,
+# kdykoli je znovu vyrobí `node overit_lista.mjs`.
+snimek_*.png
+
+# Pokusná skládka: ověřovací stránky k File System Access API a s nimi
+# celý profil prohlížeče. Nejsou to zdrojáky a jsou v nich i vzorky dat.
+pokus_db/
+pokus_db*.mjs
+
+# Stavové zápisy z jednotlivých dávek. Jsou to pracovní poznámky pro nás,
+# ne zdrojáky – a cituje se v nich, co uživatel poslal, včetně čísel zakázek.
+STAV_*.md
+PLAN_*.md
+
+# Běžný nepořádek
+# Bez lomítka schválně: node_modules je tady symlink, a `node_modules/`
+# s lomítkem platí jen na adresáře – symlink by se do repozitáře dostal.
+node_modules
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+*.tmp
+/tmp/

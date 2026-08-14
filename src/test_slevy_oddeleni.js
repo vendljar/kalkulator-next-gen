@@ -217,12 +217,16 @@ for (const fixes of [false, true]) {
   const zSlevou = zadaniProj(); zSlevou.slevaPct = -40;
   test('zrušené pole slevaPct výpočet projekce neovlivňuje',
     blizko(engProj.vypocetProj(zSlevou, cenikProj()).souhrn.celkem, bez));
-  /* Sekce vykazuje přirážku, ne slevu – jméno pole to má říkat. */
+  /* Sekce vykazuje přirážku (marže = naklad × procento sekce), ne slevu –
+   * a od #141 je procento JEDNO, takže žádné druhé pole s přirážkou
+   * existovat nesmí (právě dvojice polí vedla k dvojímu započtení). */
   const r = engProj.vypocetProj(z, cenikProj());
   test('sekce vykazuje přirážku pod vlastním jménem',
-    r.sekce.every(s => typeof s.prirazkaKc === 'number' && s.slevaKc === undefined));
+    r.sekce.every(s => typeof s.marze === 'number' && s.slevaKc === undefined
+      && s.prirazkaKc === undefined));
   test('souhrn vykazuje přirážku, ne slevu',
-    typeof r.souhrn.prirazka === 'number' && r.souhrn.sleva === undefined);
+    typeof r.souhrn.marze === 'number' && r.souhrn.sleva === undefined
+    && r.souhrn.prirazka === undefined);
 }
 
 /* ============================================================

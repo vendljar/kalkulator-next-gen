@@ -199,10 +199,11 @@ t('1.2 žádná položka není ve výchozím stavu vyřazená',
   z.sekce.find(s => s.key === 'kolaudace').polozky[0].cenaPrepis = 1000;
   const r = vypocetProj(z, C);
   const s = sek(r, 'kolaudace');
-  /* kolaudace má vlastní přirážku 20 %, takže přepis musí projít celým
-   * řetězcem náklad → marže → doprava → přirážka, ne jen do nákladu */
+  /* Přepis musí projít celým řetězcem náklad → přirážka sekce → cena.
+   * Procento je od 13. 8. 2026 JEDNO (#141): bez vlastního čísla sekce
+   * platí globální přirážka z ceníku — žádné druhé násobení. */
   tc('8.1 cena sekce vychází z přepsaného nákladu',
-    s.celkem, (1000 * (1 + C.marze)) * 1.2);
+    s.celkem, 1000 * (1 + C.marze));
   tc('8.2 souhrn odpovídá součtu sekcí',
     r.souhrn.celkem, r.sekce.reduce((a, x) => a + x.celkem, 0));
 }

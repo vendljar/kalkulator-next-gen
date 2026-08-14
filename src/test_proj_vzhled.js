@@ -132,8 +132,10 @@ test('zrušené pole globální slevy PROJ už v UI není',
 test('v hlavičce PROJ už není dlaždicový řádek Obchodní zaokrouhlení',
   !/kl">Obchodní zaokrouhlení/.test(kod));
 test('v hlavičce PROJ zůstává Cena nabídky bez DPH', /Cena nabídky bez DPH/.test(kod));
+/* Od #141 má souhrnná tabulka o dva sloupce méně (sloupec „Sleva/přir."
+ * zmizel spolu s druhým procentem), takže zaokrouhlení sedí přes 4 sloupce. */
 test('souhrnná tabulka zaokrouhlení dál vypisuje vlastním řádkem',
-  /colspan="6">Obchodní zaokrouhlení/.test(kod));
+  /colspan="4">Obchodní zaokrouhlení/.test(kod));
 
 /* ---------- 8) ceníková marže nesmí být zadrátovaná ve zdrojácích ----------
  * „Dejme i výchozí hodnotu marže do ceníku a natahujme z ceníkové databáze."

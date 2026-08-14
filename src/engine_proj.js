@@ -152,8 +152,25 @@ function vypocetProj(zadani, cenik) {
                cenaEfekt: fix, naklad: vyrazeno ? 0 : fix };
     });
     const naklad = polozky.reduce((a, p) => a + p.naklad, 0);
-    const marze = naklad * c.marze;
-    const cena = naklad + marze;                      // O – nabídková cena sekce (bez dopravy)
+    /* JEDNO PROCENTO SEKCE (#141, 13. 8. 2026 — oprava nálezu N1).
+     *
+     * Do 13. 8. 2026 tu byla procenta DVĚ: globální přirážka z ceníku
+     * (naklad × c.marze) a k tomu ještě „vlastní % sekce", které se násobilo
+     * NAD cenou s marží. Prázdné pole sekce přitom od 11. 8. znamenalo „vezmi
+     * globální" — takže se globální přirážka započítala DVAKRÁT a nabídka
+     * vyšla o desítky procent dráž.
+     *
+     * Rozhodnutí J. V. z 13. 8. 2026: „Přirážka má být globální přirážkou,
+     * kterou máme ve výchozí hodnotě pro všechny položky, a následně je
+     * upravitelná pro každou jednotlivou sekci." Procento je tedy JEDNO:
+     * výchozí hodnota je globální přirážka z ceníku PROJ a sekce ji může
+     * vlastním číslem PŘEPSAT (ne přidat navíc).
+     *
+     * „Prázdno není nula" platí dál: prázdné pole = globální přirážka,
+     * vyplněná nula = „u téhle sekce nepřirážíme nic". */
+    const pct = (s.prirazkaPct != null ? s.prirazkaPct / 100 : (+c.marze || 0));
+    const marze = naklad * pct;
+    const cena = naklad + marze;                      // nabídková cena sekce (bez dopravy)
     // Doprava: bez marže, přičítá se k ceně sekce (vzor: O12 = O8 + O11).
     // Paušál „mimo Prahu" jde Z CENÍKU (dopravaPausalKc) a přičítá se jen
     // se zaškrtnutým s.doprava.mimoPrahu — do 2. 8. 2026 položka ceníku do
@@ -166,41 +183,25 @@ function vypocetProj(zadani, cenik) {
         + (+s.doprava.pausal || 0)
       : 0;
     const cenaSDopravou = cena + dopravaKc;
-    /* PROCENTO SEKCE (#132, přepracováno 11. 8. 2026 podle zadání „globální
-     * přirážka by měla být výchozí přirážkou pro sekce; pokud je globální
-     * přirážka 30 %, má být u všech sekcí 30 %").
-     *
-     * Výchozí hodnota je GLOBÁLNÍ PŘIRÁŽKA Z CENÍKU (PC.marze). Sekce ji tedy
-     * nemusí nikde mít napsanou — vezme si ji sama a obchodník ji může u jedné
-     * konkrétní sekce ručně přepsat. Zvláštní ceníkové pole pro tohle není
-     * potřeba a nemá ho ani ceník: jedno číslo, jedno místo.
-     *
-     * Sleva se sem NEPLETE — odečítá se až od hotové ceny projekce
-     * (cenaNabidkyProj). Přirážka říká, kolik si účtujeme; sleva kolik z toho
-     * zákazníkovi odpustíme, a to je jiná otázka i jiný řádek v nabídce.
-     *
-     * „Prázdno není nula" i tady: nula u sekce znamená „nepřirážíme nic"
-     * a přebije ceník, kdežto prázdno znamená „platí globální přirážka". */
-    const pct = (s.prirazkaPct != null ? s.prirazkaPct / 100 : (+c.marze || 0));
-    /* Pole se do 12. 8. 2026 jmenovalo `slevaKc`, protože tudy tekla i sleva.
-     * Sleva je pryč (#134), takže je to čistě přirážka a jmenuje se tak. */
-    const prirazkaKc = cenaSDopravou * pct;           // T – přirážka sekce v Kč
-    const celkem = cenaSDopravou + prirazkaKc;        // V – celková cena sekce
+    /* Sleva se sem NEPLETE — odečítá se až od hotové ceny projekce
+     * (cenaNabidkyProj). Přirážka říká, kolik si účtujeme; sleva kolik
+     * z toho zákazníkovi odpustíme, a to je jiná otázka i jiný řádek
+     * v nabídce. A doprava přirážku nenese — přeprodává se tak, jak stojí. */
+    const celkem = cenaSDopravou;                     // celková cena sekce
     return { key: s.key, nazev: s.nazev, polozky, naklad, marze, cena, dopravaKc,
              cenaSDopravou, prirazkaPct: s.prirazkaPct == null ? null : s.prirazkaPct,
-             pouzitePct: pct * 100, prirazkaKc, celkem };
+             pouzitePct: pct * 100, celkem };
   });
 
   const sum = f => sekce.reduce((a, s) => a + s[f], 0);
   return {
     sekce,
     souhrn: {
-      naklad: sum('naklad'),           // I61
-      marze: sum('marze'),             // M61
+      naklad: sum('naklad'),
+      marze: sum('marze'),             // přirážka v Kč (jedno procento, viz výše)
       doprava: sum('dopravaKc'),
-      cena: sum('cenaSDopravou'),      // O61
-      prirazka: sum('prirazkaKc'),     // T61 – přirážka sekcí, ne sleva
-      celkem: sum('celkem'),           // V61 – celková nabídková cena
+      cena: sum('cenaSDopravou'),
+      celkem: sum('celkem'),           // celková nabídková cena
     },
   };
 }

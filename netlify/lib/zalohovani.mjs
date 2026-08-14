@@ -41,12 +41,20 @@ export async function porizOtisk(zdroj, kdo) {
     if (x) uzivatele.push(x);              // celé účty včetně otisků hesel (viz výše)
   }
 
+  /* Centrální šablony dokumentů (#139) – celé úložiště včetně souborů,
+   * stejně jako v záloze ke stažení. Bez nich by obnova vrátila aplikaci
+   * bez šablon a v přísném režimu by se nedala vytisknout jediná nabídka. */
+  const sab = await uloziste('sablony');
+  const sablony = {};
+  for (const k of await sab.seznam()) sablony[k] = await sab.cti(k);
+
   const otisk = {
     porizena: new Date().toISOString(),
     zdroj: String(zdroj || 'nocni-otisk'),
     kdo: String(kdo || ''),
     program: program || null, firma: firma || null,
     rejstrik: rejstrik || null, zakazky, uzivatele,
+    sablony: Object.keys(sablony).length ? sablony : null,
   };
   await (await uloziste('zalohy')).zapis(den, otisk);
   return { den, pocetZakazek: Object.keys(zakazky).length, pocetUctu: uzivatele.length };

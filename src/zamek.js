@@ -124,6 +124,11 @@ function zamkniVariantu(v, info) {
     typ: info.typ || '',
     popis: info.popis || dokumentPopis(info.typ),
     kdo: info.kdo || '',
+    /* Ze které šablony dokument vznikl (#139): { zdroj:'server'|'mistni',
+     * verze, otisk, nazev }. U serverové šablony je tím doložené, že nabídka
+     * odešla z centrálně řízené verze; „mistni" je razítko tisku mimo ni
+     * (měkký režim nebo práce bez serveru) a nejde dodatečně zapřít. */
+    sablona: info.sablona || null,
   };
   if (variantaUzamcena(v)) {
     if (!Array.isArray(v.zamek.tisky)) v.zamek.tisky = [];

@@ -173,7 +173,8 @@ function onlinePoPrihlaseni(ja) {
   /* Matice zobrazení se načítá spolu s ostatním — a hlavně PŘED prvním
    * překreslením, aby rozhraní hned napoprvé odpovídalo roli. Kdyby dorazila
    * později, obchodník by na okamžik zahlédl ceníky a pak by mu zmizely. */
-  return Promise.all([onlineNactiProgram(), onlineNactiFirmu(), onlineNactiZobrazeni(), onlineNactiRejstrik()])
+  return Promise.all([onlineNactiProgram(), onlineNactiFirmu(), onlineNactiZobrazeni(), onlineNactiRejstrik(),
+                      onlineNactiSablony()])
     .then(() => { if (jeAdminOnline()) onlineZalohaAuto(); });
 }
 
@@ -191,6 +192,7 @@ function onlineOdhlas() {
     ONLINE_STAV.kdyUlozeno = null;
     ONLINE_STAV.uzivatele = []; ONLINE_STAV.uzivateleNacteno = false; ONLINE_STAV.formHeslo = '';
     ONLINE_STAV.otisky = []; ONLINE_STAV.otiskyNacteno = false;
+    ONLINE_STAV.sablonyRejstrik = null;   // šablony patří přihlášeným (#139)
     if (ONLINE_STAV.timer) { clearTimeout(ONLINE_STAV.timer); ONLINE_STAV.timer = null; }
     /* Když v aplikaci vládl online ceník, po odhlášení k němu už není zdroj –
      * návrat k ceníku ze sestavení, stejná úvaha jako při odpojení složky. */
@@ -255,6 +257,73 @@ function onlineZverejni() {
     return onlineNactiProgram().then(() => true);
   }).catch(e => { onlineZprava('Zveřejnit online se nepodařilo: ' + e.message, 'chyba'); return false; })
     .then(v => { ONLINE_STAV.pracuje = false; render(); return v; });
+}
+
+/* ---------- centrální šablony dokumentů (#139, 13. 8. 2026) ----------
+ *
+ * Rejstřík (verze, otisky, režim) se načítá hned po přihlášení; SOUBORY
+ * šablon se stahují až ve chvíli generování a drží se v paměti podle
+ * typu a verze — nová verze na serveru se tedy projeví okamžitě, protože
+ * má jiný klíč a stará se z paměti prostě přestane používat. */
+const SABLONY_ONLINE_CACHE = {};
+
+function onlineNactiSablony() {
+  return onlineApi('/api/sablony').then(o => {
+    ONLINE_STAV.sablonyRejstrik = o.rejstrik || null;
+    return true;
+  }).catch(e => {
+    /* Nenačtený rejstřík NENÍ „žádné šablony": v přísném režimu se z něj
+     * rozhoduje o zákazu tisku, proto se rozlišuje null (nevím — server
+     * nedostupný) a rejstřík bez šablon (vím, že nic není). */
+    ONLINE_STAV.sablonyRejstrik = null;
+    return false;
+  });
+}
+
+function onlineSablonyRezim() {
+  const r = ONLINE_STAV.sablonyRejstrik;
+  return (r && r.rezim) === 'mekky' ? 'mekky' : 'prisny';
+}
+
+function onlineSablonaMeta(typ) {
+  return (typeof sablonaPlatna === 'function')
+    ? sablonaPlatna(ONLINE_STAV.sablonyRejstrik, typ) : null;
+}
+
+/* Stažení platné šablony daného typu → Promise<{nazev, verze, otisk, data:ArrayBuffer}>.
+ * Vrací null, když šablona na serveru není (o zákazu tisku rozhoduje volající
+ * podle režimu — tahle funkce jen přináší data). */
+function onlineSablonaStahni(typ) {
+  const meta = onlineSablonaMeta(typ);
+  if (!meta) return Promise.resolve(null);
+  const klic = typ + '/' + meta.verze;
+  if (SABLONY_ONLINE_CACHE[klic]) return Promise.resolve(SABLONY_ONLINE_CACHE[klic]);
+  return onlineApi('/api/sablony?typ=' + encodeURIComponent(typ)).then(o => {
+    const bin = atob(o.data);
+    const u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    const v = { nazev: o.nazev, verze: o.verze, otisk: o.otisk, data: u8.buffer };
+    SABLONY_ONLINE_CACHE[klic] = v;
+    return v;
+  });
+}
+
+/* Zveřejnění šablony — volá obrazovka Nastavení → Šablony. Soubor jde na
+ * server v base64; verzi, otisk i odmítnutí ne-Wordu řeší server. */
+function onlineSablonaZverejni(typ, nazev, arrayBuffer, poznamka) {
+  const u8 = new Uint8Array(arrayBuffer);
+  let bin = '';
+  const KROK = 32768;   // String.fromCharCode má strop na počet argumentů
+  for (let i = 0; i < u8.length; i += KROK)
+    bin += String.fromCharCode.apply(null, u8.subarray(i, i + KROK));
+  return onlineApi('/api/sablony', { akce: 'zverejnit', typ, nazev, data: btoa(bin),
+                                     poznamka: String(poznamka || '') })
+    .then(o => onlineNactiSablony().then(() => o));
+}
+
+function onlineSablonyRezimNastav(rezim) {
+  return onlineApi('/api/sablony', { akce: 'rezim', rezim })
+    .then(() => onlineNactiSablony());
 }
 
 /* ---------- firemní údaje ze serveru (4. 8. 2026) ----------

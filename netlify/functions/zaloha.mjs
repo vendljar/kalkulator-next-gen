@@ -25,9 +25,17 @@ export default async (req) => {
     const x = await uziv.cti(k);
     if (x) uzivatele.push({ email: x.email, jmeno: x.jmeno, role: x.role, aktivni: x.aktivni !== false });
   }
+  /* Centrální šablony dokumentů (#139) patří do zálohy CELÉ, včetně souborů
+   * všech verzí: po obnově musí jít vytisknout nabídku toutéž šablonou jako
+   * před výpadkem — a doložit i starší verze. Base64 v JSONu přidá k záloze
+   * stovky kB, což za jistotu obnovy stojí. */
+  const sab = await uloziste('sablony');
+  const sablony = {};
+  for (const k of await sab.seznam()) sablony[k] = await sab.cti(k);
   return json({ ok: true, zaloha: {
     porizena: new Date().toISOString(), zdroj: 'schaftscalc.netlify.app',
     program: prog || null, firma: firma || null,
-    rejstrik: rejstrik || null, zakazky, uzivatele } });
+    rejstrik: rejstrik || null, zakazky, uzivatele,
+    sablony: Object.keys(sablony).length ? sablony : null } });
 };
 export const config = { path: '/api/zaloha' };

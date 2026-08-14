@@ -414,7 +414,61 @@ function sablonaChybejiciCsv(typ, lang) {
   }).catch(err => sablonaPrelozStav(typ, lang, 'Chyba: ' + err.message));
 }
 
+/* ---------- zveřejnění šablony online (#139) – jen administrátor ---------- */
+function sablonaOnlineStav(text, chyba) {
+  const el = document.getElementById('sablOnlineStav');
+  if (el) { el.textContent = text || ''; el.style.color = chyba ? 'var(--red, #c0392b)' : ''; }
+}
+function sablonaZverejniOnline(typ) {
+  if (!jeAdmin()) return alert('Zveřejnit šablonu smí jen administrátor.');
+  const s = SABLONY[typ];
+  if (!s) return alert('Nejdřív nahrajte .docx soubor šablony.');
+  /* Zveřejňuje se česká šablona A VŠECHNY hotové jazykové mutace najednou —
+   * zveřejnit jen češtinu by znamenalo, že anglická nabídka pojede z jiné
+   * (starší) verze než česká, což je přesně to, čemu má centrála zabránit. */
+  const mutace = ['en', 'de', 'fr'].filter(l => SABLONY[typ + '_' + l]);
+  if (!confirm('Zveřejnit „' + s.nazev + '" jako platnou šablonu pro celý program?'
+    + (mutace.length ? '\nSpolu s ní se zveřejní jazykové mutace: ' + mutace.map(l => l.toUpperCase()).join(', ') + '.' : '')
+    + '\n\nOd této chvíle z ní budou tisknout všichni přihlášení.')) return;
+  const pozn = prompt('Čím se změna zdůvodňuje (nepovinné):', '') || '';
+  sablonaOnlineStav('Zveřejňuji…');
+  let fronta = Promise.resolve();
+  const vysledky = [];
+  [[typ, s]].concat(mutace.map(l => [typ + '_' + l, SABLONY[typ + '_' + l]])).forEach(([t, sab]) => {
+    fronta = fronta
+      .then(() => onlineSablonaZverejni(t, sab.nazev, sab.data.slice(0), pozn))
+      .then(o => vysledky.push(t + ' → verze ' + o.verze))
+      .catch(e => {
+        /* „Beze změny" není chyba zveřejnění, jen informace. */
+        vysledky.push(t + ': ' + e.message);
+      });
+  });
+  fronta.then(() => { sablonaOnlineStav('Hotovo: ' + vysledky.join(' · ')); nastRefresh(); });
+}
+function sablonyRezimUI(rezim) {
+  if (!jeAdmin()) return;
+  if (rezim === 'mekky' && !confirm('Přepnout šablony do MĚKKÉHO režimu?\n\n'
+    + 'Obchodníci pak budou moci tisknout i z místních souborů. Používejte jen při výpadku '
+    + 'online části; po jeho odeznění přepněte zpět na přísný.')) { nastRefresh(); return; }
+  onlineSablonyRezimNastav(rezim)
+    .then(() => { sablonaOnlineStav('Režim přepnut.'); nastRefresh(); })
+    .catch(e => { sablonaOnlineStav('Chyba: ' + e.message, true); nastRefresh(); });
+}
+
 function nastSablony() {
+  /* Řádek platné serverové verze daného typu (#139). Ukazuje se každému
+   * přihlášenému — obchodník má vědět, ze které verze se tiskne. */
+  const onlineInfo = (typ) => {
+    if (!sablonyOnlineAktivni()) return '';
+    const kusy = [typ].concat(['en', 'de', 'fr'].map(l => typ + '_' + l)).map(t => {
+      const m = (typeof onlineSablonaMeta === 'function') ? onlineSablonaMeta(t) : null;
+      if (!m) return null;
+      const j = t === typ ? '' : ' ' + t.slice(-2).toUpperCase();
+      return `verze ${m.verze}${j} (${esc(m.nazev)}, zveřejnil ${esc(m.zverejnil)} ${esc((m.kdy || '').slice(0, 10))})`;
+    }).filter(Boolean);
+    return `<div class="note" style="margin-top:6px">☁ Na serveru: ${kusy.length
+      ? kusy.join(' · ') : '<b>žádná šablona zatím zveřejněná</b>'}</div>`;
+  };
   const radek = (typ, label, pozn) => {
     const s = SABLONY[typ];
     const mutace = ['en', 'de', 'fr'].map(l => {
@@ -427,7 +481,10 @@ function nastSablony() {
       <b>${label}</b> ${pozn ? `<span class="note">— ${pozn}</span>` : ''}<br>
       <span class="${s ? '' : 'note'}" style="font-size:12.5px">${s ? '✓ nahráno: ' + esc(s.nazev) : 'zatím nenahráno (použije se výběr souboru při generování)'}</span>
       <div class="btns" style="margin-top:6px"><button onclick="sablonaNahraj('${typ}')">Nahrát .docx</button>
-        ${s ? `<button class="mini" onclick="sablonaSmaz('${typ}')">Odebrat</button>` : ''}</div>
+        ${s ? `<button class="mini" onclick="sablonaSmaz('${typ}')">Odebrat</button>` : ''}
+        ${s && jeAdmin() && sablonyOnlineAktivni()
+          ? `<button class="primary" onclick="sablonaZverejniOnline('${typ}')">☁ Zveřejnit online jako platnou</button>` : ''}</div>
+      ${onlineInfo(typ)}
       ${s && jeAdmin() ? `<div style="margin-top:8px;border-top:1px dashed var(--line);padding-top:8px">
         <span class="note">Jazyková mutace šablony (N1):</span>
         <div class="btns" style="margin-top:4px">${mutace}
@@ -437,13 +494,43 @@ function nastSablony() {
         <div id="sablStav-${typ}" class="note" style="margin-top:6px"></div></div>` : ''}
       </div>`;
   };
-  return `<div class="note">Nahraj vlastní <b>.docx</b> šablony přímo do aplikace. Generátor je použije místo výběru souboru
-    při každém generování. Šablony se plní zástupnými symboly <code>{{KLÍČ}}</code>.
-    <b>Zatím platí pro relaci</b>; trvalé uložení přijde s nasazením (viz <code>SET-6</code>).</div>
+  /* Přepínač režimu (#139) — jen administrátor, jen online. Věty u voleb
+   * říkají důsledek, ne mechanismus: administrátor rozhoduje o tom, co se
+   * stane obchodníkovi u tisku. */
+  const rezimBlok = () => {
+    if (!sablonyOnlineAktivni()) return '';
+    const rezim = (typeof onlineSablonyRezim === 'function') ? onlineSablonyRezim() : 'prisny';
+    const r = ONLINE_STAV.sablonyRejstrik || {};
+    if (!jeAdmin())
+      return `<div class="note" style="margin-top:8px">Režim šablon: <b>${rezim === 'prisny'
+        ? 'přísný — tiskne se výhradně z centrálních šablon' : 'měkký — při výpadku lze použít místní soubor'}</b>.</div>`;
+    return `<div style="margin:10px 0;padding:10px;border:1px solid var(--line);border-radius:8px">
+      <b>Režim centrálních šablon</b>
+      <div class="btns" style="margin-top:6px">
+        <select onchange="sablonyRezimUI(this.value)">
+          <option value="prisny" ${rezim === 'prisny' ? 'selected' : ''}>PŘÍSNÝ — bez serverové šablony dokument nevznikne (doporučeno)</option>
+          <option value="mekky" ${rezim === 'mekky' ? 'selected' : ''}>MĚKKÝ — při výpadku serveru lze tisknout z místního souboru</option>
+        </select></div>
+      <div class="note" style="margin-top:6px">Přísný režim zaručuje, že žádný obchodník netiskne ze staré verze.
+        Měkký je nouzová výjimka pro výpadek online části — každý tisk z místního souboru se zapíše do zámku
+        varianty jako „místní šablona", takže zůstává dohledatelný.
+        ${r.rezimZmenil ? `Naposledy přepnul ${esc(r.rezimZmenil)} ${esc((r.rezimKdy || '').slice(0, 10))}.` : ''}</div>
+      <div id="sablOnlineStav" class="note" style="margin-top:6px"></div></div>`;
+  };
+  return `<div class="note">Šablony <b>.docx</b> se od 13. 8. 2026 řídí <b>centrálně</b> (#139): administrátor je zveřejní
+    na serveru a všichni přihlášení z nich automaticky tisknou — nikdo nemůže omylem použít starou verzi. Nahrání
+    souboru níže je příprava (a nouzová cesta pro práci bez serveru); teprve <b>„Zveřejnit online"</b> ji učiní platnou
+    pro všechny. Šablony se plní zástupnými symboly <code>{{KLÍČ}}</code> a jsou součástí všech záloh.</div>
+    ${rezimBlok()}
     ${radek('nabidka', 'Šablona cenové nabídky OCK', 'používá se pro „Vytvořit nabídku (Word)" v Kalkulaci OCK')}
     ${radek('nabidkaProj', 'Šablona cenové nabídky PROJ (OVP-CN)',
       'používá se pro „Vytvořit nabídku PROJ (Word)" v Kalkulaci PROJ – je to jiný dokument než nabídka OCK')}
-    ${radek('sod', 'Šablona smlouvy o dílo (SoD)', 'připraveno pro generování SoD – čeká na právní znění')}
+    ${radek('sod', 'Šablona smlouvy o dílo — REALIZACE (OCK)',
+      'Sablona_SOD_REALIZACE.docx – strany, cena, podmínky a termíny přes symboly {{…}}')}
+    ${radek('sodProj', 'Šablona smlouvy o dílo — PROJEKČNÍ PRÁCE',
+      'Sablona_SOD_PROJEKCE.docx – strany, cena, sankce a platby po fázích přes symboly {{…}}')}
+    ${radek('plnaMoc', 'Šablona plné moci',
+      'Sablona_PLNA_MOC.docx – zmocnitel, nemovitost a firemní údaje přes symboly {{…}}')}
     <div class="note" style="margin-top:10px">Mutace vzniká překladem <b>pevného textu</b> šablony; nepřeložené fráze
       zůstanou česky a jsou v CSV k doplnění. <b>Hodnoty</b> dosazované do <code>{{…}}</code> se překládají zvlášť podle
       jazyka zvoleného v technické specifikaci. Vytváření mutací a export seznamů = <b>jen administrátor</b>.</div>`;

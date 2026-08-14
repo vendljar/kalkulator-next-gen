@@ -149,7 +149,7 @@ function zamekKdo() {
 /* Volá se ze dvou míst: po stažení nabídky do Wordu a z tiskového náhledu
  * (okno náhledu si sáhne přes window.opener). Zamykají jen dokumenty, které
  * jdou zákazníkovi – viz ZAMEK_DOKUMENTY v zamek.js. */
-function zamekPoTisku(typ, varId) {
+function zamekPoTisku(typ, varId, sablona) {
   if (!dokumentZamyka(typ)) return null;
   const v = (varId && ZAK.varianty.find(x => x.id === varId)) || aktivniVarianta(ZAK);
   if (!v) return null;
@@ -158,7 +158,8 @@ function zamekPoTisku(typ, varId) {
   if (prvni) {
     try { otisk = zamekOtiskZPorovnani(porovnaniData(), v.id); } catch (e) { otisk = null; }
   }
-  zamkniVariantu(v, { typ, kdo: zamekKdo(), cislo: variantaCislo(ZAK, v), otisk });
+  zamkniVariantu(v, { typ, kdo: zamekKdo(), cislo: variantaCislo(ZAK, v), otisk,
+                      sablona: sablona || null });
   render();
   return v.zamek;
 }

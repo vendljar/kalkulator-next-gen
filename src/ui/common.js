@@ -160,8 +160,60 @@ function kpiVidSet(k, v) { if (!NAST.kpiViditelne) NAST.kpiViditelne = {}; NAST.
   if (typeof nastdbZmeneno === 'function') nastdbZmeneno(); render(); }
 
 /* Úložiště nahraných šablon dokumentů (SET-6). Relace; { typ: {nazev, data:ArrayBuffer} }.
- * Generátor (nabídka, budoucí SoD) je bere odtud místo výběru souboru pokaždé. */
+ * Generátor (nabídka, budoucí SoD) je bere odtud místo výběru souboru pokaždé.
+ * Od #139 (13. 8. 2026) je to NOUZOVÁ cesta — přednost mají centrální šablony
+ * ze serveru (viz sablonaProTisk níž). */
 const SABLONY = {};
+
+/* ---------- odkud vzít šablonu pro tisk (#139, 13. 8. 2026) ----------
+ *
+ * Jediné místo, které rozhoduje, ze které šablony se generuje Word. Pravidla:
+ *
+ *  1) Běží-li aplikace online a uživatel je přihlášen, bere se PLATNÁ šablona
+ *     ze serveru (v jazyce dokumentů, když má server mutaci; jinak česká
+ *     s upozorněním). Obchodník tak NIKDY netiskne ze staré verze.
+ *  2) Když serverová šablona není nebo se nedá stáhnout, rozhoduje režim:
+ *     PŘÍSNÝ (výchozí) — dokument nevznikne, stejně jako nevznikne bez
+ *     platného ceníku. MĚKKÝ — povolí se místní soubor, ale tisk dostane
+ *     do zámku varianty razítko „místní šablona", aby nešel zapřít.
+ *  3) Nad file:// (jednosouborová kopie bez serveru) platí dosavadní chování:
+ *     místní šablona z Nastavení, nebo výběr souboru.
+ *
+ * Vrací Promise: objekt { data, nazev, zdroj:'server', verze, otisk, typ,
+ * mutaceChybi } — nebo null („pokračuj místní cestou"; jen mimo přísný
+ * režim) — nebo odmítnutí s českou větou, kterou jde rovnou ukázat. */
+function sablonyOnlineAktivni() {
+  return typeof ONLINE_STAV !== 'undefined' && ONLINE_STAV.bezi && !!ONLINE_STAV.ja;
+}
+function sablonaProTisk(typ, lang) {
+  if (!sablonyOnlineAktivni()) return Promise.resolve(null);
+  const L = lang || 'cz';
+  const rezim = (typeof onlineSablonyRezim === 'function') ? onlineSablonyRezim() : 'prisny';
+  const typJazyk = L !== 'cz' ? typ + '_' + L : null;
+  const metaJ = typJazyk && onlineSablonaMeta(typJazyk);
+  const meta = onlineSablonaMeta(typ);
+  const popis = (typeof dokumentPopis === 'function' && dokumentPopis(typ)) || typ;
+
+  if (metaJ || meta) {
+    const vybrany = metaJ ? typJazyk : typ;
+    return onlineSablonaStahni(vybrany)
+      .then(v => ({ data: v.data, nazev: v.nazev, zdroj: 'server', verze: v.verze,
+                    otisk: v.otisk, typ: vybrany, mutaceChybi: !!(typJazyk && !metaJ) }))
+      .catch(err => {
+        if (rezim === 'prisny')
+          throw new Error('Šablonu „' + popis + '" se nepodařilo stáhnout ze serveru ('
+            + err.message + '). V přísném režimu se dokument z místních souborů negeneruje – '
+            + 'zkuste to za chvíli znovu, nebo ať administrátor přepne šablony do měkkého režimu '
+            + '(Nastavení → Šablony).');
+        return null;
+      });
+  }
+  if (rezim === 'prisny')
+    return Promise.reject(new Error('Na serveru zatím není zveřejněná šablona „' + popis + '". '
+      + 'V přísném režimu se dokument z místních souborů negeneruje – šablonu zveřejní '
+      + 'administrátor v Nastavení → Šablony.'));
+  return Promise.resolve(null);
+}
 /* je záložka viditelná? (skryté ceníky/detaily pro běžného uživatele) */
 const TAB_ZOBRAZENI_KLIC = { cenik: 'tab.cenik', cenikproj: 'tab.cenikproj', detail: 'tab.detail', specdata: 'tab.specdata' };
 function tabViditelny(t) {

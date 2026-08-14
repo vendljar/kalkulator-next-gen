@@ -106,10 +106,12 @@ function renderProj() {
   const projCena = cnp ? cnp.cena : r.souhrn.celkem;
   const projZaokr = cnp ? cnp.zaokrKc : 0;
 
-  /* Přirážka položky se v jádře počítá až za celou sekci (naklad × PC.marze).
-   * Pro sloupce v tabulce ji rozpočítáme na řádky – součet sedí, protože jde
-   * o tentýž jednotný podíl. Doprava přirážku nenese, proto u ní pomlčka. */
-  const marzeP = n => n * (PC.marze || 0);
+  /* Přirážka položky se v jádře počítá až za celou sekci (naklad × procento
+   * sekce). Pro sloupce v tabulce se rozpočítá na řádky – součet sedí, protože
+   * jde o tentýž jednotný podíl. Od #141 je procento JEDNO: výchozí globální
+   * z ceníku, sekce ho může přepsat — řádky sekce proto počítají s procentem
+   * SVÉ sekce, ne s globálním. Doprava přirážku nenese, proto u ní pomlčka. */
+  const marzeSekce = (s, n) => n * ((s.pouzitePct || 0) / 100);
   const penize = (naklad, marze, cena) =>
     (col.showCost ? `<td>${fmt(naklad)}</td><td>${marze === null ? '—' : fmt(marze)}</td>` : '') +
     `<td>${fmt(cena)}</td>`;
@@ -195,7 +197,7 @@ function renderProj() {
             title="${p.vyrazeno ? 'položka se nepočítá – zaškrtnutím ji vrátíte do výpočtu' : 'odškrtnutím položku vyřadíte z výpočtu (zůstane v seznamu)'}"></td>`
         : '';
       const tr = `<tr${p.vyrazeno ? ' class="vyrazeno"' : ''}${dz}>`;
-      const cena = p.naklad + marzeP(p.naklad);
+      const cena = p.naklad + marzeSekce(s, p.naklad);
 
       if (p.typ === 'hod') {
         /* Sloupec Sazba: číslo z ceníku + drobný štítek činnosti (zadání
@@ -214,7 +216,7 @@ function renderProj() {
           <td>${col.admin ? `<input type="number" step="1" style="width:66px" value="${p.rezerva}" onchange="pjSet(${i}, 'polozky.${j}.rezerva', +this.value)">` : num(p.rezerva)}</td>
           <td>${num(p.hodinyCelkem)}</td>
           <td style="white-space:nowrap">${sazbaEd}</td>
-          ${penize(p.naklad, marzeP(p.naklad), cena)}${pocitat}</tr>`;
+          ${penize(p.naklad, marzeSekce(s, p.naklad), cena)}${pocitat}</tr>`;
       }
 
       /* Fixní částka. Do 30. 7. 2026 se tímhle polem přepisoval CENÍK, takže
@@ -233,7 +235,7 @@ function renderProj() {
           ? (p.cenaPrepsana ? 'fixní částka – přepsáno pro tuto zakázku' : 'fixní částka (ceník PROJ)')
           : 'fixní částka'}</td>
         <td style="white-space:nowrap">${fixEd}</td>
-        ${penize(p.naklad, marzeP(p.naklad), cena)}${pocitat}</tr>`;
+        ${penize(p.naklad, marzeSekce(s, p.naklad), cena)}${pocitat}</tr>`;
     }).join('');
 
     /* Doprava je běžný řádek sekce, jen z ní přirážka neplyne (dle předlohy).
@@ -297,17 +299,20 @@ function renderProj() {
     Prázdné pole ve sloupci Sazba znamená „drž se ceníku"; co do něj napíšete, je dohoda jen pro tuhle zakázku (nula je platná dohoda – „děláme zdarma") a tlačítkem ↺ se vrátí ceníková hodnota.
     Poznámka pod názvem položky je <b>interní</b> – do nabídky ani do krycího listu se nepřenáší.</div>` : ''}`;
 
+  /* Souhrn: od #141 je procento sekce JEDNO (výchozí globální, přepsatelné),
+   * takže sloupec „Sleva/přir." zmizel — býval to druhý zápis téhož a právě
+   * z té dvojice vzniklo dvojí započtení přirážky. */
   const souhrnTbl = `<table>
-    <tr><th>Sekce</th><th>Náklad</th><th>Přirážka</th><th>Doprava</th><th>Cena</th><th>Sleva/přir.</th><th>Celkem</th></tr>
+    <tr><th>Sekce</th><th>Náklad</th><th>Přirážka</th><th>Doprava</th><th>Celkem</th></tr>
     ${r.sekce.filter(s => s.celkem !== 0 || s.naklad !== 0).map(s =>
-      `<tr><td>${esc(s.nazev)}</td><td>${fmt(s.naklad)}</td><td>${fmt(s.marze)}</td><td>${fmt(s.dopravaKc)}</td>
-       <td>${fmt(s.cenaSDopravou)}</td><td>${num(s.pouzitePct)} % ⇒ ${fmt(s.prirazkaKc)}</td><td>${fmt(s.celkem)}</td></tr>`).join('')}
+      `<tr><td>${esc(s.nazev)}</td><td>${fmt(s.naklad)}</td><td>${num(s.pouzitePct)} % ⇒ ${fmt(s.marze)}</td>
+       <td>${fmt(s.dopravaKc)}</td><td>${fmt(s.celkem)}</td></tr>`).join('')}
     <tr class="tot"><td>CELKEM</td><td>${fmt(r.souhrn.naklad)}</td><td>${fmt(r.souhrn.marze)}</td><td>${fmt(r.souhrn.doprava)}</td>
-      <td>${fmt(r.souhrn.cena)}</td><td>${fmt(r.souhrn.prirazka)}</td><td><b>${fmt0(r.souhrn.celkem)}</b></td></tr>
+      <td><b>${fmt0(r.souhrn.celkem)}</b></td></tr>
     ${projZaokr && typeof zaokrKc === 'function' ? `
-    <tr><td colspan="6">Obchodní zaokrouhlení${typeof zaokrStav === 'function' && zaokrStav(r.souhrn.celkem, ZOP).popis ? ' (' + esc(zaokrStav(r.souhrn.celkem, ZOP).popis) + ')' : ''}</td>
+    <tr><td colspan="4">Obchodní zaokrouhlení${typeof zaokrStav === 'function' && zaokrStav(r.souhrn.celkem, ZOP).popis ? ' (' + esc(zaokrStav(r.souhrn.celkem, ZOP).popis) + ')' : ''}</td>
       <td>${esc(zaokrKc(projZaokr))}</td></tr>
-    <tr class="tot"><td colspan="6">CENA NABÍDKY PROJ</td><td><b>${fmt0(projCena)}</b></td></tr>` : ''}
+    <tr class="tot"><td colspan="4">CENA NABÍDKY PROJ</td><td><b>${fmt0(projCena)}</b></td></tr>` : ''}
   </table>`;
 
   document.getElementById('page-proj').innerHTML =

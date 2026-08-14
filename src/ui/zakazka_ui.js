@@ -547,29 +547,44 @@ function nabidkaVarianta() {
 let SABLONA_DOCX = null;   // {nazev, data:ArrayBuffer} – drží se jen po dobu otevřené aplikace
 
 function nabidkaWord() {
-  // přednost má šablona nahraná v Nastavení → Šablony (SET-6)
-  if (typeof SABLONY !== 'undefined' && SABLONY.nabidka) SABLONA_DOCX = SABLONY.nabidka;
-  if (SABLONA_DOCX) { nabidkaWordGeneruj(); return; }
-  const inp = document.createElement('input');
-  inp.type = 'file'; inp.accept = '.docx';
-  inp.onchange = () => {
-    const f = inp.files[0]; if (!f) return;
-    f.arrayBuffer().then(buf => {
-      SABLONA_DOCX = { nazev: f.name, data: buf };
-      if (typeof SABLONY !== 'undefined') SABLONY.nabidka = SABLONA_DOCX;   // zapamatuj pro další generování
-      nabidkaWordGeneruj();
-    });
-  };
-  inp.click();
+  /* Odkud vzít šablonu, rozhoduje sablonaProTisk (#139): přednost má platná
+   * šablona ze serveru; místní cesta (Nastavení / výběr souboru) zůstává jen
+   * pro měkký režim a pro práci bez serveru. Přísný režim tady může skončit
+   * odmítnutím — česká věta z něj jde rovnou do stavového řádku. */
+  const L = (typeof jazyk === 'function') ? jazyk() : 'cz';
+  sablonaProTisk('nabidka', L).then(srv => {
+    if (srv) { nabidkaWordGeneruj(srv); return; }
+    // místní cesta – přednost má šablona nahraná v Nastavení → Šablony (SET-6)
+    if (typeof SABLONY !== 'undefined' && SABLONY.nabidka) SABLONA_DOCX = SABLONY.nabidka;
+    if (SABLONA_DOCX) { nabidkaWordGeneruj(null); return; }
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = '.docx';
+    inp.onchange = () => {
+      const f = inp.files[0]; if (!f) return;
+      f.arrayBuffer().then(buf => {
+        SABLONA_DOCX = { nazev: f.name, data: buf };
+        if (typeof SABLONY !== 'undefined') SABLONY.nabidka = SABLONA_DOCX;   // zapamatuj pro další generování
+        nabidkaWordGeneruj(null);
+      });
+    };
+    inp.click();
+  }).catch(err => nabidkaStavText('Chyba: ' + err.message));
 }
 
-function nabidkaWordGeneruj() {
+function nabidkaWordGeneruj(srv) {
   // jazyk dokumentu (N1) – hodnoty se dosazují v něm; pevný text jen tehdy,
-  // je-li v Nastavení → Šablony vyrobena jazyková mutace šablony
+  // existuje-li jazyková mutace šablony (na serveru, nebo v Nastavení → Šablony)
   const L = (typeof jazyk === 'function') ? jazyk() : 'cz';
-  const mutace = (L !== 'cz' && typeof SABLONY !== 'undefined') ? SABLONY['nabidka_' + L] : null;
-  const sablona = mutace ? mutace.data : SABLONA_DOCX.data;
-  nabidkaStavText('Vyplňuji šablonu…' + (L !== 'cz' ? ' (' + L.toUpperCase() + ')' : ''));
+  const mutace = (!srv && L !== 'cz' && typeof SABLONY !== 'undefined') ? SABLONY['nabidka_' + L] : null;
+  const sablona = srv ? srv.data : (mutace ? mutace.data : SABLONA_DOCX.data);
+  const mutaceChybi = srv ? srv.mutaceChybi : (L !== 'cz' && !mutace);
+  /* Razítko šablony do zámku varianty (#139): u serverové verze číslo
+   * a otisk, u místní jméno souboru — dohledatelné v obou případech. */
+  const sablonaInfo = srv
+    ? { zdroj: 'server', typ: srv.typ, verze: srv.verze, otisk: srv.otisk, nazev: srv.nazev }
+    : { zdroj: 'mistni', nazev: (mutace || SABLONA_DOCX).nazev || '' };
+  nabidkaStavText('Vyplňuji šablonu…' + (L !== 'cz' ? ' (' + L.toUpperCase() + ')' : '')
+    + (srv ? ' [serverová verze ' + srv.verze + ']' : ''));
   // varianta se určuje jednou dopředu – potřebujeme ji i pro zámek (#34)
   const varianta = nabidkaVarianta();
   // jednotný registr dokumentů (dokumenty.js) – stejná cesta jako krycí list apod.
@@ -582,13 +597,15 @@ function nabidkaWordGeneruj() {
       // stažený .docx je hotová nabídka pro zákazníka → varianta se uzamyká
       let zamcenoText = '';
       if (typeof zamekPoTisku === 'function') {
-        const z = zamekPoTisku('nabidka', varianta.id);
+        const z = zamekPoTisku('nabidka', varianta.id, sablonaInfo);
         if (z) zamcenoText = ' Varianta ' + (z.cislo || '') + ' je nyní uzamčená jako odeslaná nabídka; '
           + 'pokračujte jejím klonem.';
       }
       nabidkaStavText('Hotovo – soubor ' + res.nazevSouboru + '.docx je ve Stažených. '
         + 'Uložte jej do složky _CN, doupravte ve Wordu a vytiskněte do PDF.'
-        + (L !== 'cz' && !mutace ? ' Pozor: pevný text šablony zůstal český – jazykovou mutaci šablony '
+        + (srv ? ' Použita centrální šablona (verze ' + srv.verze + ').'
+               : (sablonyOnlineAktivni() ? ' POZOR: použita MÍSTNÍ šablona (měkký režim) – do zámku se to zapsalo.' : ''))
+        + (mutaceChybi ? ' Pozor: pevný text šablony zůstal český – jazykovou mutaci šablony '
           + 'vyrobíte v Nastavení → Šablony.' : '')
         + zamcenoText);
     })

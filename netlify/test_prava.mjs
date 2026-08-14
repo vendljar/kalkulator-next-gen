@@ -50,6 +50,7 @@ import zalohaVynuceno from './functions/zaloha_vynuceno.mjs';
 import zdravi from './functions/zdravi.mjs';
 import zobrazeni from './functions/zobrazeni.mjs';
 import schvalovaniFn from './functions/schvalovani.mjs';
+import sablonyFn from './functions/sablony.mjs';
 import pdPole from './functions/pd_pole.mjs';
 import pdDealy from './functions/pd_dealy.mjs';
 import pdDeal from './functions/pd_deal.mjs';
@@ -362,6 +363,26 @@ const MATICE = [
     metoda: 'GET', url: 'http://x/api/pd/pole',
     proc: 'názvy polí v CRM nejsou tajemství; vynucené obnovení už jen pro správce',
     prava: PRIHLASENY_OK },
+
+  /* Centrální šablony dokumentů (#139). Číst smí každý přihlášený — obchodník
+   * z platné šablony tiskne. Zveřejnit a přepínat režim smí JEN administrátor:
+   * kdyby šablonu mohl vyměnit kdokoli, celé centrální řízení by nic neřídilo. */
+  { fn: sablonyFn, soubor: 'sablony.mjs', nazev: 'šablony — rejstřík (GET /api/sablony)',
+    metoda: 'GET', url: 'http://x/api/sablony',
+    proc: 'obchodník tiskne z platné šablony, musí ji tedy umět stáhnout',
+    prava: PRIHLASENY_OK },
+
+  { fn: sablonyFn, soubor: 'sablony.mjs', nazev: 'šablony — zveřejnění (POST /api/sablony)',
+    metoda: 'POST', url: 'http://x/api/sablony',
+    telo: () => ({ akce: 'zverejnit', typ: 'nabidka', nazev: 'x.docx', data: 'UEsDBAAA' }),
+    proc: 'výměna šablony mění dokumenty celé firmy — to je rozhodnutí administrátora',
+    prava: JEN_ADMIN },
+
+  { fn: sablonyFn, soubor: 'sablony.mjs', nazev: 'šablony — přepnutí režimu (POST /api/sablony)',
+    metoda: 'POST', url: 'http://x/api/sablony',
+    telo: () => ({ akce: 'rezim', rezim: 'mekky' }),
+    proc: 'měkký režim vypíná záruku „nikdo netiskne ze staré verze" — jen administrátor',
+    prava: JEN_ADMIN },
 ];
 
 console.log('\n===== KŘÍŽOVÁ MATICE: cesta × role =====\n');

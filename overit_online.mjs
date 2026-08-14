@@ -39,6 +39,7 @@ import zaloha from './netlify/functions/zaloha.mjs';
 import firma from './netlify/functions/firma.mjs';
 import zobrazeni from './netlify/functions/zobrazeni.mjs';
 import zalohaVynuceno from './netlify/functions/zaloha_vynuceno.mjs';
+import sablonyFn from './netlify/functions/sablony.mjs';
 
 const require = createRequire(import.meta.url);
 let chromium;
@@ -62,6 +63,9 @@ const FUNKCE = {
    * chyběla, volání z prohlížeče by skončilo na 404 a test by mlčel
    * o tom, že „vynucené zálohování" pořád nikam nevede. */
   '/api/zaloha_vynuceno': zalohaVynuceno,
+  /* Centrální šablony (#139) — aplikace si rejstřík bere hned po přihlášení;
+   * bez téhle cesty by každý průchod svítil 404 v konzoli. */
+  '/api/sablony': sablonyFn,
 };
 
 let ok = 0, fail = 0;
