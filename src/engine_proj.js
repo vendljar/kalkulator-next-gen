@@ -42,14 +42,15 @@ const DEFAULT_ZADANI_PROJ = {
    * Migrace v zakazka.js hodnotu ze starých zakázek převezme, aby se cena
    * nezměnila ani o korunu. */
   sekce: [
-    /* Výchozí rozsah (rozhodnutí J. V. 17. 8. 2026 večer): nová zakázka
-     * začíná se STUDIÍ vyplněnou a ZAMĚŘENÍM prázdným — studie je běžný
-     * případ prodeje a zaměření je v ní obsažené jako část 1 (sekce se
-     * vzájemně vylučují, viz pjVyrazeno v ui/kalk_proj.js). */
+    /* Výchozí rozsah (oprava nedorozumění 18. 8. 2026): NÁKLADY ZŮSTÁVAJÍ —
+     * zaměření si nese své hodiny (5 + 10) pořád, jen je ve výchozím stavu
+     * VYŘAZENÉ (odškrtnuté): nová zakázka počítá s celou studií, která
+     * zaměření obsahuje jako část 1, a separátní zaměření by se v nabídce
+     * duplikovalo. Jedno kliknutí na sekční zaškrtávátko ho vrátí i s hodinami. */
     { key: 'zamereni', nazev: 'ZAMĚŘENÍ', doprava: { km: 0, pausal: 0 }, prirazkaPct: null,
       polozky: [
-        { nazev: 'Zaměření', typ: 'hod', sazba: 'zamereni', hodiny: 0, rezerva: 0 },
-        { nazev: 'Výstup', typ: 'hod', sazba: 'projektant', hodiny: 0, rezerva: 0 },
+        { nazev: 'Zaměření', typ: 'hod', sazba: 'zamereni', hodiny: 5, rezerva: 0, vyrazeno: true },
+        { nazev: 'Výstup', typ: 'hod', sazba: 'projektant', hodiny: 10, rezerva: 0, vyrazeno: true },
       ] },
     { key: 'studie', nazev: 'ST – STUDIE', prirazkaPct: null,
       polozky: [

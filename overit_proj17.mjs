@@ -111,10 +111,10 @@ test('zapnutí položky ZAMĚŘENÍ vyřadí všechny položky STUDIE',
 /* ---------- 6) sekce mimo rozsah se v nabídce neuvádějí ---------- */
 console.log('\nnabídka bez sekcí mimo rozsah');
 const nabidka = await p.evaluate(() => {
-  /* Výchozí hodiny zaměření jsou od 17. 8. večer NULOVÉ — pro zkoušku
-   * rozsahu se zaměření ocení (a studie zůstala vyřazená z kroku výše). */
+  /* Výchozí zaměření je VYŘAZENÉ (18. 8.) — pro zkoušku rozsahu se zapne
+   * (studie zůstala vyřazená z kroku výše). */
   const za = PJ.sekce.find(s => s.key === 'zamereni');
-  za.polozky[0].hodiny = 5; za.polozky[1].hodiny = 10;
+  za.polozky.forEach(q => { delete q.vyrazeno; });
   const d = nabidkaProjData(ZAK, aktivniVarianta(ZAK), 'cz');
   const nadpisy = d.bloky.map(b => b.nadpis || b.text || '').join(' | ');
   return {
@@ -163,12 +163,15 @@ test('ikona v hlavičce je zelený znak dolaru, favicon zůstal tmavě modrý',
 
 /* ---------- 9) večerní dávka II (17. 8.) ---------- */
 console.log('\nvečerní dávka II');
-test('výchozí rozsah nové zakázky: STUDIE vyplněná, ZAMĚŘENÍ prázdné',
+test('výchozí rozsah: STUDIE počítaná, ZAMĚŘENÍ vyřazené — ale S hodinami (náklady zůstávají)',
   await p.evaluate(() => {
     const z = novaZakazka();
     const sekce = z.varianty[0].data.proj.zadani.sekce;
-    const hod = k => sekce.find(s => s.key === k).polozky.reduce((a, q) => a + (+q.hodiny || 0), 0);
-    return hod('studie') > 0 && hod('zamereni') === 0;
+    const za = sekce.find(s => s.key === 'zamereni');
+    const st = sekce.find(s => s.key === 'studie');
+    const hod = s => s.polozky.reduce((a, q) => a + (+q.hodiny || 0), 0);
+    return hod(st) > 0 && st.polozky.every(q => !q.vyrazeno)
+      && hod(za) > 0 && za.polozky.every(q => q.vyrazeno);
   }));
 test('sekční zaškrtávátko za/odškrtne všechny položky sekce',
   await p.evaluate(() => {
@@ -191,9 +194,9 @@ test('sekční zaškrtávátko je v pruhu sekce a je tmavě modré',
 test('podnadpis části nese popis v závorce a body začínají pomlčkou',
   await p.evaluate(() => {
     const za = PJ.sekce.find(s => s.key === 'zamereni');
-    za.polozky[0].hodiny = 5;
+    za.polozky.forEach(q => { delete q.vyrazeno; });
     const d = nabidkaProjData(ZAK, aktivniVarianta(ZAK), 'cz');
-    za.polozky[0].hodiny = 0;
+    za.polozky.forEach(q => { q.vyrazeno = true; });
     const dpz = d.bloky.find(b => b.typ === 'rozsah' && /POVOLENÍ ZÁMĚRU/.test(b.nadpis));
     const hlavicka = dpz && dpz.radky.find(r => !r[1] && /část 1/.test(r[0]));
     const body = dpz ? dpz.radky.filter(r => r[1]) : [];
@@ -203,9 +206,9 @@ test('podnadpis části nese popis v závorce a body začínají pomlčkou',
 test('termíny nesou hvězdičky *) jako ve VZORu',
   await p.evaluate(() => {
     const za = PJ.sekce.find(s => s.key === 'zamereni');
-    za.polozky[0].hodiny = 5;
+    za.polozky.forEach(q => { delete q.vyrazeno; });
     const d = nabidkaProjData(ZAK, aktivniVarianta(ZAK), 'cz');
-    za.polozky[0].hodiny = 0;
+    za.polozky.forEach(q => { q.vyrazeno = true; });
     const terminy = d.bloky.find(b => b.typ === 'pary' && /TERMÍNY/.test(b.nadpis));
     const texty = terminy ? terminy.radky.map(r => r[0]).join(' | ') : '';
     return /stanovisek dotčených orgánů \*\)/.test(texty);
@@ -289,6 +292,13 @@ test('zaškrtnutí ATYP předvyplní rezervy 30 % a zámečníka 50 000 Kč',
     atypPrepni(false);
     const zpet = Z.rezervaProfilyPct === 0 && Z.zamecnikAtypKc === null && Z.atyp === false;
     return po && vKalkulaci && zpet;
+  }));
+
+test('součtový řádek nese závorku až ZA slovem CELKEM',
+  await p.evaluate(() => {
+    const radky = [...document.querySelectorAll('#page-proj tr.sectot')].map(x => x.textContent);
+    return radky.some(r => /KOLAUDACE CELKEM \(pro 1 ks výtahu\)/.test(r))
+      && !radky.some(r => /\(pro 1 ks výtahu\) CELKEM/.test(r));
   }));
 
 test('aplikace nehlásila chybu do konzole', konzole.length === 0, konzole.slice(0, 3).join(' | '));

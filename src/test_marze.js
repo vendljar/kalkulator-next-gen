@@ -104,7 +104,7 @@ test('u výchozího ceníku je PROJ nad minimem', pOk.celek.podMin === false && 
 const zadaniP2 = JSON.parse(JSON.stringify(zadaniP));
 /* od 17. 8. má výchozí rozsah vyplněnou STUDII (zaměření prázdné) — sleva
  * se dává první sekci, která má co slevit (nenulové hodiny/fix) */
-const prvni = zadaniP2.sekce.find(s => (s.polozky || []).some(p => (+p.hodiny || 0) > 0 || (+p.cena || 0) > 0))
+const prvni = zadaniP2.sekce.find(s => (s.polozky || []).some(p => !p.vyrazeno && ((+p.hodiny || 0) > 0 || (+p.cena || 0) > 0)))
   || zadaniP2.sekce[0];
 prvni.prirazkaPct = -40;
 const rp2 = ep.vypocetProj(zadaniP2, cenikP);

@@ -195,6 +195,7 @@ test('činnosti mimo nabídku se vypíšou jmenovitě',
 const vVse = zk.novaVarianta('Vše oceněno', JSON.parse(JSON.stringify(v.data)));
 vVse.data.proj.zadani.sekce.forEach(s => (s.polozky || []).forEach(p => {
   if (p.typ === 'hod') p.hodiny = Math.max(p.hodiny || 0, 1);
+  delete p.vyrazeno;   // výchozí zaměření je od 18. 8. vyřazené — tady má být oceněné vše
 }));
 Object.keys(vVse.data.proj.cenik.fixy).forEach(k => {
   vVse.data.proj.cenik.fixy[k] = Math.max(vVse.data.proj.cenik.fixy[k] || 0, 1000);

@@ -257,6 +257,7 @@ const zobrazeni = await p.evaluate(([marze, zdroj]) => {
       if (prazdna < 0) return null;
       const s = PJ.sekce[prazdna].polozky[0];
       const zaloha = JSON.stringify(s);
+      delete s.vyrazeno;                       // výchozí zaměření je od 18. 8. vyřazené
       if (s.typ === 'hod') s.hodiny = 10; else s.cenaPrepis = 10000;
       const v = vypocetProj(PJ, PC).sekce[prazdna];
       Object.assign(s, JSON.parse(zaloha));

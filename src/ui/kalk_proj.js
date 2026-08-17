@@ -329,7 +329,11 @@ function renderProj() {
         <div style="display:flex;align-items:center;gap:12px">
           <span style="flex:1">${esc(s.nazev)}</span>${vlastniPct}${sekceChk}</div></td></tr>`
       + radky + doprava + pridat
-      + `<tr class="sectot"><td colspan="${POPIS_SL}">${esc(s.nazev)} CELKEM</td>`
+      /* Součtový řádek: závorka z názvu se stěhuje AŽ ZA slovo CELKEM
+       * (zadání 18. 8.) — „KOLAUDACE CELKEM (pro 1 ks výtahu)". */
+      + `<tr class="sectot"><td colspan="${POPIS_SL}">${esc(nazevBezZavorek(s.nazev))} CELKEM${
+          (String(s.nazev).match(/\s*(\([^)]*\))\s*$/) || [, ''])[1]
+            ? ' ' + esc((String(s.nazev).match(/\s*(\([^)]*\))\s*$/) || [, ''])[1]) : ''}</td>`
       + penize(s.naklad + s.dopravaKc, s.marze, s.celkem)
       + `${col.admin ? '<td class="admincol"></td>' : ''}</tr>`;
   }).join('');

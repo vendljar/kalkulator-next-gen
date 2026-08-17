@@ -704,8 +704,9 @@ ok('v náhledu tisku nejsou čísla o marži nikdy', !/\d/.test(m36bezn.tisk.rep
 
 const m36ztrata = await p.evaluate(() => {
   NAST.jeAdmin = true;
-  /* Výchozí ZAMĚŘENÍ je od 17. 8. večer prázdné (0 h) — ztrátu na něm
-   * nejde vyrobit bez hodin; test si je proto nasype sám. */
+  /* Výchozí ZAMĚŘENÍ je od 18. 8. VYŘAZENÉ (hodiny si nese) — ztráta se
+   * vyrobí až po zapnutí položek. */
+  PJ.sekce[0].polozky.forEach(q => { delete q.vyrazeno; });
   PJ.sekce[0].polozky[0].hodiny = 5; PJ.sekce[0].polozky[1].hodiny = 10;
   C.marze = 0.30; PJ.sekce[0].prirazkaPct = -60; syncVarianta(); render();
   const lo = document.querySelector('#page-kalk .marze-lista');
@@ -719,7 +720,7 @@ ok('lišta PROJ jmenuje konkrétní sekci', /ZAMĚŘENÍ/.test(m36ztrata.textPro
 ok('zdravé OCK vedle ztrátové sekce PROJ mlčí', m36ztrata.ock === false);
 
 const m36min = await p.evaluate(() => {
-  PJ.sekce[0].polozky[0].hodiny = 0; PJ.sekce[0].polozky[1].hodiny = 0;   // zpět na výchozí
+  PJ.sekce[0].polozky.forEach(q => { q.vyrazeno = true; });               // zpět na výchozí
   PJ.sekce[0].prirazkaPct = 30;            // zpět na zdravou sekci
   C.marze = 0.03;                          // málo, ale pořád se vydělává
   NAST.slevy.minMarze = 0; syncVarianta(); render();

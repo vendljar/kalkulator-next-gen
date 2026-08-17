@@ -39,6 +39,7 @@ const kopie = x => JSON.parse(JSON.stringify(x));
 const predlohoveHodiny = zad => {
   const za = zad.sekce.find(s => s.key === 'zamereni');
   za.polozky[0].hodiny = 5; za.polozky[1].hodiny = 10;
+  za.polozky.forEach(p => { delete p.vyrazeno; });   // výchozí stav je má vyřazená (18. 8.)
   const st = zad.sekce.find(s => s.key === 'studie');
   st.polozky.forEach(p => { p.hodiny = 0; });
   return zad;

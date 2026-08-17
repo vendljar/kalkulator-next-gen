@@ -118,6 +118,10 @@ test('technická verze uvádí jen ANO/NE bez cen',
 //     a dosud neoceněná činnost se musí přepnout z „není součástí nabídky“ na „ANO – …“
 const puvodni = najdi(bo, 'Hodnota zakázky bez DPH');
 const sekZam = v.data.proj.zadani.sekce.find(s => s.key === 'zamereni');
+/* výchozí zaměření je od 18. 8. VYŘAZENÉ (hodiny si nese dál) — pro zkoušku
+ * živého napojení se položka zapne a na konci zase vyřadí */
+const zamVyrazeno = sekZam.polozky.map(p => !!p.vyrazeno);
+sekZam.polozky.forEach(p => { delete p.vyrazeno; });
 sekZam.polozky[0].hodiny = sekZam.polozky[0].hodiny + 8;
 const bo2 = kp.kryciProjData(zak, v, JEKLY, 'bo');
 test('změna hodin v Kalkulaci PROJ mění hodnotu v krycím listu',
@@ -143,6 +147,7 @@ test('technická verze studie přepnuta na ANO bez ceny',
   najdi(td3, labelStudie) === 'ANO', najdi(td3, labelStudie));
 // vrátit zpět, ať navazující testy pracují s výchozí kalkulací
 sekSt.polozky.forEach((p, i) => { p.hodiny = puvodniStudie[i]; }); sekZam.polozky[0].hodiny = sekZam.polozky[0].hodiny - 8;
+sekZam.polozky.forEach((p, i) => { if (zamVyrazeno[i]) p.vyrazeno = true; });
 
 /* ---------- opravy krycího listu (#23), společné s verzí OCK ---------- */
 
