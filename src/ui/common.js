@@ -41,7 +41,7 @@ syncVarianta();
 /* ---------- nastavení aplikace (ozubené kolo, jen admin) ---------- */
 const NAST = {
   jeAdmin: true,               // dnes je vše admin; přepínač role je v Nastavení
-  tabViditelnost: { kalk: true, detail: true, spec: true, specdata: true, kryci: true, proj: true, kryciproj: true, cenik: true, cenikproj: true, zakazka: true, schvalovani: true },
+  tabViditelnost: { kalk: true, detail: true, spec: true, specdata: true, kryci: true, proj: true, detailproj: true, kryciproj: true, cenik: true, cenikproj: true, zakazka: true, schvalovani: true },
   zobrazitNaklady: true,       // sloupce Náklad/Přirážka v tabulce kalkulace (jen admin)
   kpiViditelne: { naklad: false, hrubyZisk: false, sleva: false, marze: false }, // KPI v hlavičce viditelné i běžnému uživateli
   panel: 'obecne',             // aktivní vnitřní záložka Nastavení: obecne | uzivatele | slevy
@@ -235,8 +235,15 @@ function sablonaProTisk(typ, lang) {
   return Promise.resolve(null);
 }
 /* je záložka viditelná? (skryté ceníky/detaily pro běžného uživatele) */
-const TAB_ZOBRAZENI_KLIC = { cenik: 'tab.cenik', cenikproj: 'tab.cenikproj', detail: 'tab.detail', specdata: 'tab.specdata' };
+/* Detail výpočtu PROJ (17. 8. 2026) se řídí TÝMŽ právem jako detail OCK —
+ * oba rozepisují nákladové sazby a rozdávat je zvlášť by jen mátlo. */
+const TAB_ZOBRAZENI_KLIC = { cenik: 'tab.cenik', cenikproj: 'tab.cenikproj', detail: 'tab.detail', detailproj: 'tab.detail', specdata: 'tab.specdata' };
 function tabViditelny(t) {
+  /* Nová záložka Detail výpočtu PROJ (17. 8. 2026): starší uložená nastavení
+   * ji neznají — zdědí proto viditelnost Detailu výpočtu OCK, ať nikomu,
+   * kdo detail vidí, nová záložka tiše nechybí. */
+  if (NAST.tabViditelnost.detailproj === undefined)
+    NAST.tabViditelnost.detailproj = NAST.tabViditelnost.detail !== false;
   if (!NAST.tabViditelnost[t]) return false;
   /* Dřív tu stálo `!NAST.jeAdmin && (cenik|cenikproj|detail|specdata)`.
    * Matice #136 se ve výchozím stavu chová stejně, jen jde po jednotlivých
@@ -270,6 +277,11 @@ const esc = s => String(s ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const escJs = s => esc(String(s ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+
+/* Nadpis sekce bez informativních závorek: „KOLAUDACE (pro 1 ks výtahu)" →
+ * „KOLAUDACE" (zadání 17. 8. 2026). Jen pro ZOBRAZENÍ v kalkulaci — uložené
+ * názvy v datech zakázek se nemění, aby se staré soubory načítaly beze změny. */
+const nazevBezZavorek = t => String(t || '').replace(/\s*\([^)]*\)/g, '').trim();
 
 function rootObj() { return { Z, C, OCK, PJ, PC, TS, ZAK, SL }; }
 function get(path) { return path.split('.').reduce((o, k) => o[k], rootObj()); }
@@ -548,7 +560,9 @@ function slevaCast(cast) {
     cast: proj ? 'proj' : 'ock',
     proj,
     obj: proj ? (typeof SLP !== 'undefined' ? SLP : null) : (typeof SL !== 'undefined' ? SL : null),
-    nazev: proj ? 'Sleva na nabídku PROJ (ZAK-10)' : 'Sleva na nabídku OCK (ZAK-10)',
+    /* Interní čísla úkolů v nadpisech skončila 17. 8. 2026 (zadání J. V.:
+     * „Odstraň v nadpisech sekcí informativní text v závorkách.") */
+    nazev: proj ? 'Sleva na nabídku PROJ' : 'Sleva na nabídku OCK',
     kotva: proj ? 'proj-sleva' : 'ock-sleva',
     /* Dva tvary, aby věty dávaly česky smysl: „cena projekčních prací"
      * (2. pád) a „platí jen pro projekční práce" (4. pád). */
@@ -886,9 +900,30 @@ function dokPatickaHtml(prekl) {
     ? '<br>' + esc(P('Vypracoval') + ': ' + kontakt) : ''}</div>`;
 }
 
+/* Podpisový blok obchodníka na KONEC tiskové nabídky (zadání 17. 8. 2026):
+ * jméno, funkce a kontakt PŘIHLÁŠENÉHO zpracovatele + sken podpisu s razítkem,
+ * je-li nahraný v profilu (Můj profil). Ve Wordu totéž dělají symboly ZPRAC_*
+ * a {{ZPRAC_PODPIS}} v šabloně — tohle je táž informace pro online tisk.
+ * Bez přihlášení se blok skládá z firemních údajů (offline build). */
+function dokPodpisHtml(prekl) {
+  const P = typeof prekl === 'function' ? prekl : (t => t);
+  const f = (typeof firmaAktualni === 'function') ? firmaAktualni() : null;
+  const p = (typeof zpracovatelPlaceholders === 'function') ? zpracovatelPlaceholders(f) : {};
+  const obr = (typeof zpracovatelObrazky === 'function') ? zpracovatelObrazky() : {};
+  if (!p.ZPRAC_JMENO && !obr.ZPRAC_PODPIS) return '';
+  const kontakt = [p.ZPRAC_FUNKCE, p.ZPRAC_TEL, p.ZPRAC_EMAIL].filter(Boolean).join(' · ');
+  return `<div class="podpis-blok" style="margin:28px 0 10px;page-break-inside:avoid">
+    <div style="font-size:11px;color:#6b7686;text-transform:uppercase;letter-spacing:.03em">${esc(P('Vypracoval'))}</div>
+    ${obr.ZPRAC_PODPIS ? `<img src="${esc(obr.ZPRAC_PODPIS)}" alt=""
+      style="max-height:84px;max-width:250px;display:block;margin:6px 0 2px">` : ''}
+    <div style="font-weight:700">${esc(p.ZPRAC_JMENO || '')}</div>
+    ${kontakt ? `<div style="font-size:12px;color:#42506b">${esc(kontakt)}</div>` : ''}
+  </div>`;
+}
+
 /* ---------- záložky ---------- */
 let TAB = 'kalk';
-const TABY = ['kalk', 'detail', 'spec', 'specdata', 'kryci', 'proj', 'kryciproj', 'cenik', 'cenikproj', 'zakazka', 'schvalovani'];
+const TABY = ['kalk', 'detail', 'spec', 'specdata', 'kryci', 'proj', 'detailproj', 'kryciproj', 'cenik', 'cenikproj', 'zakazka', 'schvalovani'];
 function prepniTab(t) {
   if (!tabViditelny(t)) t = 'kalk';
   TAB = t;
@@ -1083,6 +1118,7 @@ function renderTelo() {
   renderInputs(); renderOutputs();
   renderNabidkaOck();
   renderDetail();
+  if (typeof renderDetailProj === 'function') renderDetailProj();
   renderTechspec();
   renderSpecData();
   renderKryci();

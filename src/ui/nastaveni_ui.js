@@ -125,7 +125,8 @@ function slSchemaSet(i, k, v) { NAST.slevy.schemata[i][k] = v; nastRefresh(); }
 const NAST_TAB_LABELS = {
   detail: 'Detail výpočtu', spec: 'Technická specifikace OCK', specdata: 'Technická specifikace OCK Data',
   kryci: 'Krycí list zakázky OCK',
-  proj: 'Kalkulace PROJ', kryciproj: 'Krycí list zakázky PROJ', cenik: 'Ceník nákladů OCK', cenikproj: 'Ceník nákladů PROJ', zakazka: 'Přehled cenových nabídek',
+  proj: 'Kalkulace PROJ', detailproj: 'Detail výpočtu PROJ', kryciproj: 'Krycí list zakázky PROJ',
+  cenik: 'Ceník nákladů OCK', cenikproj: 'Ceník nákladů PROJ', zakazka: 'Přehled cenových nabídek',
   schvalovani: 'Schvalování slev',
 };
 

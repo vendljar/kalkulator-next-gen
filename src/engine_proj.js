@@ -172,14 +172,16 @@ function vypocetProj(zadani, cenik) {
     const marze = naklad * pct;
     const cena = naklad + marze;                      // nabídková cena sekce (bez dopravy)
     // Doprava: bez marže, přičítá se k ceně sekce (vzor: O12 = O8 + O11).
-    // Paušál „mimo Prahu" jde Z CENÍKU (dopravaPausalKc) a přičítá se jen
-    // se zaškrtnutým s.doprava.mimoPrahu — do 2. 8. 2026 položka ceníku do
-    // výpočtu vůbec nevstupovala a editovala se naprázdno. Ruční Kč pole
-    // (s.doprava.pausal) zůstává jako příplatek navíc; stará zakázka bez
-    // pole mimoPrahu se počítá na haléř stejně jako dřív.
+    // Příplatek „mimo Prahu" se od 17. 8. 2026 (rozhodnutí J. V.) POČÍTÁ ZE
+    // VZDÁLENOSTI: km / 60 × 1000 Kč — tedy hodina cesty při 60 km/h à 1 000 Kč.
+    // Pevný paušál z ceníku (dopravaPausalKc) do výpočtu nevstupuje: dvě
+    // nezávislá čísla pro jednu jízdu by se nevyhnutelně rozcházela a delší
+    // cesta má stát víc než kratší. Ruční Kč pole (s.doprava.pausal) zůstává
+    // jako příplatek navíc — nesou ho staré zakázky a jejich cena se změnit nesmí.
+    const km = s.doprava ? (+s.doprava.km || 0) : 0;
     const dopravaKc = s.doprava
-      ? (+s.doprava.km || 0) * c.dopravaKmKc
-        + (s.doprava.mimoPrahu ? (+c.dopravaPausalKc || 0) : 0)
+      ? km * c.dopravaKmKc
+        + (s.doprava.mimoPrahu ? km / 60 * 1000 : 0)
         + (+s.doprava.pausal || 0)
       : 0;
     const cenaSDopravou = cena + dopravaKc;

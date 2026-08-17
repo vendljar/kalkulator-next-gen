@@ -94,7 +94,7 @@ function zaokrKarta(kontext) {
         <div><span class="pill ${zapnuto ? '' : 'mut'}">${zapnuto ? esc(zaokrStav(0, st).popis) : 'vypnuto'}</span></div></div>
     </div>
     ${dopad}`;
-  return card(proj ? 'Obchodní zaokrouhlení koncové ceny PROJ (#38)'
-                   : 'Obchodní zaokrouhlení koncové ceny OCK (#38)',
+  return card(proj ? 'Obchodní zaokrouhlení koncové ceny PROJ'
+                   : 'Obchodní zaokrouhlení koncové ceny OCK',
               inner, false, proj ? 'proj-zaokr' : 'ock-zaokr');
 }

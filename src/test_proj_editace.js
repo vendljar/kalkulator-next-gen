@@ -212,34 +212,45 @@ t('1.2 žádná položka není ve výchozím stavu vyřazená',
  * Položka „Doprava – paušál mimo Prahu" v ceníku do 2. 8. 2026 do výpočtu
  * vůbec nevstupovala — engine četl jen sazbu za km a ruční Kč paušál sekce.
  * Editovatelné pole ceníku bez účinku je past: kdo ho změní, věří, že změnil
- * cenu. Teď: zaškrtnutí „mimo Prahu" u dopravy sekce přičte paušál Z CENÍKU
- * (a při změně ceníku se přepočítá); ruční Kč pole zůstává jako příplatek
- * navíc a staré zakázky bez nového pole se počítají beze změny. */
+ * cenu. Od 17. 8. 2026 (rozhodnutí J. V.) se příplatek „mimo Prahu" POČÍTÁ
+ * ZE VZDÁLENOSTI: km / 60 × 1000 Kč (hodina cesty při 60 km/h à 1 000 Kč).
+ * Pevný paušál z ceníku (dopravaPausalKc) do výpočtu už nevstupuje — dvě
+ * nezávislá čísla pro jednu jízdu by se rozcházela. Ruční Kč pole
+ * (s.doprava.pausal) zůstává jako příplatek navíc kvůli starým zakázkám. */
 
 {
   const z = zad();
   const s0 = z.sekce.find(s => s.doprava);
-  s0.doprava.km = 10; s0.doprava.pausal = 0; s0.doprava.mimoPrahu = true;
+  s0.doprava.km = 120; s0.doprava.pausal = 0; s0.doprava.mimoPrahu = true;
   const r = vypocetProj(z, C);
-  tc('8b.1 mimo Prahu přičte paušál z ceníku',
-    sek(r, s0.key).dopravaKc, 10 * C.dopravaKmKc + C.dopravaPausalKc);
+  tc('8b.1 mimo Prahu: příplatek = km / 60 × 1000 (120 km ⇒ 2 000 Kč)',
+    sek(r, s0.key).dopravaKc, 120 * C.dopravaKmKc + 120 / 60 * 1000);
 
   const z2 = zad();
   const s2 = z2.sekce.find(s => s.doprava);
-  s2.doprava.km = 10; s2.doprava.pausal = 0;      // mimoPrahu chybí (stará zakázka)
+  s2.doprava.km = 120; s2.doprava.pausal = 0;      // mimoPrahu chybí (stará zakázka / po Praze)
   const r2 = vypocetProj(z2, C);
-  tc('8b.2 po Praze (bez zaškrtnutí) se paušál z ceníku nepřičítá',
-    sek(r2, s2.key).dopravaKc, 10 * C.dopravaKmKc);
+  tc('8b.2 po Praze (bez zaškrtnutí) je doprava jen km × sazba',
+    sek(r2, s2.key).dopravaKc, 120 * C.dopravaKmKc);
 
   const z3 = zad();
   const s3 = z3.sekce.find(s => s.doprava);
   s3.doprava.km = 0; s3.doprava.pausal = 1500; s3.doprava.mimoPrahu = true;
   const r3 = vypocetProj(z3, C);
-  tc('8b.3 ruční Kč paušál je příplatek NAVÍC k paušálu z ceníku',
-    sek(r3, s3.key).dopravaKc, C.dopravaPausalKc + 1500);
+  tc('8b.3 ruční Kč paušál je příplatek navíc; bez kilometrů „mimo Prahu" nic nepřidá',
+    sek(r3, s3.key).dopravaKc, 1500);
+
+  /* Ceníkový paušál nesmí do výpočtu vstupovat, ani když je v ceníku nenulový —
+   * jinak by se jedna jízda platila dvakrát (vzorcem i paušálem). */
+  const z5 = zad();
+  const s5 = z5.sekce.find(s => s.doprava);
+  s5.doprava.km = 60; s5.doprava.pausal = 0; s5.doprava.mimoPrahu = true;
+  const C5 = { ...C, dopravaPausalKc: 99999 };
+  tc('8b.5 pevný paušál z ceníku do výpočtu nevstupuje',
+    sek(vypocetProj(z5, C5), s5.key).dopravaKc, 60 * C.dopravaKmKc + 1000);
 
   /* doprava dál bez přirážky a uvnitř ceny sekce (dle předlohy O12 = O8 + O11) */
-  tc('8b.4 paušál z ceníku nenese přirážku',
+  tc('8b.4 příplatek mimo Prahu nenese přirážku',
     sek(r, s0.key).cenaSDopravou, sek(r, s0.key).cena + sek(r, s0.key).dopravaKc);
 }
 

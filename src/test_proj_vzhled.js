@@ -111,8 +111,11 @@ const zaokrUi = fs.readFileSync(__dirname + '/ui/zaokrouhleni_ui.js', 'utf8');
 
 test('kalkulace PROJ vykresluje kartu slevy', /slevaKarta\('proj'\)/.test(kod));
 test('kalkulace PROJ vykresluje kartu obchodního zaokrouhlení', /zaokrKarta\('proj'\)/.test(kod));
-test('karty stojí hned pod výpočetním oknem (za kartou Cenová kalkulace PROJ)',
-  /card\('Cenová kalkulace PROJ'[\s\S]{0,200}slevaKarta\('proj'\)[\s\S]{0,120}zaokrKarta\('proj'\)/.test(kod));
+/* Od 17. 8. 2026 (zadání J. V.) stojí SLEVA až POD souhrnem: obchodník napřed
+ * vidí, z čeho cena vzešla, a teprve pak z ní slevuje. Pořadí karet je tedy
+ * kalkulace → zaokrouhlení → souhrn → sleva. */
+test('karty jdou v pořadí kalkulace → zaokrouhlení → souhrn → sleva',
+  /card\('Cenová kalkulace PROJ'[\s\S]{0,400}zaokrKarta\('proj'\)[\s\S]{0,200}Souhrn projekčních prací[\s\S]{0,200}slevaKarta\('proj'\)/.test(kod));
 test('karta slevy umí druhou kotvu proj-sleva', /'proj-sleva'/.test(spol));
 test('karta zaokrouhlení umí druhou kotvu proj-zaokr', /'proj-zaokr'/.test(zaokrUi));
 /* Od 12. 8. 2026 (#134) má projekce VLASTNÍ slevu (SLP nad data.slevaProj).

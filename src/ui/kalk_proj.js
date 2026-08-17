@@ -45,6 +45,20 @@ function pjPrepis(i, j, pole, hodnota) {
 function pjVyrazeno(i, j, vyrazeno) {
   const p = PJ.sekce[i].polozky[j];
   if (vyrazeno) p.vyrazeno = true; else delete p.vyrazeno;
+  /* ZAMĚŘENÍ × STUDIE se VYLUČUJÍ (rozhodnutí 17. 8. 2026). Studie
+   * proveditelnosti zaměření už obsahuje (její část 1 je totéž zaměření
+   * a zpracování výstupů) — kdyby se počítaly obě sekce, nabídka by
+   * zaměření účtovala dvakrát. Zapnutí položky v jedné sekci proto
+   * automaticky vyřadí všechny položky té druhé; kdo chce zpět, jedním
+   * kliknutím druhou sekci zase zapne (a vyřadí se tahle). */
+  if (!vyrazeno) {
+    const kde = PJ.sekce[i].key;
+    const druha = kde === 'zamereni' ? 'studie' : (kde === 'studie' ? 'zamereni' : null);
+    if (druha) {
+      const ds = PJ.sekce.find(x => x.key === druha);
+      if (ds) ds.polozky.forEach(q => { q.vyrazeno = true; });
+    }
+  }
   aktivniVarianta(ZAK).upraveno = new Date().toISOString();
   render();
 }
@@ -239,22 +253,27 @@ function renderProj() {
     }).join('');
 
     /* Doprava je běžný řádek sekce, jen z ní přirážka neplyne (dle předlohy).
-     * Paušál „mimo Prahu" se od 2. 8. 2026 bere Z CENÍKU (PC.dopravaPausalKc)
-     * a zapíná se zaškrtnutím — dřív položka ceníku do výpočtu nevstupovala
-     * a editovala se naprázdno. Ruční Kč pole zůstává jako příplatek navíc. */
+     * Příplatek „mimo Prahu" se od 17. 8. 2026 POČÍTÁ ZE VZDÁLENOSTI:
+     * km / 60 × 1000 Kč (hodina cesty při 60 km/h à 1 000 Kč). Zaškrtnutí ho
+     * přičte k ceně dopravy; vypočtená částka je vidět hned vedle, žádné
+     * ruční pole. Starší zakázky s ručním Kč příplatkem (doprava.pausal) ho
+     * nesou dál — jejich cena se změnit nesmí — a ukazuje se štítkem. */
+    const mimoKc = (+((zdroj.doprava || {}).km) || 0) / 60 * 1000;
+    const rucni = +((zdroj.doprava || {}).pausal) || 0;
+    const rucniPill = rucni ? ` <span class="pill mut" title="ruční příplatek dopravy ze starší zakázky – přičítá se dál, ať se cena nezmění">+ ${fmt(rucni)}</span>` : '';
     const doprava = !zdroj.doprava ? ''
       : col.admin
-        ? `<tr><td><span class="grip" style="visibility:hidden">⠿</span>Doprava (${num(PC.dopravaKmKc)} Kč/km + paušál)
+        ? `<tr><td><span class="grip" style="visibility:hidden">⠿</span>Doprava (${num(PC.dopravaKmKc)} Kč/km)
              <span class="pill mut" style="margin-left:6px">bez přirážky</span></td>
            <td><input type="number" step="1" style="width:66px" value="${zdroj.doprava.km}" onchange="pjSet(${i}, 'doprava.km', +this.value)" title="km"></td>
            <td class="note">km</td>
-           <td style="white-space:nowrap"><label title="přičte paušál dopravy z ceníku PROJ (${num(PC.dopravaPausalKc)} Kč); po Praze nechte odškrtnuté">
+           <td style="white-space:nowrap"><label title="příplatek mimo Prahu = km / 60 × 1000 Kč (hodina cesty à 1 000 Kč); po Praze nechte odškrtnuté">
              <input type="checkbox" ${zdroj.doprava.mimoPrahu ? 'checked' : ''} onchange="pjSet(${i}, 'doprava.mimoPrahu', this.checked)"> mimo Prahu</label></td>
-           <td><input type="number" step="100" style="width:86px" value="${zdroj.doprava.pausal}" onchange="pjSet(${i}, 'doprava.pausal', +this.value)" title="ruční příplatek dopravy v Kč (navíc k paušálu z ceníku)"></td>
+           <td class="note" style="white-space:nowrap" title="příplatek mimo Prahu: ${num(zdroj.doprava.km)} km / 60 × 1 000 Kč">${zdroj.doprava.mimoPrahu ? fmt(mimoKc) : '—'}${rucniPill}</td>
            ${penize(s.dopravaKc, null, s.dopravaKc)}<td class="admincol"></td></tr>`
         : (s.dopravaKc
           ? `<tr><td>Doprava${zdroj.doprava.mimoPrahu ? ' (mimo Prahu)' : ''}</td><td>${num(zdroj.doprava.km)}</td><td class="note">km</td><td></td>
-             <td>${num(zdroj.doprava.pausal)}</td>${penize(s.dopravaKc, null, s.dopravaKc)}</tr>` : '');
+             <td class="note">${zdroj.doprava.mimoPrahu ? fmt(mimoKc) : '—'}${rucniPill}</td>${penize(s.dopravaKc, null, s.dopravaKc)}</tr>` : '');
 
     const pridat = col.admin
       ? `<tr class="pridat noprint"><td colspan="${NC}">
@@ -281,9 +300,9 @@ function renderProj() {
     // id řádku s názvem sekce = cíl kotvy v klouzající liště (kalkLista)
     return `<tr class="sechd" id="proj-sek-${i}"><td colspan="${NC}">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
-          <span>${esc(s.nazev)}</span>${vlastniPct}</div></td></tr>`
+          <span>${esc(nazevBezZavorek(s.nazev))}</span>${vlastniPct}</div></td></tr>`
       + radky + doprava + pridat
-      + `<tr class="sectot"><td colspan="${POPIS_SL}">${esc(s.nazev)} CELKEM</td>`
+      + `<tr class="sectot"><td colspan="${POPIS_SL}">${esc(nazevBezZavorek(s.nazev))} CELKEM</td>`
       + penize(s.naklad + s.dopravaKc, s.marze, s.celkem)
       + `${col.admin ? '<td class="admincol"></td>' : ''}</tr>`;
   }).join('');
@@ -305,7 +324,7 @@ function renderProj() {
   const souhrnTbl = `<table>
     <tr><th>Sekce</th><th>Náklad</th><th>Přirážka</th><th>Doprava</th><th>Celkem</th></tr>
     ${r.sekce.filter(s => s.celkem !== 0 || s.naklad !== 0).map(s =>
-      `<tr><td>${esc(s.nazev)}</td><td>${fmt(s.naklad)}</td><td>${num(s.pouzitePct)} % ⇒ ${fmt(s.marze)}</td>
+      `<tr><td>${esc(nazevBezZavorek(s.nazev))}</td><td>${fmt(s.naklad)}</td><td>${num(s.pouzitePct)} % ⇒ ${fmt(s.marze)}</td>
        <td>${fmt(s.dopravaKc)}</td><td>${fmt(s.celkem)}</td></tr>`).join('')}
     <tr class="tot"><td>CELKEM</td><td>${fmt(r.souhrn.naklad)}</td><td>${fmt(r.souhrn.marze)}</td><td>${fmt(r.souhrn.doprava)}</td>
       <td><b>${fmt0(r.souhrn.celkem)}</b></td></tr>
@@ -334,10 +353,12 @@ function renderProj() {
      *     v Kalkulaci OCK (stav ZO). Zadání ze 4. 8. 2026: „do kalkulace ock
      *     patří pouze část týkající se výtahové šachty, část týkající se
      *     projekčních prací pak patří do sekce kalkulace proj." */
-    (typeof slevaKarta === 'function' ? slevaKarta('proj') : '') +
+    /* Sleva stojí od 17. 8. 2026 až POD souhrnem (zadání J. V.) — obchodník
+     * napřed vidí, z čeho cena vzešla, a teprve pak z ní slevuje. */
     (typeof zaokrKarta === 'function' ? zaokrKarta('proj') : '') +
     card('Souhrn projekčních prací', souhrnTbl, false, 'proj-souhrn') +
-    (typeof nabidkaProjKarta === 'function' ? card('Cenová nabídka PROJ (OVP-CN)', nabidkaProjKarta(), false, 'proj-nabidka') : '') +
+    (typeof slevaKarta === 'function' ? slevaKarta('proj') : '') +
+    (typeof nabidkaProjKarta === 'function' ? card('Cenová nabídka PROJ', nabidkaProjKarta(), false, 'proj-nabidka') : '') +
     `<div class="note">Globální přirážku PROJ zadáte přímo v hlavičce nahoře (stejně jako v Kalkulaci OCK); platí pro všechny sekce a je proto započtená i u sekcí, které se u téhle stavby nepoužijí. Slevu a obchodní zaokrouhlení najdete v sekcích pod výpočtem. Sazby (projektant/statik/zaměření), fixní ceny subdodávek a sazbu dopravy nastavíte v záložce <b>Ceník nákladů PROJ</b> — ty platí pro všechny zakázky.
      Doprava se počítá bez přirážky; sleva/přirážka sekce se počítá z ceny včetně dopravy (dle předlohy).</div>`;
 }

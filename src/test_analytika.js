@@ -103,7 +103,7 @@ test('záložky mimo kalkulace samy čas nesbírají', stav.ock === 75 && stav.p
 
 test('mapování záložek: OCK', ['kalk', 'detail', 'spec', 'specdata', 'kryci']
   .every(t => analytikaCastZTabu(t) === 'ock'));
-test('mapování záložek: PROJ', ['proj', 'kryciproj'].every(t => analytikaCastZTabu(t) === 'proj'));
+test('mapování záložek: PROJ', ['proj', 'detailproj', 'kryciproj'].every(t => analytikaCastZTabu(t) === 'proj'));
 test('mapování záložek: ceníky a přehled se neměří',
   ['cenik', 'cenikproj', 'zakazka', 'schvalovani'].every(t => analytikaCastZTabu(t) === null));
 

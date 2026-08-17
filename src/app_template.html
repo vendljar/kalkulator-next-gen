@@ -279,7 +279,7 @@
   #page-kalk [id], #page-proj [id] { scroll-margin-top:64px; }
   /* Lišta detailu je o řádek vyšší (přepínač a tisk stojí nad kotvami),
      proto má cíl kotvy větší odstup než v kalkulacích. */
-  #page-detail [id] { scroll-margin-top:96px; }
+  #page-detail [id], #page-detailproj [id] { scroll-margin-top:96px; }
   html { scroll-behavior:smooth; }
   /* DET-1/DET-3: ovládací lišta detailu výpočtu. Vzhled je záměrně shodný
      s klouzající lištou kalkulací (zadání 29. 7. 2026) – obě dělají totéž
@@ -661,6 +661,7 @@
   <button id="tab-specdata" onclick="prepniTab('specdata')">Technická specifikace OCK Data</button>
   <button id="tab-kryci" onclick="prepniTab('kryci')">Krycí list zakázky OCK</button>
   <button id="tab-proj" onclick="prepniTab('proj')">Kalkulace PROJ</button>
+  <button id="tab-detailproj" onclick="prepniTab('detailproj')">Detail výpočtu PROJ</button>
   <button id="tab-kryciproj" onclick="prepniTab('kryciproj')">Krycí list zakázky PROJ</button>
   <button id="tab-cenik" onclick="prepniTab('cenik')">Ceník nákladů OCK</button>
   <button id="tab-cenikproj" onclick="prepniTab('cenikproj')">Ceník nákladů PROJ</button>
@@ -683,6 +684,7 @@
 <div class="page" id="page-specdata" style="display:none"></div>
 <div class="page" id="page-kryci" style="display:none"></div>
 <div class="page" id="page-proj" style="display:none"></div>
+<div class="page" id="page-detailproj" style="display:none"></div>
 <div class="page" id="page-kryciproj" style="display:none"></div>
 <div class="page narrow" id="page-cenik" style="display:none"></div>
 <div class="page narrow" id="page-cenikproj" style="display:none"></div>

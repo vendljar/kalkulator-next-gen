@@ -122,7 +122,7 @@ function casKrok(stav, ted, cast) {
  * míchá OCK i PROJ, takže by číslo jen kalilo. */
 function analytikaCastZTabu(tab) {
   if (['kalk', 'detail', 'spec', 'specdata', 'kryci'].includes(tab)) return 'ock';
-  if (['proj', 'kryciproj'].includes(tab)) return 'proj';
+  if (['proj', 'detailproj', 'kryciproj'].includes(tab)) return 'proj';
   return null;
 }
 

@@ -870,6 +870,7 @@ function nabidkaOckDokument() {
     ${cenaHtml}
     ${priplatkyHtml}
     ${dodavatelHtml}
+    ${typeof dokPodpisHtml === 'function' ? dokPodpisHtml(P) : ''}
     ${patickaHtml}
     </div>
     ${tiskListaSkript({

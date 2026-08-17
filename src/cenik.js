@@ -134,7 +134,10 @@ const CENIK_DEF_PROJ = [
   ]],
   ['DOPRAVA', [
     ['PC.dopravaKmKc', 'Doprava – sazba za km', 'Kč/km', 'po Praze 0 km'],
-    ['PC.dopravaPausalKc', 'Doprava – paušál mimo Prahu', 'Kč', 'po Praze 0'],
+    /* Pevný paušál „mimo Prahu" (dopravaPausalKc) z editoru zmizel 17. 8. 2026:
+     * příplatek se počítá vzorcem km / 60 × 1000 (engine_proj.js) a editovatelné
+     * číslo bez účinku je přesně past, která se opravovala 2. 8. 2026.
+     * Klíč v datech ceníku zůstává kvůli starým uloženým ceníkům. */
   ]],
 ];
 

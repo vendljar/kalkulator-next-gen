@@ -276,6 +276,7 @@ function nabidkaProjNahled() {
     ${typeof nabidkaFotoHtml === 'function' ? nabidkaFotoHtml('proj') : ''}
     ${html}
     ${rekapHtml}
+    ${typeof dokPodpisHtml === 'function' ? dokPodpisHtml(P) : ''}
     ${patickaHtml}
     </div>
     ${tiskListaSkript({
