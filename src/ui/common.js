@@ -156,6 +156,26 @@ function jazyk() { return NAST.jazyk || 'cz'; }
 function jazykSet(k) { NAST.jazyk = JAZYK_IDX[k] === undefined && k !== 'cz' ? 'cz' : k;
   if (typeof nastdbZmeneno === 'function') nastdbZmeneno(); render(); }
 function T(cz) { return tr(cz, jazyk()); }
+
+/* Jazyk TISKU dokumentů (#143). Nastavení → jazyk dokumentů platí pro celou
+ * aplikaci; tady jde o jednorázovou volbu „tuhle nabídku vytiskni anglicky"
+ * přímo u tlačítka, bez cesty do Nastavení a zpět. Prázdná hodnota = řídí se
+ * Nastavením (výchozí stav). Volba je jen pro relaci – neukládá se, aby po
+ * jedné německé nabídce neodcházely německy i všechny další. */
+let TISK_JAZYK = '';
+function tiskJazyk() { return TISK_JAZYK || jazyk(); }
+function tiskJazykNastav(v) {
+  TISK_JAZYK = (v && (v === 'cz' || JAZYK_IDX[v] !== undefined)) ? v : '';
+}
+function tiskJazykVyber() {
+  const moznosti = [['', 'dle Nastavení (' + jazyk().toUpperCase() + ')'],
+    ['cz', 'česky'], ['en', 'anglicky'], ['de', 'německy'], ['fr', 'francouzsky']];
+  return '<label class="note" style="margin-left:8px">Jazyk tisku:&nbsp;<select '
+    + 'onchange="tiskJazykNastav(this.value)" title="Jazyk tohoto výtisku – pevný text dodá jazyková mutace šablony, hodnoty přeloží aplikace">'
+    + moznosti.map(([v, t]) => '<option value="' + v + '"' + (v === TISK_JAZYK ? ' selected' : '')
+      + '>' + t + '</option>').join('')
+    + '</select></label>';
+}
 function kpiVidSet(k, v) { if (!NAST.kpiViditelne) NAST.kpiViditelne = {}; NAST.kpiViditelne[k] = !!v;
   if (typeof nastdbZmeneno === 'function') nastdbZmeneno(); render(); }
 

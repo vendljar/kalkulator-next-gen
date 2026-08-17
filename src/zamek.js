@@ -29,6 +29,12 @@ const ZAMEK_DOKUMENTY = {
   nabidkaTisk:     { zamyka: true,  popis: 'Cenová nabídka OCK (tisk)' },
   nabidkaProj:     { zamyka: true,  popis: 'Cenová nabídka PROJ (Word)' },
   nabidkaProjTisk: { zamyka: true,  popis: 'Cenová nabídka PROJ (tisk)' },
+  /* Smlouvy (#143). SoD jde zákazníkovi a podepisuje se — varianta, ze které
+   * vznikla, se zamyká úplně stejně jako u odeslané nabídky. Plná moc je
+   * administrativa (archiv stavebního úřadu), kalkulaci nijak nezmrazuje. */
+  sod:             { zamyka: true,  popis: 'Smlouva o dílo — realizace (Word)' },
+  sodProj:         { zamyka: true,  popis: 'Smlouva o dílo — projekční práce (Word)' },
+  plnaMoc:         { zamyka: false, popis: 'Plná moc (Word)' },
   podklady:        { zamyka: false, popis: 'Náhled podkladů' },
   kryci:           { zamyka: false, popis: 'Krycí list objednávky / SoD' },
   kryciProj:       { zamyka: false, popis: 'Krycí list zakázky PROJ' },

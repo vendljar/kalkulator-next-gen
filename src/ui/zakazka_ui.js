@@ -519,13 +519,15 @@ function nabidkaKarta() {
       <button class="primary"${zab} onclick="nabidkaOckDokument()">Kompletní náhled a tisk nabídky</button>
       <button${zab} onclick="nabidkaWord()">Vytvořit nabídku (Word)</button>
       <button onclick="nabidkaNahled()">Kompletní náhled podkladů</button>
+      ${typeof tiskJazykVyber === 'function' ? tiskJazykVyber() : ''}
     </div>
     <div class="note" style="margin-top:6px">Tlačítko <b>Kompletní náhled a tisk nabídky</b> otevře celou cenovou nabídku
       přímo v aplikaci – stejně jako u nabídky PROJ. V náhledu lze zaškrtnout <b>✏️ Upravit text před tiskem</b> a nabídku
       ručně doladit ještě před uložením do PDF; <b>↺ Vrátit původní znění</b> vrátí text vygenerovaný z kalkulace.
       Ruční úpravy platí <b>jen pro daný výtisk</b> – do zakázky ani do kalkulace se nepropisují. Cesta přes Word
       i náhled podkladů zůstávají beze změny.</div>
-    <div class="note nabidkaStav">${SABLONA_DOCX ? 'Šablona načtena (' + esc(SABLONA_DOCX.nazev) + ').' : 'Při prvním použití budete vyzváni k výběru souboru šablony ze složky _CN.'}</div>`;
+    <div class="note nabidkaStav">${SABLONA_DOCX ? 'Šablona načtena (' + esc(SABLONA_DOCX.nazev) + ').' : 'Při prvním použití budete vyzváni k výběru souboru šablony ze složky _CN.'}</div>
+    ${typeof sodKarta === 'function' ? sodKarta() : ''}`;
 }
 
 /* Stavový řádek nabídky OCK je v aplikaci dvakrát (Kalkulace OCK i Přehled
@@ -551,7 +553,7 @@ function nabidkaWord() {
    * šablona ze serveru; místní cesta (Nastavení / výběr souboru) zůstává jen
    * pro měkký režim a pro práci bez serveru. Přísný režim tady může skončit
    * odmítnutím — česká věta z něj jde rovnou do stavového řádku. */
-  const L = (typeof jazyk === 'function') ? jazyk() : 'cz';
+  const L = (typeof tiskJazyk === 'function') ? tiskJazyk() : jazyk();
   sablonaProTisk('nabidka', L).then(srv => {
     if (srv) { nabidkaWordGeneruj(srv); return; }
     // místní cesta – přednost má šablona nahraná v Nastavení → Šablony (SET-6)
@@ -572,9 +574,9 @@ function nabidkaWord() {
 }
 
 function nabidkaWordGeneruj(srv) {
-  // jazyk dokumentu (N1) – hodnoty se dosazují v něm; pevný text jen tehdy,
-  // existuje-li jazyková mutace šablony (na serveru, nebo v Nastavení → Šablony)
-  const L = (typeof jazyk === 'function') ? jazyk() : 'cz';
+  // jazyk dokumentu – volba „Jazyk tisku" u tlačítka (#143), jinak Nastavení;
+  // pevný text jen tehdy, existuje-li jazyková mutace šablony (server/Nastavení)
+  const L = (typeof tiskJazyk === 'function') ? tiskJazyk() : jazyk();
   const mutace = (!srv && L !== 'cz' && typeof SABLONY !== 'undefined') ? SABLONY['nabidka_' + L] : null;
   const sablona = srv ? srv.data : (mutace ? mutace.data : SABLONA_DOCX.data);
   const mutaceChybi = srv ? srv.mutaceChybi : (L !== 'cz' && !mutace);
@@ -776,7 +778,8 @@ function nabidkaOckDokument() {
     const duvod = dokumentZabrana();
     if (duvod) { alert(duvod); return; }
   }
-  const L = (typeof jazyk === 'function') ? jazyk() : 'cz';
+  const L = (typeof tiskJazyk === 'function') ? tiskJazyk()
+    : ((typeof jazyk === 'function') ? jazyk() : 'cz');   // volba „Jazyk tisku" (#143)
   const P = t => (L !== 'cz' && typeof tr === 'function') ? tr(t, L) : t;
   const varianta = nabidkaVarianta();   // drží se kvůli zámku (#34)
   const data = nabidkaData(ZAK, varianta, JEKLY, L);

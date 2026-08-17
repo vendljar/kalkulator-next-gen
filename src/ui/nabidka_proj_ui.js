@@ -69,6 +69,7 @@ function nabidkaProjKarta() {
         onclick="nabidkaProjWord()">Vytvořit nabídku PROJ (Word)</button>
       <button${typeof ukazkoveZabranaAttr === 'function' ? ukazkoveZabranaAttr() : ''}
         onclick="nabidkaProjNahled()">Kompletní náhled a tisk nabídky</button>
+      ${typeof tiskJazykVyber === 'function' ? tiskJazykVyber() : ''}
     </div>
     <div class="note nabidkaProjStav" style="margin-top:6px"></div>
     <div class="note">Word se plní <b>šablonou <code>Sablona_NABIDKA_PROJ.docx</code></b> – stejnou cestou jako nabídka OCK.
@@ -78,7 +79,8 @@ function nabidkaProjKarta() {
     <div class="note" style="margin-top:6px">V náhledu lze zaškrtnout <b>✏️ Upravit text před tiskem</b> a nabídku ručně doladit
       (dopsat větu, přeformulovat, škrtnout odstavec) ještě před uložením do PDF. Tlačítko <b>↺ Vrátit původní znění</b>
       vrátí text vygenerovaný z kalkulace. Ruční úpravy platí <b>jen pro daný výtisk</b> – do zakázky ani do kalkulace
-      se nepropisují, takže se čísla v aplikaci nemohou nepozorovaně rozejít.</div>`;
+      se nepropisují, takže se čísla v aplikaci nemohou nepozorovaně rozejít.</div>
+    ${typeof sodProjKarta === 'function' ? sodProjKarta() : ''}`;
 }
 
 /* ============================================================================
@@ -102,7 +104,7 @@ function nabidkaProjStavText(txt) {
 function nabidkaProjWord() {
   /* Stejná cesta jako u nabídky OCK (#139): napřed serverová šablona,
    * místní soubor jen v měkkém režimu nebo bez serveru. */
-  const L = (typeof jazyk === 'function') ? jazyk() : 'cz';
+  const L = (typeof tiskJazyk === 'function') ? tiskJazyk() : jazyk();
   sablonaProTisk('nabidkaProj', L).then(srv => {
     if (srv) { nabidkaProjWordGeneruj(srv); return; }
     // místní cesta – přednost má šablona nahraná v Nastavení → Šablony (SET-6)
@@ -123,7 +125,7 @@ function nabidkaProjWord() {
 }
 
 function nabidkaProjWordGeneruj(srv) {
-  const L = (typeof jazyk === 'function') ? jazyk() : 'cz';
+  const L = (typeof tiskJazyk === 'function') ? tiskJazyk() : jazyk();   // volba „Jazyk tisku" (#143)
   const mutace = (!srv && L !== 'cz' && typeof SABLONY !== 'undefined') ? SABLONY['nabidkaProj_' + L] : null;
   const sablona = srv ? srv.data : (mutace ? mutace.data : SABLONA_PROJ_DOCX.data);
   const mutaceChybi = srv ? srv.mutaceChybi : (L !== 'cz' && !mutace);
@@ -177,7 +179,8 @@ function nabidkaProjNahled() {
     const duvod = dokumentZabrana();
     if (duvod) { alert(duvod); return; }
   }
-  const L = (typeof jazyk === 'function') ? jazyk() : 'cz';
+  const L = (typeof tiskJazyk === 'function') ? tiskJazyk()
+    : ((typeof jazyk === 'function') ? jazyk() : 'cz');   // volba „Jazyk tisku" (#143)
   const P = t => (L !== 'cz' && typeof tr === 'function') ? tr(t, L) : t;
   const akt = (typeof aktivniVarianta === 'function') ? aktivniVarianta(ZAK) : (ZAK.varianty || [])[0];
   const d = nabidkaProjData(ZAK, akt, L);
