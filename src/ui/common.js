@@ -1048,6 +1048,9 @@ function render() {
     renderTelo();
     const b = document.getElementById('render-chyba');
     if (b) b.style.display = 'none';
+    /* heat mapa (#26) jede s uživatelem: každé překreslení aplikace
+     * překreslí i ji — jinak by po přepnutí záložky ukazovala staré prvky */
+    if (typeof heatPoRenderu === 'function') heatPoRenderu();
   } catch (e) {
     renderChybaBanner(e);
     renderPrihlaseniNejdriv();          // ať zůstane cesta k přihlášení

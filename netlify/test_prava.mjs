@@ -51,6 +51,7 @@ import zdravi from './functions/zdravi.mjs';
 import zobrazeni from './functions/zobrazeni.mjs';
 import schvalovaniFn from './functions/schvalovani.mjs';
 import sablonyFn from './functions/sablony.mjs';
+import analytikaFn from './functions/analytika.mjs';
 import pdPole from './functions/pd_pole.mjs';
 import pdDealy from './functions/pd_dealy.mjs';
 import pdDeal from './functions/pd_deal.mjs';
@@ -382,6 +383,28 @@ const MATICE = [
     metoda: 'POST', url: 'http://x/api/sablony',
     telo: () => ({ akce: 'rezim', rezim: 'mekky' }),
     proc: 'měkký režim vypíná záruku „nikdo netiskne ze staré verze" — jen administrátor',
+    prava: JEN_ADMIN },
+
+  { fn: analytikaFn, soubor: 'analytika.mjs', nazev: 'analytika — stav sběru (GET ?akce=rezim)',
+    metoda: 'GET', url: 'http://x/api/analytika?akce=rezim',
+    proc: 'klient musí vědět, jestli má sbírat, dřív než cokoli pošle',
+    prava: PRIHLASENY_OK },
+
+  { fn: analytikaFn, nazev: 'analytika — souhrn (GET /api/analytika)',
+    metoda: 'GET', url: 'http://x/api/analytika',
+    proc: 'čísla provozu a časy zakázek vidí JEN administrátor (rozhodnutí 17. 8. 2026)',
+    prava: JEN_ADMIN },
+
+  { fn: analytikaFn, nazev: 'analytika — dávka událostí (POST akce=udalosti)',
+    metoda: 'POST', url: 'http://x/api/analytika',
+    telo: () => ({ akce: 'udalosti', den: { kliky: {}, zdrz: {}, zalozky: {}, pocty: {} } }),
+    proc: 'agregáty posílá každý přihlášený klient — bez toho by nebylo co měřit',
+    prava: PRIHLASENY_OK },
+
+  { fn: analytikaFn, nazev: 'analytika — vypínač sběru (POST akce=rezim)',
+    metoda: 'POST', url: 'http://x/api/analytika',
+    telo: () => ({ akce: 'rezim', sber: false }),
+    proc: 'globální vypínač měření je rozhodnutí administrátora',
     prava: JEN_ADMIN },
 ];
 

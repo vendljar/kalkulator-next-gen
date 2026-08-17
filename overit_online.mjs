@@ -40,6 +40,7 @@ import firma from './netlify/functions/firma.mjs';
 import zobrazeni from './netlify/functions/zobrazeni.mjs';
 import zalohaVynuceno from './netlify/functions/zaloha_vynuceno.mjs';
 import sablonyFn from './netlify/functions/sablony.mjs';
+import analytikaFn from './netlify/functions/analytika.mjs';
 
 const require = createRequire(import.meta.url);
 let chromium;
@@ -66,6 +67,7 @@ const FUNKCE = {
   /* Centrální šablony (#139) — aplikace si rejstřík bere hned po přihlášení;
    * bez téhle cesty by každý průchod svítil 404 v konzoli. */
   '/api/sablony': sablonyFn,
+  '/api/analytika': analytikaFn,
 };
 
 let ok = 0, fail = 0;

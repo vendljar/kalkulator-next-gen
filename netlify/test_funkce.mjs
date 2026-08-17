@@ -8,6 +8,7 @@ globalThis.__TEST_ULOZISTE = (nazev) => ({
   async zapis(k, v) { pamet.set(nazev + '/' + k, JSON.stringify(v)); },
   async seznam(prefix) { return [...pamet.keys()].filter(x => x.startsWith(nazev + '/' + (prefix || '')))
     .map(x => x.slice(nazev.length + 1)); },
+  async smaz(k) { pamet.delete(nazev + '/' + k); },
 });
 
 import prihlaseni from './functions/prihlaseni.mjs';
@@ -17,6 +18,7 @@ import program from './functions/program.mjs';
 import firma from './functions/firma.mjs';
 import zakazky from './functions/zakazky.mjs';
 import zaloha from './functions/zaloha.mjs';
+import analytika from './functions/analytika.mjs';
 import zalohaNocni from './functions/zaloha_nocni.mjs';
 import zalohaVynuceno from './functions/zaloha_vynuceno.mjs';
 import { ADMIN_EMAIL } from './lib/sdilene.mjs';
@@ -373,6 +375,69 @@ const DOCX2 = 'UEsDBBQABgAIAAAAIQ' + 'B'.repeat(400);   // jiná data = jiný ot
   test('noční otisk nese šablony včetně souborů',
     otisk && otisk.sablony && otisk.sablony['data/nabidka/2']
     && otisk.sablony['data/nabidka/2'].data === DOCX2);
+}
+
+/* ---- ANALYTIKA UŽÍVÁNÍ (#25 + #26 + #27, 17. 8. 2026) ----
+ * Zásady: agregáty za všechny, žádná stopa jednotlivce; čas k zakázce,
+ * ne k účtu; vypínač jen administrátor; retence 24 měsíců; MIMO zálohy. */
+{
+  const dnes = new Date().toISOString().slice(0, 10);
+  const uloz = await globalThis.__TEST_ULOZISTE('analytika');
+
+  test('analytika: režim čte i obchodník (klient musí vědět, jestli sbírat)',
+    (await (await get(analytika, 'http://x/api/analytika?akce=rezim', cookieObch)).json()).sber === true);
+  test('analytika: souhrn obchodníkovi NEpatří (jen administrátor)',
+    (await get(analytika, 'http://x/api/analytika', cookieObch)).status === 403);
+  test('analytika: vypínač obchodníkovi NEpatří',
+    (await post(analytika, 'http://x/api/analytika', { akce: 'rezim', sber: false }, cookieObch)).status === 403);
+
+  /* dávka událostí od klienta se přičte do dnešního dne */
+  const den1 = { kliky: { 'kalk|BUTTON|nabidkaWord(…)': 2 }, zdrz: { 'kalk|INPUT|sirka': 30 },
+                 zalozky: { kalk: 5 }, pocty: { zakazky: 1, kalkulace: 0, tiskyWord: 2, tiskyNahled: 0, prihlaseni: 1, chyby: 0 } };
+  await post(analytika, 'http://x/api/analytika', { akce: 'udalosti', den: den1,
+    casy: { '2026-OPR-CN-0001': { ock: 120, proj: 30 } } }, cookieObch);
+  await post(analytika, 'http://x/api/analytika', { akce: 'udalosti', den: den1 }, cookieObch);
+  const ulozeny = await uloz.cti('den/' + dnes);
+  test('analytika: dávky se PŘIČÍTAJÍ do denního agregátu (žádné záznamy po lidech)',
+    ulozeny && ulozeny.kliky['kalk|BUTTON|nabidkaWord(…)'] === 4 && ulozeny.pocty.tiskyWord === 4);
+  test('analytika: v uloženém dni není žádný e-mail ani jméno',
+    !JSON.stringify(ulozeny).includes('@'));
+
+  /* čas zakázky se akumuluje pod číslem zakázky */
+  await post(analytika, 'http://x/api/analytika', { akce: 'udalosti',
+    casy: { '2026-OPR-CN-0001': { ock: 60, proj: 0 } } }, cookieObch);
+  const cas = await uloz.cti('cas/2026-OPR-CN-0001');
+  test('analytika: čas zakázky se akumuluje odděleně OCK / PROJ',
+    cas && cas.ock === 180 && cas.proj === 30);
+
+  /* souhrn pro administrátora */
+  const preh = await (await get(analytika, 'http://x/api/analytika?od=2020-01-01&do=2099-12-31', cookie)).json();
+  test('analytika: souhrn nese celkové počty i řadu po měsících',
+    preh.celkem.pocty.zakazky === 2 && preh.poMesicich[dnes.slice(0, 7)].pocty.zakazky === 2);
+  test('analytika: souhrn nese časy zakázek', preh.casy['2026-OPR-CN-0001'].ock === 180);
+
+  /* retence: den starší 24 měsíců zmizí při dalším zápisu */
+  await uloz.zapis('den/2023-01-15', den1);
+  await post(analytika, 'http://x/api/analytika', { akce: 'udalosti', den: den1 }, cookieObch);
+  test('analytika: den starší 24 měsíců se při zápisu smaže (retence)',
+    (await uloz.cti('den/2023-01-15')) === null);
+
+  /* vypínač: po vypnutí se dávky tiše zahazují, po zapnutí zase přičítají */
+  await post(analytika, 'http://x/api/analytika', { akce: 'rezim', sber: false }, cookie);
+  const podpis = await uloz.cti('rezim');
+  test('analytika: vypnutí sběru se podepisuje (kdo + kdy)',
+    podpis.sber === false && podpis.kdo === ADMIN_EMAIL && !!podpis.kdy);
+  const pred = (await uloz.cti('den/' + dnes)).pocty.zakazky;
+  const odm = await (await post(analytika, 'http://x/api/analytika', { akce: 'udalosti', den: den1 }, cookieObch)).json();
+  test('analytika: při vypnutém sběru se dávka TIŠE zahodí (ok, žádná chyba uživateli)',
+    odm.ok === true && odm.sber === false && (await uloz.cti('den/' + dnes)).pocty.zakazky === pred);
+  await post(analytika, 'http://x/api/analytika', { akce: 'rezim', sber: true }, cookie);
+
+  /* analytika NEJDE do záloh (rozhodnutí 17. 8.) — ani ke stažení, ani nočně */
+  const zalA = await (await get(zaloha, 'http://x/api/zaloha', cookie)).json();
+  test('analytika: záloha ke stažení analytiku NEVOZÍ', zalA.zaloha.analytika === undefined);
+  const kodZaloh = kodSouboru.get('functions/zaloha.mjs') + kodSouboru.get('lib/zalohovani.mjs');
+  test('analytika: zálohovací kód úložiště analytiky vůbec nezná', !kodZaloh.includes('analytika'));
 }
 
 console.log(`\n${ok} prošlo, ${fail} selhalo`);

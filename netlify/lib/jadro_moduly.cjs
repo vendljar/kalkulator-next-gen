@@ -51,6 +51,7 @@ Object.assign(globalThis, require('../../src/cenik.js'));
 Object.assign(globalThis, require('../../src/cenik_stari.js'));
 Object.assign(globalThis, require('../../src/konfigurace.js'));
 Object.assign(globalThis, require('../../src/sablony_online.js'));
+Object.assign(globalThis, require('../../src/analytika.js'));
 Object.assign(globalThis, require('../../src/program.js'));
 Object.assign(globalThis, require('../../src/ukazkove.js'));
 Object.assign(globalThis, require('../../src/zobrazeni.js'));

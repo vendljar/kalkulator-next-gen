@@ -34,8 +34,15 @@ const NAST_PANELY = [
   { id: 'zobrazeni', nazev: 'Zobrazení', klic: 'nastaveni.zobrazeni', telo: () => nastZobrazeni() },
   { id: 'konfigurace', nazev: 'Konfigurace', klic: 'nastaveni.konfigurace', telo: () => nastKonfigurace() },
   { id: 'slovnik', nazev: 'Slovník', klic: 'nastaveni.slovnik', telo: () => nastSlovnik() },
+  /* Analytika (#25+#26+#27) je JEN pro administrátora — natvrdo, ne přes
+   * matici zobrazení: časy zakázek a čísla provozu se nepřidělují (rozhodnutí
+   * 17. 8. 2026), takže by řádek v matici jen sváděl k omylu. */
+  { id: 'analytika', nazev: 'Analytika', jenAdmin: true, telo: () => nastAnalytika() },
 ];
-function nastPanelSmi(x) { return !x.klic || typeof smiZobrazit !== 'function' || smiZobrazit(x.klic); }
+function nastPanelSmi(x) {
+  if (x.jenAdmin && !(typeof jeAdmin === 'function' && jeAdmin())) return false;
+  return !x.klic || typeof smiZobrazit !== 'function' || smiZobrazit(x.klic);
+}
 function nastPanelyViditelne() { return NAST_PANELY.filter(nastPanelSmi); }
 /* Vybraný panel se dohledává přes „smí ho vidět" — kdyby v NAST.panel zůstal
  * z dřívějška panel, na který uživatel po změně matice nárok nemá (nebo se

@@ -174,7 +174,9 @@ function onlinePoPrihlaseni(ja) {
    * překreslením, aby rozhraní hned napoprvé odpovídalo roli. Kdyby dorazila
    * později, obchodník by na okamžik zahlédl ceníky a pak by mu zmizely. */
   return Promise.all([onlineNactiProgram(), onlineNactiFirmu(), onlineNactiZobrazeni(), onlineNactiRejstrik(),
-                      onlineNactiSablony()])
+                      onlineNactiSablony(),
+                      /* analytika (#27): zjistit, jestli je sběr zapnutý, a nastartovat ho */
+                      typeof analytikaPoPrihlaseni === 'function' ? analytikaPoPrihlaseni() : Promise.resolve()])
     .then(() => { if (jeAdminOnline()) onlineZalohaAuto(); });
 }
 
@@ -193,6 +195,12 @@ function onlineOdhlas() {
     ONLINE_STAV.uzivatele = []; ONLINE_STAV.uzivateleNacteno = false; ONLINE_STAV.formHeslo = '';
     ONLINE_STAV.otisky = []; ONLINE_STAV.otiskyNacteno = false;
     ONLINE_STAV.sablonyRejstrik = null;   // šablony patří přihlášeným (#139)
+    /* analytika (#26): případná zapnutá heat mapa po odhlášení zhasne
+     * a sběr se zastaví (analytikaBezi bez přihlášení nic nepustí) */
+    if (typeof ANL !== 'undefined' && ANL.heat) {
+      ANL.heat = false;
+      if (typeof heatSmaz === 'function') { heatSmaz(); heatPanelSmaz(); }
+    }
     if (ONLINE_STAV.timer) { clearTimeout(ONLINE_STAV.timer); ONLINE_STAV.timer = null; }
     /* Když v aplikaci vládl online ceník, po odhlášení k němu už není zdroj –
      * návrat k ceníku ze sestavení, stejná úvaha jako při odpojení složky. */
@@ -1039,7 +1047,8 @@ function renderOnlineLista() {
   }
   /* Titul se ukazuje i v liště: člověk tak hned vidí, v jaké podobě půjde
    * jeho jméno do nabídky, a nemusí kvůli kontrole nic generovat. */
-  el.innerHTML = `<b>👤 ${esc(onlineJmenoSTitulem() || ONLINE_STAV.ja.email)}</b>
+  el.innerHTML = `${typeof heatPrepinacHtml === 'function' ? heatPrepinacHtml() : ''}
+    <b>👤 ${esc(onlineJmenoSTitulem() || ONLINE_STAV.ja.email)}</b>
     <span>(${esc(ONLINE_STAV.ja.role)})</span>
     <button class="mini" onclick="otevriMujProfil()">Můj profil</button>
     <button class="mini" onclick="otevriZmenaHesla()">Změnit heslo</button>

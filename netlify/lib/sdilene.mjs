@@ -37,6 +37,8 @@ export async function uloziste(nazev) {
       const { blobs } = await s.list(prefix ? { prefix } : {});
       return blobs.map(b => b.key);
     },
+    /* mazání potřebuje jen retence analytiky (dny starší 24 měsíců) */
+    async smaz(klic) { await s.delete(klic); },
   };
 }
 
