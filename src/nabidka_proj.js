@@ -71,11 +71,11 @@ const NABIDKA_PROJ_DEF = [
     { cz: 'Studie proveditelnosti – podoba úprav domu, umístění výtahové šachty a technologie výtahu – se zpracovává jako prvotní dokumentace, do které se zapracují veškeré požadavky investora v kombinaci s realizovatelností záměru a legislativních požadavků. Tím se docílí podkladu, který poté slouží nejen pro projednání záměru na stavebním úřadě, ale je možné ho dále rozpracovat do dalších stupňů projektových dokumentací.' },
   ], radky: [
     ['Studie proveditelnosti – část 1', '', 'zamereni'],
-    ['Stavebně technický průzkum a zaměření', 'zajištění původní dokumentace stavby v potřebném rozsahu od investora nebo z archivu stavebního úřadu'],
+    ['Stavebně technický průzkum a zaměření', 'zajištění původní dokumentace stavby v potřebném rozsahu od investora nebo z archivu stavebního úřadu', 'zamereni'],
     ['Stavebně technický průzkum a zaměření', 'detailní zaměření 3D skenerem dotčených částí objektu', 'zamereni'],
-    ['Stavebně technický průzkum a zaměření', 'zpracování výstupu ze zaměření'],
+    ['Stavebně technický průzkum a zaměření', 'zpracování výstupu ze zaměření', 'zamereni'],
     ['Stavebně technický průzkum a zaměření', 'vizuální prohlídka objektu stavebně technických návazností', 'zamereni'],
-    ['Stavebně technický průzkum a zaměření', 'pořízení detailní fotodokumentace'],
+    ['Stavebně technický průzkum a zaměření', 'pořízení detailní fotodokumentace', 'zamereni'],
     ['Studie proveditelnosti – část 2', '', 'studie'],
     ['Návrh grafické studie', 'PŮVODNÍ STAV – grafický výstup ze zaměření, průmět reality z průzkumu s původní dokumentací stavby', 'studie'],
     ['Návrh grafické studie', 'ROZSAH BOURÁNÍ – grafické naznačení možného rozsahu bourání s ohledem na statiku objektu', 'studie'],
@@ -240,10 +240,10 @@ const NABIDKA_PROJ_DEF = [
     ['Zpracování STUDIE PROVEDITELNOSTI (SP)', 'do 10–12 týdnů od zpracování výstupů ze zaměření', 'studie'],
     ['Projednání s odborem památkové péče HMP', 'do cca 2–3 měsíců od podání žádosti – záleží na vytíženosti úředníků státní správy', 'projednani'],
     ['Zpracování dokumentace pro dotčené orgány (hrubopis DPZ)', 'do 10–12 týdnů od schválení studie investorem a objednání', 'dpz'],
-    ['Zajištění stanovisek dotčených orgánů', 'cca do 4 týdnů od podání žádosti (v případě potřeby stanoviska hygieny a/nebo památkové péče cca do 2,5 měsíce)', 'ic'],
+    ['Zajištění stanovisek dotčených orgánů *)', 'cca do 4 týdnů od podání žádosti (v případě potřeby stanoviska hygieny a/nebo památkové péče cca do 2,5 měsíce)', 'ic'],
     ['Dopracování dokumentace pro povolení záměru (čistopis DPZ)', 'proběhne v průběhu lhůty vyjádření dotčených orgánů', 'dpz'],
     ['Podání žádosti o povolení záměru', 'po obdržení souhlasných stanovisek dotčených orgánů (+ 14 dní v případě nutnosti zapracování podmínek dotčených orgánů do dokumentace)', 'ic'],
-    ['Inženýrská činnost (IČ) – vyřízení povolení záměru', 'cca 2 měsíce od podání žádosti + 1 měsíc na nabytí právní moci povolení záměru', 'ic'],
+    ['Inženýrská činnost (IČ) – vyřízení povolení záměru *)', 'cca 2 měsíce od podání žádosti + 1 měsíc na nabytí právní moci povolení záměru', 'ic'],
     ['Zpracování dokumentace pro provedení stavby (DPS)', 'cca do 6 týdnů od schválení dokumentace a povolení záměru stavebním úřadem', 'dps'],
     ['Ekonomická zadávací část (EZC)', 'do 2 týdnů od zpracování projektu pro provedení stavby', 'ezc'],
   ] },
@@ -364,9 +364,35 @@ function nabidkaProjData(zak, varianta, lang) {
       return { typ: 'proza', nadpis: P(b.nadpis), odstavce: odst, prazdny: b.klic === 'popisZameru' && !(zak && zak.popisZameru || '').trim() };
     }
     if (b.typ === 'seznam') return { typ: 'seznam', nadpis: P(b.nadpis), radky: b.radky.map(P) };
-    if (b.typ === 'rozsah') return { typ: 'rozsah', nadpis: P(b.nadpis),
-      uvod: (b.uvod || []).map(proza),
-      radky: b.radky.filter(radekVRozsahu).map(x => [P(x[0]), x[1] ? P(x[1]) : '']) };
+    if (b.typ === 'rozsah') {
+      /* PŘESKLÁDÁNÍ ROZSAHU (17. 8. 2026 večer, zadání J. V.): podnadpis
+       * části nese v závorce POPIS (společný levý štítek řádků pod ním) —
+       * „Dokumentace pro povolení záměru – část 1 (Stavební část projektu)" —
+       * a každý bod začíná pomlčkou přes celou šířku. Opakovat tentýž štítek
+       * na každém řádku bylo hůř čitelné. Skupiny bez hlavičky části (blok
+       * ZAMĚŘENÍ) dostanou podnadpis ze svého štítku. */
+      const vstup = b.radky.filter(radekVRozsahu).map(x => [P(x[0]), x[1] ? P(x[1]) : '']);
+      const radky = [];
+      let i = 0;
+      const jeHlavicka = r => !r[1];
+      while (i < vstup.length) {
+        if (jeHlavicka(vstup[i])) {
+          const cast = vstup[i][0]; i++;
+          const skupina = [];
+          while (i < vstup.length && !jeHlavicka(vstup[i])) { skupina.push(vstup[i]); i++; }
+          const stitky = [...new Set(skupina.map(r => r[0]).filter(Boolean))];
+          radky.push([cast + (stitky.length === 1 ? ' (' + stitky[0] + ')' : ''), '']);
+          skupina.forEach(r => radky.push(['', '– ' + r[1]]));
+        } else {
+          const stitek = vstup[i][0];
+          const skupina = [];
+          while (i < vstup.length && !jeHlavicka(vstup[i]) && vstup[i][0] === stitek) { skupina.push(vstup[i]); i++; }
+          if (stitek) radky.push([stitek, '']);
+          skupina.forEach(r => radky.push(['', '– ' + r[1]]));
+        }
+      }
+      return { typ: 'rozsah', nadpis: P(b.nadpis), uvod: (b.uvod || []).map(proza), radky };
+    }
     if (b.typ === 'pary') {
       if (b.klic === 'obchodni') return { typ: 'pary', nadpis: P(b.nadpis), radky: [
         [P('Současně platná sazba DPH'), dphPct + ' %'],

@@ -435,7 +435,16 @@ function vypocet(zadani, cenik, jekly, fixes = true) {
     !ext ? mkItem('PRÁCE ZÁMEČNÍKA - SPODNÍ RÁM (INT)', 1, c.spodniRamKc, { cenaPath: 'C.spodniRamKc' }) : null,
     mkItem('PRÁCE ZÁMEČNÍKA - NÝTOVÁNÍ', nytovaniKs, c.nytKc, { cenaPath: 'C.nytKc' }),
     !ext ? mkItem('PRÁCE ZÁMEČNÍKA - ČÍLKA (INT)', pocetCilek, c.cilkoKc, { cenaPath: 'C.cilkoKc' }) : null,
-    z.zamecnikAtypKs ? oznacAtyp(mkItem('PRÁCE ZÁMEČNÍKA - OSTATNÍ (ATYP)', z.zamecnikAtypKs, atypZamecnikSazba, { cenaPath: 'Z.zamecnikAtypKc' })) : null,
+    /* Zámečník atyp — JEDNA ČÁSTKA (17. 8. 2026 večer): pole „množství" z UI
+     * zmizelo, zadává se jen částka v Kč (přepis; zaškrtnutí ATYP předvyplní
+     * 50 000). Řádek má množství VŽDY 1 a jednotkovou cenu = ta částka.
+     * Staré zakázky s uloženými kusy se počítají PŘESNĚ jako dřív — kusy
+     * mají přednost, dokud v datech jsou; jinak by se změnily jejich ceny. */
+    (+z.zamecnikAtypKs || 0)
+      ? oznacAtyp(mkItem('PRÁCE ZÁMEČNÍKA - OSTATNÍ (ATYP)', z.zamecnikAtypKs, atypZamecnikSazba, { cenaPath: 'Z.zamecnikAtypKc' }))
+      : (atypZamecnikPrepsana
+        ? oznacAtyp(mkItem('PRÁCE ZÁMEČNÍKA - OSTATNÍ (ATYP)', 1, atypZamecnikSazba, { cenaPath: 'Z.zamecnikAtypKc' }))
+        : null),
     mkItem('LAKOVÁNÍ (ŠACHTA, PLECHY, ZASKLENÍ, OPLECHOVÁNÍ)', 1, lakovaniKc, { naklad: lakovaniKc }),
     mkItem('MONTÁŽ NA STAVBĚ', montazHod, c.montazHodKc, { cenaPath: 'C.montazHodKc' }),
     ext ? mkItem('VĚTRACÍ MŘÍŽKA (EXT)', 2, c.vetraciMrizkaKc, { cenaPath: 'C.vetraciMrizkaKc' }) : null,

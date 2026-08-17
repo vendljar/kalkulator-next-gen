@@ -239,7 +239,7 @@ function onlineVerzeInfo() {
 
 /* Zveřejnění online – stejná úvaha jako progZverejni nad složkou, jen zápis
  * jde na server (a server si admina i „beze změny" zkontroluje ještě sám). */
-function onlineZverejni() {
+function onlineZverejni(preddanaPozn) {
   if (!jeAdminOnline()) { onlineZprava('Zveřejnit ceník smí jen administrátor.', 'varovani'); render(); return Promise.resolve(false); }
   const ctx = progKontext('');
   if (ONLINE_STAV.db && programBezeZmeny(ONLINE_STAV.db, ctx)) {
@@ -250,7 +250,8 @@ function onlineZverejni() {
   const shrnuti = ONLINE_STAV.db
     ? (rozdily.length ? rozdily.length + ' změněných položek ceníku' : 'ceník beze změny, mění se katalog nebo slevy')
     : 'založení online databáze programu';
-  const pozn = prompt('Zveřejnit ceník aktivní varianty jako platný ONLINE pro celý program?\n\n'
+  const pozn = (typeof preddanaPozn === 'string') ? preddanaPozn
+    : prompt('Zveřejnit ceník aktivní varianty jako platný ONLINE pro celý program?\n\n'
     + shrnuti + '.\nOd této chvíle z něj budou vycházet nové nabídky všech přihlášených.\n'
     + 'Rozpracované nabídky se přepočítají samy, vytištěné (uzamčené) zůstanou beze změny.'
     + '\n\nČím se změna zdůvodňuje (nepovinné):', '');
@@ -1047,11 +1048,14 @@ function renderOnlineLista() {
   }
   /* Titul se ukazuje i v liště: člověk tak hned vidí, v jaké podobě půjde
    * jeho jméno do nabídky, a nemusí kvůli kontrole nic generovat. */
-  el.innerHTML = `${typeof heatPrepinacHtml === 'function' ? heatPrepinacHtml() : ''}
-    <b>👤 ${esc(onlineJmenoSTitulem() || ONLINE_STAV.ja.email)}</b>
-    <span>(${esc(ONLINE_STAV.ja.role)})</span>
+  /* Pořadí a barvy (17. 8. 2026 večer): jméno s funkcí SVĚTLE ZELENĚ, ať je
+   * na tmavé liště vidět; přepínač heat mapy stojí až ZA „Změnit heslo". */
+  const funkce = ONLINE_STAV.ja.funkce ? ' · ' + ONLINE_STAV.ja.funkce : '';
+  el.innerHTML = `<b style="color:#86e8ad">👤 ${esc(onlineJmenoSTitulem() || ONLINE_STAV.ja.email)}${esc(funkce)}</b>
+    <span style="color:#86e8ad;opacity:.85">(${esc(ONLINE_STAV.ja.role)})</span>
     <button class="mini" onclick="otevriMujProfil()">Můj profil</button>
     <button class="mini" onclick="otevriZmenaHesla()">Změnit heslo</button>
+    ${typeof heatPrepinacHtml === 'function' ? heatPrepinacHtml() : ''}
     <button class="mini" onclick="onlineOdhlas()">Odhlásit</button>`;
 }
 

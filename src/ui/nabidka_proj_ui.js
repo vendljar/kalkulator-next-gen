@@ -194,13 +194,19 @@ function nabidkaProjNahled() {
       return `<h2>${esc(b.nadpis)}</h2>${b.odstavce.map(x =>
         `<p${b.prazdny ? ' class="chybi"' : ''}>${esc(x)}</p>`).join('')}`;
     if (b.typ === 'seznam')
-      return `<h2>${esc(b.nadpis)}</h2><ul>${b.radky.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`;
+      /* body s pomlčkou místo puntíku (17. 8. večer — jednotný vzhled s rozsahy) */
+      return `<h2>${esc(b.nadpis)}</h2><ul style="list-style:none;margin-left:0;padding-left:2px">${
+        b.radky.map(x => `<li>– ${esc(x)}</li>`).join('')}</ul>`;
     if (b.typ === 'rozsah')
+      /* Od 17. 8. večer: podnadpis části nese popis v závorce a body jdou
+       * s pomlčkou přes celou šířku (řádky s prázdným levým sloupcem). */
       return `<h2>${esc(b.nadpis)}</h2>`
         + (b.uvod || []).map(x => `<p>${esc(x)}</p>`).join('')
-        + `<table>${b.radky.map(r => r[1]
-            ? `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`
-            : `<tr class="podnadpis"><td colspan="2">${esc(r[0])}</td></tr>`).join('')}</table>`;
+        + `<table>${b.radky.map(r => !r[1]
+            ? `<tr class="podnadpis"><td colspan="2">${esc(r[0])}</td></tr>`
+            : (r[0]
+              ? `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`
+              : `<tr><td colspan="2" style="width:auto">${esc(r[1])}</td></tr>`)).join('')}</table>`;
     if (b.typ === 'pary')
       return `<h2>${esc(b.nadpis)}</h2><table>${b.radky.map(r =>
         `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join('')}</table>`;

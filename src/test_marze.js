@@ -102,7 +102,10 @@ test('u výchozího ceníku je PROJ nad minimem', pOk.celek.podMin === false && 
 
 /* jedné sekci se dá sleva, která ji utopí – celek přitom může zůstat v pořádku */
 const zadaniP2 = JSON.parse(JSON.stringify(zadaniP));
-const prvni = zadaniP2.sekce.find(s => s.polozky && s.polozky.length) || zadaniP2.sekce[0];
+/* od 17. 8. má výchozí rozsah vyplněnou STUDII (zaměření prázdné) — sleva
+ * se dává první sekci, která má co slevit (nenulové hodiny/fix) */
+const prvni = zadaniP2.sekce.find(s => (s.polozky || []).some(p => (+p.hodiny || 0) > 0 || (+p.cena || 0) > 0))
+  || zadaniP2.sekce[0];
 prvni.prirazkaPct = -40;
 const rp2 = ep.vypocetProj(zadaniP2, cenikP);
 const pPod = marzeStavProj(rp2, nast);
@@ -143,7 +146,11 @@ test('práce se ztrátou je vážnější', marzeStupen({ podMin: true, marze: -
  * náklad + doprava; obě čísla se musejí rovnat. */
 const zadaniP3 = JSON.parse(JSON.stringify(zadaniP));
 {
-  const seDopravou = zadaniP3.sekce.find(s => s.doprava);
+  /* Od 17. 8. je výchozí ZAMĚŘENÍ prázdné — sekce s dopravou se vybírá tak,
+   * aby měla nenulový náklad práce (jinak by km vyšly nulové a nebylo by
+   * co hlídat). Ve výchozím zadání to je DPZ. */
+  const seDopravou = zadaniP3.sekce.find(s => s.doprava
+    && ep.vypocetProj(zadaniP3, cenikP).sekce.find(x => x.key === s.key).naklad > 0);
   /* Sekce schválně BEZ přirážky (nula, ne prázdno). Od 11. 8. 2026 je výchozí
    * hodnotou sekce globální přirážka z ceníku, a ta roste spolu s dopravou —
    * protože se počítá z ceny včetně dopravy. S ní by marže pod minimum

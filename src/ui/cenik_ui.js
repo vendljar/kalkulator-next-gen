@@ -63,13 +63,12 @@ function katDel(sekceKey, kid) {
 }
 
 const CENIK_POZN = `<div class="note">Ceník je součástí aktivní varianty a ukládá se se zakázkou (tlačítko „Uložit zakázku") –
-  změna cen tady se dotkne <b>jen této varianty</b>. Trvale, tedy pro všechny nové nabídky, se ceny mění
-  tlačítkem <b>Zveřejnit</b> v kartě Databáze programu nahoře; bez připojené složky platí ceník ze sestavení aplikace.</div>`;
+  změna cen tady se dotkne <b>jen této varianty</b>. Trvale, tedy pro všechny nové nabídky a přes nová
+  sestavení aplikace, se ceny mění tlačítkem <b>Zveřejnit</b> v kartě Platný ceník programu nahoře.</div>`;
 
 function renderCenik() {
   document.getElementById('page-cenik').innerHTML =
-    `${smiZobrazit('cenik.zverejnit') ? renderProgramKarta() : ''}
-     ${smiZobrazit('cenik.zverejnit') && typeof renderOnlineCenikKarta === 'function' ? renderOnlineCenikKarta() : ''}
+    `${smiZobrazit('cenik.zverejnit') ? renderCenikProgramKarta() : ''}
      <div class="card"><h2 style="cursor:default">Ceník nákladů OCK – číselník jednotkových cen
        <span class="pill warn" style="float:right">každou cenu před nabídkou překontrolovat!</span></h2>
      <div class="body">
@@ -104,8 +103,7 @@ function renderCenikProj() {
      * nad týmž stavem, stejný vzor jako karty slevy a zaokrouhlení. Karta
      * nenese žádné id (card() bez čtvrtého argumentu), dvojí vykreslení
      * proto nic nezdvojí; hlídá to overit_program.mjs. */
-    `${smiZobrazit('cenik.zverejnit') ? renderProgramKarta() : ''}
-     ${smiZobrazit('cenik.zverejnit') && typeof renderOnlineCenikKarta === 'function' ? renderOnlineCenikKarta() : ''}
+    `${smiZobrazit('cenik.zverejnit') ? renderCenikProgramKarta() : ''}
      <div class="card"><h2 style="cursor:default">Ceník nákladů PROJ – projekční práce
        <span class="pill warn" style="float:right">každou cenu před nabídkou překontrolovat!</span></h2>
      <div class="body">

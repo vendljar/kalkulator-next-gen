@@ -33,7 +33,17 @@ function tc(nazev, got, exp, tol = 1e-6) {
   t(nazev + ' = ' + got, Math.abs(got - exp) <= tol, 'očekáváno ' + exp);
 }
 const kopie = x => JSON.parse(JSON.stringify(x));
-const zad = () => kopie(DEFAULT_ZADANI_PROJ);
+/* Výchozí ROZSAH se 17. 8. 2026 večer změnil (studie vyplněná, zaměření
+ * prázdné — rozhodnutí J. V.). Porovnání s předlohou ale stojí na JEJÍCH
+ * hodinách, proto si je test nastavuje výslovně a nezávisle na výchozím. */
+const predlohoveHodiny = zad => {
+  const za = zad.sekce.find(s => s.key === 'zamereni');
+  za.polozky[0].hodiny = 5; za.polozky[1].hodiny = 10;
+  const st = zad.sekce.find(s => s.key === 'studie');
+  st.polozky.forEach(p => { p.hodiny = 0; });
+  return zad;
+};
+const zad = () => predlohoveHodiny(kopie(DEFAULT_ZADANI_PROJ));
 const sek = (r, key) => r.sekce.find(s => s.key === key);
 const pol = (r, key, nazev) => sek(r, key).polozky.find(p => p.nazev === nazev);
 

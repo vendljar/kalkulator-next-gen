@@ -257,7 +257,9 @@ vObouRezimech(() => {
 {
   const sekce = k => eng_proj_zadani().sekce.find(s => s.key === k);
   const hodin = s => s.polozky.filter(p => p.typ === 'hod').reduce((a, p) => a + p.hodiny, 0);
-  test('sekce ZAMĚŘENÍ má nenulový základ hodin', hodin(sekce('zamereni')) > 0);
+  /* od 17. 8. 2026 je zaměření ve výchozím stavu PRÁZDNÉ (rozhodnutí J. V.,
+   * studie ho obsahuje jako část 1) — hlídka nulování mířív na studii */
+  test('sekce STUDIE má nenulový základ hodin', hodin(sekce('studie')) > 0);
   test('sekce DPZ má nenulový základ hodin', hodin(sekce('dpz')) > 0);
   test('sekce DPS má nenulový základ hodin', hodin(sekce('dps')) > 0);
 

@@ -73,5 +73,41 @@ test('sazba 0 % řádek nevytvoří', najdi(rA0).length === 0);
 const rAtypFix = eng.vypocet(zA, cenik(), JEKLY, true);
 test('přirážka funguje i v opraveném režimu', najdi(rAtypFix).length === 1);
 
+/* 6) Zámečník atyp — JEDNA částka (17. 8. 2026 večer, zadání J. V.)
+ *
+ * Pole „množství" z UI zmizelo: nové zadání je jediná částka v Kč (přepis
+ * Z.zamecnikAtypKc; zaškrtnutí ATYP ji předvyplní na 50 000). V kalkulaci
+ * je pak řádek s množstvím VŽDY 1 a jednotkovou cenou = ta částka.
+ * Staré zakázky s uloženými kusy (zamecnikAtypKs) se ale počítat nesmí
+ * jinak než dřív — kusy mají přednost, dokud v datech jsou. */
+const ZAM = 'PRÁCE ZÁMEČNÍKA - OSTATNÍ (ATYP)';
+const najdiZam = r => [...r.sekce.hrubaOck, ...r.sekce.rezie].filter(x => (x.origNazev || x.nazev) === ZAM);
+
+{ // bez přepisu a bez kusů řádek není (stejně jako dřív)
+  const z = zadani(); z.zamecnikAtypKs = 0; z.zamecnikAtypKc = null;
+  test('zámečník: bez částky i bez kusů řádek nevzniká',
+    najdiZam(eng.vypocet(z, cenik(), JEKLY, false)).length === 0);
+}
+{ // nová cesta: jen částka → množství 1, jednotková cena = částka
+  const z = zadani(); z.zamecnikAtypKs = 0; z.zamecnikAtypKc = 50000;
+  const radek = najdiZam(eng.vypocet(z, cenik(), JEKLY, false))[0];
+  test('zámečník: samotná částka vytvoří řádek s množstvím 1', !!radek && radek.mnozstvi === 1,
+    radek && radek.mnozstvi);
+  test('zámečník: jednotková cena = částka z pole', !!radek && radek.naklad === 50000,
+    radek && radek.naklad);
+}
+{ // nula je platný přepis („zdarma") — řádek je vidět s nulou
+  const z = zadani(); z.zamecnikAtypKs = 0; z.zamecnikAtypKc = 0;
+  const radek = najdiZam(eng.vypocet(z, cenik(), JEKLY, false))[0];
+  test('zámečník: přepis 0 Kč = viditelný řádek zdarma', !!radek && radek.naklad === 0);
+}
+{ // stará zakázka s kusy: počítá se PŘESNĚ jako dřív (kusy × sazba)
+  const z = zadani(); z.zamecnikAtypKs = 3; z.zamecnikAtypKc = null;
+  const radek = najdiZam(eng.vypocet(z, cenik(), JEKLY, false))[0];
+  test('zámečník: stará zakázka s kusy počítá kusy × ceníková sazba',
+    !!radek && radek.mnozstvi === 3 && radek.naklad === 3 * cenik().zamecnikAtypKc,
+    radek && [radek.mnozstvi, radek.naklad]);
+}
+
 console.log('\n' + ok + ' OK, ' + fail + ' FAIL');
 process.exit(fail ? 1 : 0);

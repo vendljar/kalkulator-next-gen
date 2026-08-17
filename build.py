@@ -87,12 +87,16 @@ favicon_svg = (root / 'src' / 'favicon.svg')
 favicon_b64 = (base64.b64encode(favicon_svg.read_bytes()).decode('ascii')
                if favicon_svg.exists() else ikona_b64)
 
-# Ikona programu = favicon (zadání 17. 8. 2026): v hlavičce aplikace se ukazuje
-# tentýž tmavě modrý znak dolaru jako na kartě prohlížeče — jedna identita.
+# Ikona programu = znak dolaru jako favicon (17. 8. 2026), ale v hlavičce
+# SVĚTLE ZELENÝ (17. 8. večer): hlavička je tmavá a tmavě modrý znak na ní
+# nebyl vidět. Zdroj: src/ikona_hlavicka.svg; když chybí, spadne na favicon.
+ikona_hlavicka = (root / 'src' / 'ikona_hlavicka.svg')
+ikona_hlavicka_b64 = (base64.b64encode(ikona_hlavicka.read_bytes()).decode('ascii')
+                      if ikona_hlavicka.exists() else favicon_b64)
 html = (html.replace('/*__CORE__*/', core).replace('/*__JEKLY__*/', jekly)
             .replace('/*__UI__*/', ui).replace('__VERZE__', 'v' + ver)
             .replace('__SESTAVENO__', datetime.date.today().isoformat())
-            .replace('__IKONA_B64__', favicon_b64)
+            .replace('__IKONA_B64__', ikona_hlavicka_b64)
             .replace('__FAVICON_B64__', favicon_b64))
 
 (root / 'dist').mkdir(exist_ok=True)

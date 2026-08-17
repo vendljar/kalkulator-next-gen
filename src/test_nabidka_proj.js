@@ -93,11 +93,15 @@ test('rozsahové bloky mají řádky', d.bloky.filter(b => b.typ === 'rozsah').e
 
 /* --- 3) ceny sedí na vypocetProj, nic se nedopočítává --- */
 const kc = n => n.toLocaleString('cs-CZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kč';
-const cenaZa = r.sekce.find(s => s.key === 'zamereni').celkem;
-const blokZa = d.bloky.find(b => b.typ === 'cena' && b.sekce === 'zamereni');
-test('cena ZAMĚŘENÍ je přesně z Kalkulace PROJ', blokZa.castka === kc(cenaZa), blokZa.castka + ' vs ' + kc(cenaZa));
-test('část 1 studie a ZAMĚŘENÍ mají tutéž cenu (tatáž činnost)',
-  d.bloky.filter(b => b.typ === 'cena' && b.sekce === 'zamereni').every(b => b.castka === kc(cenaZa)));
+/* Výchozí rozsah je od 17. 8. 2026 večer STUDIE (zaměření prázdné a tedy
+ * mimo dokument) — cena proti kalkulaci se proto kontroluje na studii. */
+const cenaSt = r.sekce.find(s => s.key === 'studie').celkem;
+const blokSt = d.bloky.find(b => b.typ === 'cena' && b.sekce === 'studie' && !b.pausalni && !/variantní/.test(b.nadpis));
+test('výchozí rozsah: STUDIE vyplněná, ZAMĚŘENÍ prázdné (mimo dokument)',
+  cenaSt > 0 && !d.bloky.some(b => b.typ === 'cena' && b.sekce === 'zamereni'),
+  d.bloky.filter(b => b.typ === 'cena').map(b => b.nadpis).join(' | '));
+test('cena STUDIE je přesně z Kalkulace PROJ', !!blokSt && blokSt.castka === kc(cenaSt),
+  (blokSt || {}).castka + ' vs ' + kc(cenaSt));
 const soucet = NABIDKA_PROJ_SEKCE.reduce((a, k) => {
   const s = r.sekce.find(x => x.key === k); return a + (s ? s.celkem : 0);
 }, 0);

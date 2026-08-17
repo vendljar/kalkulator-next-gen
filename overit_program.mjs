@@ -257,18 +257,20 @@ const ui = await stranka.evaluate(() => {
   otevriProgram();
   const panel = document.getElementById('program-panel').innerHTML;
   zavriProgram();
-  return { karta: /Databáze programu/.test(karta), zverejnit: /progZverejni/.test(karta),
-           kartaProj: /Databáze programu/.test(kartaProj), zverejnitProj: /progZverejni/.test(kartaProj),
+  /* Od 17. 8. 2026 večer je na záložkách Ceník JEDNA karta „Platný ceník
+   * programu" s jedním tlačítkem (cenikZverejniVse) místo dvou karet. */
+  return { karta: /Platný ceník programu/.test(karta), zverejnit: /cenikZverejniVse/.test(karta),
+           kartaProj: /Platný ceník programu/.test(kartaProj), zverejnitProj: /cenikZverejniVse/.test(kartaProj),
            dupl,
            panel: panel.length > 0, skryto: document.getElementById('program-overlay').style.display };
 });
-zkus('karta Databáze programu je na záložce Ceník', ui.karta === true);
-zkus('karta nabízí zveřejnění', ui.zverejnit === true);
+zkus('karta Platný ceník programu je na záložce Ceník', ui.karta === true);
+zkus('karta nabízí JEDNO tlačítko zveřejnění (cenikZverejniVse)', ui.zverejnit === true);
 /* Zveřejňování a verzování je jedno pro OCK i PROJ (jeden _program.json,
  * jedna verze) — karta proto musí stát i na záložce Ceník nákladů PROJ
  * (zadání 2. 8. 2026: „Proč u ceníku proj nemáme stejné zveřejňování
  * a verzování jako u OCK? Zaveď."). */
-zkus('karta Databáze programu je i na záložce Ceník PROJ',
+zkus('karta Platný ceník programu je i na záložce Ceník PROJ',
   ui.kartaProj === true && ui.zverejnitProj === true);
 zkus('dvojí vykreslení karty nezdvojilo žádné id', ui.dupl.length === 0, JSON.stringify(ui.dupl));
 zkus('panel s verzemi se otevře a zavře', ui.panel === true && ui.skryto === 'none');

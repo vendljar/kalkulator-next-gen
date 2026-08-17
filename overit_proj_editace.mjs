@@ -232,10 +232,10 @@ const zobrazeni = await p.evaluate(([marze, zdroj]) => {
     tot: document.querySelectorAll('#proj-kalkulace tr.tot').length,
     sec: document.querySelectorAll('#page-proj tr.sec').length,
     selectu: document.querySelectorAll('#proj-kalkulace select').length,
-    /* Název sekce smí v pruhu stát sám. Od 17. 8. 2026 se v NADPISU
-     * vynechávají informativní závorky (zadání J. V.) — porovnává se proto
-     * s názvem ze zadání očištěným toutéž funkcí (nazevBezZavorek). */
-    navic: nazvy.filter((t, i) => t !== nazevBezZavorek((PJ.sekce[i] || {}).nazev || '')),
+    /* Název sekce smí v pruhu stát sám. Hledat v něm číslici by nešlo —
+     * „KOLAUDACE (pro 1 ks výtahu)" ji má přímo v názvu –, takže se porovnává
+     * rovnou s tím, jak se sekce jmenuje v zadání. */
+    navic: nazvy.filter((t, i) => t !== (PJ.sekce[i] || {}).nazev),
     hlavicka: tab ? [...tab.querySelectorAll('th')].map(t => t.textContent.trim()).join(' | ') : '',
     prm: document.querySelectorAll('#page-proj .prm').length,
     // sekce pod výpočtem (zadání 1. 8. 2026) – pořadí karet na stránce PROJ

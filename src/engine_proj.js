@@ -42,15 +42,19 @@ const DEFAULT_ZADANI_PROJ = {
    * Migrace v zakazka.js hodnotu ze starých zakázek převezme, aby se cena
    * nezměnila ani o korunu. */
   sekce: [
+    /* Výchozí rozsah (rozhodnutí J. V. 17. 8. 2026 večer): nová zakázka
+     * začíná se STUDIÍ vyplněnou a ZAMĚŘENÍM prázdným — studie je běžný
+     * případ prodeje a zaměření je v ní obsažené jako část 1 (sekce se
+     * vzájemně vylučují, viz pjVyrazeno v ui/kalk_proj.js). */
     { key: 'zamereni', nazev: 'ZAMĚŘENÍ', doprava: { km: 0, pausal: 0 }, prirazkaPct: null,
       polozky: [
-        { nazev: 'Zaměření', typ: 'hod', sazba: 'zamereni', hodiny: 5, rezerva: 0 },
-        { nazev: 'Výstup', typ: 'hod', sazba: 'projektant', hodiny: 10, rezerva: 0 },
+        { nazev: 'Zaměření', typ: 'hod', sazba: 'zamereni', hodiny: 0, rezerva: 0 },
+        { nazev: 'Výstup', typ: 'hod', sazba: 'projektant', hodiny: 0, rezerva: 0 },
       ] },
     { key: 'studie', nazev: 'ST – STUDIE', prirazkaPct: null,
       polozky: [
-        { nazev: 'Studie', typ: 'hod', sazba: 'projektant', hodiny: 0, rezerva: 0 },
-        { nazev: 'Konzultace', typ: 'hod', sazba: 'projektant', hodiny: 0, rezerva: 0 },
+        { nazev: 'Studie', typ: 'hod', sazba: 'projektant', hodiny: 24, rezerva: 0 },
+        { nazev: 'Konzultace', typ: 'hod', sazba: 'projektant', hodiny: 4, rezerva: 0 },
       ] },
     { key: 'projednani', nazev: 'PROJEDNÁNÍ STUDIE', prirazkaPct: null,
       polozky: [

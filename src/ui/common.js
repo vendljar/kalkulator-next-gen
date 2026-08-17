@@ -278,9 +278,10 @@ const esc = s => String(s ?? '')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const escJs = s => esc(String(s ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
 
-/* Nadpis sekce bez informativních závorek: „KOLAUDACE (pro 1 ks výtahu)" →
- * „KOLAUDACE" (zadání 17. 8. 2026). Jen pro ZOBRAZENÍ v kalkulaci — uložené
- * názvy v datech zakázek se nemění, aby se staré soubory načítaly beze změny. */
+/* Nadpis bez informativních závorek. Od 17. 8. 2026 večer platí UŽŠÍ pravidlo
+ * (oprava zadání): u NÁZVŮ SEKCÍ kalkulace závorky ZŮSTÁVAJÍ („pro 1 ks
+ * výtahu", „celý projekt" jsou věcná informace) — bez závorek jsou jen
+ * nadpisy karet s interními čísly úkolů (Sleva, Obchodní zaokrouhlení). */
 const nazevBezZavorek = t => String(t || '').replace(/\s*\([^)]*\)/g, '').trim();
 
 function rootObj() { return { Z, C, OCK, PJ, PC, TS, ZAK, SL }; }
@@ -309,6 +310,10 @@ function inp(path, opts = {}) {
     return `<div class="row"><label>${opts.l}</label><input type="text" style="width:170px;text-align:left" value="${esc(val)}" onchange="set('${path}', this.value)"><span class="u"></span></div>`;
   if (opts.type === 'date')
     return `<div class="row"><label>${opts.l}</label><input type="date" value="${esc(val)}" onchange="set('${path}', this.value)"><span class="u"></span></div>`;
+  if (opts.type === 'anone')   // rolovací Ano / Ne; ukládá se 1 / 0 (17. 8. 2026 večer)
+    return `<div class="row"><label>${opts.l}</label><select onchange="set('${path}', +this.value)">
+      <option value="1" ${val ? 'selected' : ''}>Ano</option>
+      <option value="0" ${!val ? 'selected' : ''}>Ne</option></select><span class="u"></span></div>`;
   if (opts.type === 'pct')   // uloženo jako desetinné číslo (0,30), zobrazeno a zadáváno v % (30)
     return `<div class="row"><label>${opts.l}</label><input type="number" step="${opts.step ?? 1}" value="${Math.round(val * 10000) / 100}" onchange="set('${path}', (+this.value) / 100)"><span class="u">%</span></div>`;
   return `<div class="row"><label>${opts.l}</label><input type="number" step="${step}" value="${val}" onchange="set('${path}', +this.value)"><span class="u">${u}</span></div>`;

@@ -196,7 +196,7 @@ function progKontext(poznamka) {
   };
 }
 
-function progZverejni() {
+function progZverejni(preddanaPozn) {
   if (!jeAdmin()) { progZprava('Zveřejnit ceník smí jen správce.', 'varovani'); render(); return Promise.resolve(false); }
   /* Pozn.: tady zůstává `jeAdmin()`, ne `smiZobrazit()`. Zveřejnění ceníku
    * hlídá i server (netlify/functions/program.mjs) a matice zobrazení ho má
@@ -218,7 +218,8 @@ function progZverejni() {
   const shrnuti = PROG_STAV.db
     ? (rozdily.length ? rozdily.length + ' změněných položek ceníku' : 'ceník beze změny, mění se katalog nebo slevy')
     : 'založení databáze programu ve složce';
-  const pozn = prompt('Zveřejnit ceník aktivní varianty jako platný pro celý program?\n\n'
+  const pozn = (typeof preddanaPozn === 'string') ? preddanaPozn
+    : prompt('Zveřejnit ceník aktivní varianty jako platný pro celý program?\n\n'
     + shrnuti + '.\nOd této chvíle z něj budou vycházet nové nabídky.\n'
     + 'Rozpracované nabídky se přepočítají samy, vytištěné (uzamčené) zůstanou beze změny.'
     + '\n\nČím se změna zdůvodňuje (nepovinné):', '');
@@ -284,7 +285,7 @@ function progStahni() {
  * historické ceny do ceníku varianty, aby šlo spočítat, jak by nabídka
  * vypadala tehdy. Zveřejnit se dá až samostatným krokem. */
 function progPrevezmiVerzi(cislo) {
-  const z = programVerze(PROG_STAV.db, cislo);
+  const z = programVerze(cenikAktivniDb().db, cislo);
   if (!z) return;
   const v = (typeof aktivniVarianta === 'function') ? aktivniVarianta(ZAK) : null;
   if (!v || !v.data) return;
@@ -314,6 +315,76 @@ function progPrevezmiVerzi(cislo) {
   progZprava('Do aktivní varianty se převzal ceník: ' + programPopisVerze(z) + '.');
   zavriProgram();
   render();
+}
+
+/* ---------- JEDNA KARTA PLATNÉHO CENÍKU (17. 8. 2026 večer) ----------
+ *
+ * Dvě karty („Databáze programu" pro složku _DB a „Online ceník programu")
+ * dělaly totéž dvěma tlačítky a působily složitě (zadání J. V.). Nově je
+ * na záložkách Ceník JEDNA karta a JEDNO tlačítko Zveřejnit: zapíše platný
+ * ceník všude, kam aplikace právě dosáhne — na server po přihlášení
+ * a zároveň do složky _DB, je-li připojená (obě cesty se tak nerozejdou).
+ * Historie verzí je společná (tlačítko „Verze ceníku…") a z ní jde každá
+ * starší verze nahrát zpět do aktivní varianty. */
+function cenikAktivniDb() {
+  if (typeof ULO_STAV !== 'undefined' && ULO_STAV.koren && progJede())
+    return { db: PROG_STAV.db, zdroj: 'slozka' };
+  if (typeof ONLINE_STAV !== 'undefined' && ONLINE_STAV.db)
+    return { db: ONLINE_STAV.db, zdroj: 'online' };
+  return { db: null, zdroj: null };
+}
+
+function cenikZverejniVse() {
+  const slozka = typeof ULO_STAV !== 'undefined' && !!ULO_STAV.koren && ULO_STAV.pripraveno;
+  const online = typeof ONLINE_STAV !== 'undefined' && !!ONLINE_STAV.ja;
+  if (!slozka && !online) {
+    progZprava('Platný ceník žije na serveru — přihlaste se (případně připojte složku _DB) a zveřejněte znovu.', 'varovani');
+    render(); return Promise.resolve(false);
+  }
+  const pozn = prompt('Zveřejnit ceník aktivní varianty jako platný pro celý program?\n\n'
+    + 'Od této chvíle z něj vycházejí všechny nové nabídky'
+    + (online && slozka ? ' (zapíše se na server i do složky _DB)' : online ? ' (zapíše se na server)' : ' (zapíše se do složky _DB)')
+    + '.\nRozpracované nabídky se přepočítají samy, vytištěné (uzamčené) zůstávají beze změny.'
+    + '\nDosavadní verze se odloží do historie — kdykoli ji lze nahrát zpět.'
+    + '\n\nČím se změna zdůvodňuje (nepovinné):', '');
+  if (pozn === null) return Promise.resolve(false);
+  let kroky = Promise.resolve(true);
+  if (slozka) kroky = kroky.then(() => progZverejni(pozn));
+  if (online && typeof onlineZverejni === 'function') kroky = kroky.then(() => onlineZverejni(pozn));
+  return kroky;
+}
+
+function renderCenikProgramKarta() {
+  const slozka = typeof ULO_STAV !== 'undefined' && !!ULO_STAV.koren && ULO_STAV.pripraveno;
+  const online = typeof ONLINE_STAV !== 'undefined' && !!ONLINE_STAV.ja;
+  const akt = cenikAktivniDb();
+  const stav = akt.db
+    ? (akt.zdroj === 'slozka' ? 'Složka „' + ((typeof ULO_STAV !== 'undefined' && ULO_STAV.jmeno) || '_DB') + '" · '
+        : 'Server (online) · ') + programSouhrn(akt.db)
+    : (online || slozka
+      ? 'Platný ceník programu zatím není zveřejněný — platí ceník ze sestavení aplikace ('
+        + ((typeof buildVerze === 'function' && buildVerze()) || 'build') + '). '
+        + 'Proto se po každém novém sestavení vracejí jeho výchozí ceny: ZVEŘEJNĚTE svůj ceník a bude platit trvale.'
+      : 'Nepřihlášeno a bez složky — platí ceník ze sestavení aplikace.');
+  const hlasky = `${PROG_STAV.hlaska ? `<div class="${zapisTridaHlasky(PROG_STAV.hlaskaTyp)}">${esc(PROG_STAV.hlaska)}</div>` : ''}`;
+  return card('Platný ceník programu (OCK i PROJ)',
+    `<div class="note" style="margin-top:0">${esc(stav)}</div>
+     ${hlasky}
+     <div class="btns" style="margin-top:10px">
+       <button class="primary" onclick="cenikZverejniVse()" ${PROG_STAV.pracuje || ONLINE_STAV.pracuje ? 'disabled' : ''}>Zveřejnit ceník této varianty jako platný</button>
+       ${akt.db ? `<button onclick="otevriProgram()">Verze ceníku… (historie)</button>` : ''}
+       ${online ? `<button onclick="onlineNactiProgram().then(function(){render()})">Načíst znovu</button>`
+        : (slozka ? `<button onclick="progNactiZeSlozky()">Načíst znovu</button>` : '')}
+       ${PROG_STAV.zapisSelhal ? `<button onclick="progStahni()">Stáhnout ${esc(PROG_SOUBOR)}</button>` : ''}
+     </div>
+     <div class="note">Jeden platný ceník pro OCK i PROJ, jedno tlačítko: <b>Zveřejnit</b> zapíše ceník
+       aktivní varianty jako platný na server${slozka ? ' i do složky _DB' : ''} — z něj pak vychází
+       <b>každá nová nabídka</b> všech přihlášených a platí i po nahrání nového sestavení aplikace.
+       Ceny upravené v tabulce níž platí jen pro otevřenou variantu, dokud je nezveřejníte.
+       Každé zveřejnění odloží dosavadní verzi do historie s datem, do kdy platila — tlačítkem
+       <b>Verze ceníku…</b> v ní listujete, vidíte rozdíly a kteroukoli starší verzi nahrajete zpět
+       do varianty. Rozpracované nabídky se po zveřejnění přepočítají samy; vytištěná (uzamčená)
+       nabídka se nemění nikdy.</div>`);
 }
 
 /* ---------- karta na záložce Ceník ---------- */
@@ -376,8 +447,9 @@ function progCastka(v) {
 
 /* Rozdíly proti následující (novější) verzi – tedy co se tehdy změnilo. */
 function progRozdilyVerze(cislo) {
-  if (!PROG_STAV.db || typeof cenikRozdily !== 'function') return [];
-  const vse = [PROG_STAV.db.platny].concat(PROG_STAV.db.historie || []).filter(Boolean)
+  const db = cenikAktivniDb().db;
+  if (!db || typeof cenikRozdily !== 'function') return [];
+  const vse = [db.platny].concat(db.historie || []).filter(Boolean)
     .sort((a, b) => a.verze - b.verze);
   const i = vse.findIndex(z => +z.verze === +cislo);
   if (i <= 0) return [];
@@ -417,7 +489,7 @@ function progRadekHtml(z, platna) {
 function renderProgram() {
   const el = document.getElementById('program-panel');
   if (!el) return;
-  const db = PROG_STAV.db;
+  const db = cenikAktivniDb().db;
   const radky = db ? [progRadekHtml(db.platny, true)]
     .concat((db.historie || []).map(z => progRadekHtml(z, false))).join('') : '';
   el.innerHTML = `<h2>Verze ceníku programu

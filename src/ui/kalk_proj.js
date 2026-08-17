@@ -62,6 +62,23 @@ function pjVyrazeno(i, j, vyrazeno) {
   aktivniVarianta(ZAK).upraveno = new Date().toISOString();
   render();
 }
+/* Zaškrtávátko ZA CELOU SEKCI (17. 8. 2026 večer): jedno kliknutí zapne nebo
+ * vyřadí všechny položky sekce najednou. Při zapnutí platí totéž vyloučení
+ * ZAMĚŘENÍ × STUDIE jako u jednotlivých položek. */
+function pjSekceVse(i, pocitat) {
+  PJ.sekce[i].polozky.forEach(q => { if (pocitat) delete q.vyrazeno; else q.vyrazeno = true; });
+  if (pocitat) {
+    const kde = PJ.sekce[i].key;
+    const druha = kde === 'zamereni' ? 'studie' : (kde === 'studie' ? 'zamereni' : null);
+    if (druha) {
+      const ds = PJ.sekce.find(x => x.key === druha);
+      if (ds) ds.polozky.forEach(q => { q.vyrazeno = true; });
+    }
+  }
+  aktivniVarianta(ZAK).upraveno = new Date().toISOString();
+  render();
+}
+
 function pjPozn(i, j, text) {
   const p = PJ.sekce[i].polozky[j];
   const t = String(text || '').trim();
@@ -290,19 +307,29 @@ function renderProj() {
      * slibovalo jedno procento a počítalo se druhé. */
     const prirGlob = num(Math.round((PC.marze || 0) * 10000) / 100);
     const prirPopis = `globální přirážka ${prirGlob} % z ceníku PROJ`;
+    /* „vlastní % sekce" se 17. 8. večer posunulo DOLEVA a napravo od něj
+     * přibylo zaškrtávátko ZA CELOU SEKCI — sedí na kraji pruhu, tedy ve
+     * sloupci Počítat, a je tmavě modré, ať se od položkových liší. */
     const vlastniPct = col.admin
       ? `<span class="note" style="font-weight:400;white-space:nowrap">vlastní % sekce
            <input type="number" step="1" style="width:64px" value="${zdroj.prirazkaPct == null ? '' : zdroj.prirazkaPct}"
              placeholder="${prirGlob}" onchange="pjSet(${i}, 'prirazkaPct', this.value === '' ? null : +this.value)"
              title="vlastní % jen pro tuhle sekci: kladné číslo přirazí, záporné slevu (prázdné = ${prirPopis}). Nula znamená „u téhle sekce nepřirážíme nic“."> %</span>`
       : '';
+    const vseZaskrtnuto = s.polozky.length > 0 && s.polozky.every(p => !p.vyrazeno);
+    const sekceChk = col.admin
+      ? `<input type="checkbox" class="noprint sekce-chk" ${vseZaskrtnuto ? 'checked' : ''}
+           onchange="pjSekceVse(${i}, this.checked)"
+           style="accent-color:#1e3a8a;transform:scale(1.25);margin-left:18px"
+           title="${vseZaskrtnuto ? 'odškrtnutím vyřadíte VŠECHNY položky sekce' : 'zaškrtnutím zapnete VŠECHNY položky sekce'}">`
+      : '';
 
     // id řádku s názvem sekce = cíl kotvy v klouzající liště (kalkLista)
     return `<tr class="sechd" id="proj-sek-${i}"><td colspan="${NC}">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
-          <span>${esc(nazevBezZavorek(s.nazev))}</span>${vlastniPct}</div></td></tr>`
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="flex:1">${esc(s.nazev)}</span>${vlastniPct}${sekceChk}</div></td></tr>`
       + radky + doprava + pridat
-      + `<tr class="sectot"><td colspan="${POPIS_SL}">${esc(nazevBezZavorek(s.nazev))} CELKEM</td>`
+      + `<tr class="sectot"><td colspan="${POPIS_SL}">${esc(s.nazev)} CELKEM</td>`
       + penize(s.naklad + s.dopravaKc, s.marze, s.celkem)
       + `${col.admin ? '<td class="admincol"></td>' : ''}</tr>`;
   }).join('');
@@ -324,7 +351,7 @@ function renderProj() {
   const souhrnTbl = `<table>
     <tr><th>Sekce</th><th>Náklad</th><th>Přirážka</th><th>Doprava</th><th>Celkem</th></tr>
     ${r.sekce.filter(s => s.celkem !== 0 || s.naklad !== 0).map(s =>
-      `<tr><td>${esc(nazevBezZavorek(s.nazev))}</td><td>${fmt(s.naklad)}</td><td>${num(s.pouzitePct)} % ⇒ ${fmt(s.marze)}</td>
+      `<tr><td>${esc(s.nazev)}</td><td>${fmt(s.naklad)}</td><td>${num(s.pouzitePct)} % ⇒ ${fmt(s.marze)}</td>
        <td>${fmt(s.dopravaKc)}</td><td>${fmt(s.celkem)}</td></tr>`).join('')}
     <tr class="tot"><td>CELKEM</td><td>${fmt(r.souhrn.naklad)}</td><td>${fmt(r.souhrn.marze)}</td><td>${fmt(r.souhrn.doprava)}</td>
       <td><b>${fmt0(r.souhrn.celkem)}</b></td></tr>

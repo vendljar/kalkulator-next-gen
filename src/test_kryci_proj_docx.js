@@ -126,9 +126,14 @@ test('změna hodin v Kalkulaci PROJ mění hodnotu v krycím listu',
 test('hodnota zůstává formátovaná v Kč', /Kč$/.test(najdi(bo2, 'Hodnota zakázky bez DPH') || ''));
 
 const labelStudie = kp.KRYCI_PROJ_CINNOSTI.find(([k]) => k === 'studie')[1];
-test('neoceněná studie je „není součástí nabídky“',
-  najdi(bo2, labelStudie) === 'není součástí nabídky', najdi(bo2, labelStudie));
+/* výchozí rozsah má od 17. 8. 2026 studii VYPLNĚNOU — pro zkoušku neoceněné
+ * činnosti se napřed vynuluje (a hodiny se níž zase vrátí) */
 const sekSt = v.data.proj.zadani.sekce.find(s => s.key === 'studie');
+const puvodniStudie = sekSt.polozky.map(p => p.hodiny);
+sekSt.polozky.forEach(p => { p.hodiny = 0; });
+const boSt0 = kp.kryciProjData(zak, v, JEKLY, 'bo');
+test('neoceněná studie je „není součástí nabídky“',
+  najdi(boSt0, labelStudie) === 'není součástí nabídky', najdi(boSt0, labelStudie));
 sekSt.polozky[0].hodiny = 12;
 const bo3 = kp.kryciProjData(zak, v, JEKLY, 'bo');
 test('po ocenění se studie přepne na ANO s cenou',
@@ -137,7 +142,7 @@ const td3 = kp.kryciProjData(zak, v, JEKLY, 'techdata');
 test('technická verze studie přepnuta na ANO bez ceny',
   najdi(td3, labelStudie) === 'ANO', najdi(td3, labelStudie));
 // vrátit zpět, ať navazující testy pracují s výchozí kalkulací
-sekSt.polozky[0].hodiny = 0; sekZam.polozky[0].hodiny = sekZam.polozky[0].hodiny - 8;
+sekSt.polozky.forEach((p, i) => { p.hodiny = puvodniStudie[i]; }); sekZam.polozky[0].hodiny = sekZam.polozky[0].hodiny - 8;
 
 /* ---------- opravy krycího listu (#23), společné s verzí OCK ---------- */
 

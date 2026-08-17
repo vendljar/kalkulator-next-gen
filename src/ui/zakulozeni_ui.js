@@ -80,12 +80,16 @@ function zakUlozeniZprava(text, typ) {
  * zvýraznění zmizí, aby lišta nekřičela pořád. */
 function zakTrojice() {
   const s = zakUlozeniStav();
-  const ceka = (s.stav === 'vyplnit' || s.stav === 'ulozit');
+  const ceka = (s.stav === 'vyplnit' || s.stav === 'ulozit' || s.stav === 'nedostupne');
+  /* Barvy tlačítka (17. 8. 2026 večer): ČERVENĚ dokud zakázka uložená není
+   * (jediná akce, na kterou se nesmí zapomenout), JEMNĚ ZELENĚ po uložení —
+   * na první pohled je vidět, že je práce v bezpečí. */
+  const ulozeno = (s.stav === 'ulozeno' || s.stav === 'ceka');
   const kanal = zakKanal();
   const kam = kanal === 'online' ? 'do databáze na serveru'
     : (kanal === 'slozka' ? 'do složky _DB' : 'do souboru');
   const pracuje = ONLINE_STAV.pracuje || ULO_STAV.pracuje;
-  return `<button class="mini${ceka ? ' vyzva' : ''}" ${pracuje ? 'disabled' : ''}
+  return `<button class="mini${ceka ? ' vyzva' : ''}${ulozeno ? ' ulozeno-ok' : ''}" ${pracuje ? 'disabled' : ''}
       title="uložit otevřenou zakázku ${kam}" onclick="zakUlozUI()">💾 Uložit zakázku</button>
     <button class="mini" title="otevřít jinou zakázku (${kam})" onclick="zakNactiUI()">📂 Načíst zakázku</button>
     <button class="mini" title="začít novou prázdnou zakázku" onclick="novaZakazkaUI()">✚ Nová zakázka</button>`;
@@ -96,7 +100,9 @@ function zakTrojice() {
 function zakUlozeniRadek() {
   const s = zakUlozeniStav();
   const tridaStavu = (s.stav === 'ulozeno' || s.stav === 'ceka') ? '' : 'varovani';
-  const radky = [`<div class="${zapisTridaHlasky(tridaStavu)} zak-ulozeni noprint">${esc(s.text)}</div>`];
+  /* uložená zakázka dostává jemně zelené podbarvení řádku (17. 8. večer) */
+  const zelene = (s.stav === 'ulozeno' || s.stav === 'ceka') ? ' ulozeno-ok' : '';
+  const radky = [`<div class="${zapisTridaHlasky(tridaStavu)} zak-ulozeni${zelene} noprint">${esc(s.text)}</div>`];
   if (ZAKULO_STAV.hlaska)
     radky.push(`<div class="${zapisTridaHlasky(ZAKULO_STAV.hlaskaTyp)} zak-ulozeni noprint">${esc(ZAKULO_STAV.hlaska)}</div>`);
   return radky.join('');

@@ -53,7 +53,13 @@
      lišty (zadání) a od zbytku ji odděluje svislá čárka – ať je na první
      pohled vidět, že jde o práci se zakázkou, ne s variantou. */
   .zak-cena-del { width:1px; align-self:stretch; background:#cfe0ff; margin:0 2px; }
-  button.mini.vyzva { background:var(--acc); color:#fff; border-color:var(--acc); font-weight:600; }
+  /* „Uložit zakázku" (17. 8. 2026 večer): dokud zakázka není uložená, svítí
+     tlačítko ČERVENĚ — je to jediná akce, na kterou se nesmí zapomenout.
+     Po uložení se rozsvítí jemně zeleně a zelené je i potvrzení pod lištou. */
+  button.mini.vyzva { background:#dc2626; color:#fff; border-color:#b91c1c; font-weight:600; }
+  button.mini.ulozeno-ok { background:#e3f6eb; color:#0a7d4f; border-color:#9adbb7; font-weight:600; }
+  .zak-ulozeni.ulozeno-ok { background:rgba(16,185,129,.12); border:1px solid rgba(16,185,129,.35);
+     color:#0a7d4f; border-radius:8px; padding:6px 10px; }
   button.mini.vyzva:hover { filter:brightness(1.08); }
   .zak-ulozeni { margin-top:8px; font-size:12px; }
   /* úchop pro přetahování řádků + úzké admin sloupce */
@@ -621,7 +627,9 @@
   <img src="data:image/svg+xml;base64,__IKONA_B64__" alt="" width="28" height="28"
        style="display:block;border-radius:6px;flex:0 0 auto">
   <h1>Kalkulačka __VERZE__</h1>
-  <span class="ver">OCK dle šablony VZOR v1.00 / v22.7.1 · PROJ dle interního vzoru · <span id="rezimPill" class="pill warn">výpočet: 1:1 jako Excel (vč. jeho chyb)</span></span>
+  <!-- Podtitulek s verzemi šablon zmizel 17. 8. 2026 večer (zadání J. V.) —
+       zůstává jen štítek režimu výpočtu. -->
+  <span class="ver"><span id="rezimPill" class="pill warn">výpočet: 1:1 jako Excel (vč. jeho chyb)</span></span>
   <span class="sp"></span>
   <div class="btns">
     <!-- Zpět/Znovu jsou jediná tlačítka hlavičky, která se používají pořád –

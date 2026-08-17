@@ -26,7 +26,11 @@ function renderInputs() {
       inp('Z.cistyVstupMm', { l: 'Čistý vstup – šířka', step: 10, u: 'mm' }) + inp('Z.sirkaRamuMm', { l: 'Šířka rámu dveří', step: 5, u: 'mm' }) +
       inp('Z.prechodovePlechy', { type: 'check', l: 'Přechodové plechy' }) +
       inp('Z.pruchoziSachta', { type: 'check', l: 'Průchozí šachta (stříška na dvůr)' }) +
-      inp('Z.atyp', { type: 'check', l: 'ATYP (nestandardní zakázka)' }) +
+      /* ATYP má vlastní obsluhu (17. 8. večer): zaškrtnutí předvyplní všechny
+       * čtyři rezervy na 30 % a Zámečníka atyp na 50 000 Kč; odškrtnutí je
+       * vrací na nulu / ceník — atypové přirážky bez atypu nemají co dělat. */
+      `<div class="row"><label>ATYP (nestandardní zakázka)</label>
+        <input type="checkbox" ${Z.atyp ? 'checked' : ''} onchange="atypPrepni(this.checked)"><span class="u"></span></div>` +
       // ATYP není jen štítek – od #22 přidává přirážku do Režie. Sazbu ukazujeme
       // rovnou tady, aby obchodník viděl dopad zaškrtnutí ještě před přepočtem.
       `<div class="note" style="margin-top:2px">Přidá do sekce <b>Režie</b> přirážku
@@ -37,8 +41,11 @@ function renderInputs() {
     card('Dimenze profilů',
       profRow('sloupek', 'Sloupek') + profRow('precnikBok', 'Příčníky bok/zadek') + profRow('sloupekPortal', 'Sloupek portálu') +
       profRow('precnikPortal', 'Příčníky portálu') + profRow('spojka', 'Spojka sloupků') + profRow('lemovani', 'Lemování ext. šachty') +
-      inp('Z.rezervaProfilyPct', { l: 'Rezerva profily (atyp)', step: 0.01, u: '%×' }) +
-      inp('Z.rezervaPlechyPct', { l: 'Rezerva plechy (atyp)', step: 0.01, u: '%×' }), false, 'ock-profily') +
+      /* Rezervy se zadávají v PROCENTECH (17. 8. večer): 30 = +30 % k množství
+       * profilů/plechů. V datech zůstává desetinný podíl (0,30) — staré
+       * zakázky se počítají beze změny, jen zadávání je lidské. */
+      inp('Z.rezervaProfilyPct', { type: 'pct', l: 'Rezerva profily (atyp)' }) +
+      inp('Z.rezervaPlechyPct', { type: 'pct', l: 'Rezerva plechy (atyp)' }), false, 'ock-profily') +
     card('Práce a režie',
       inp('Z.montazZakladHod', { l: 'Montáž – základ (1 os.)', step: 1, u: 'hod' }) +
       inp('Z.montazAtypHod', { l: 'Montáž – atyp navíc', step: 1, u: 'hod' }) +
@@ -46,15 +53,32 @@ function renderInputs() {
       inp('Z.projekceAtypHod', { l: 'Projekce – atyp navíc', step: 1, u: 'hod' }) +
       inp('Z.oplechOstatniKg', { l: 'Oplechování ostatní – materiál', step: 1, u: 'kg' }) +
       inp('Z.oplechOstatniHod', { l: 'Oplechování ostatní – práce', step: 1, u: 'hod' }) +
-      inp('Z.zamecnikAtypKs', { l: 'Zámečník atyp – množství', step: 1 }) +
-      /* Prázdné pole = platí ceníková sazba; vyplněné číslo je dohoda pro tuhle
-       * jednu stavbu (i nula – „uděláme zdarma"). Proto v popisku „přepis", ne
-       * „cena": cena bydlí v ceníku, tady se jen dá přebít (#7). */
-      inp('Z.zamecnikAtypKc', { l: 'Zámečník atyp – přepis ceny (prázdné = ceník)', step: 100, u: 'Kč' }) +
-      inp('Z.engineeringKs', { l: 'Engineering (0/1)', step: 1 }) +
-      inp('Z.vystupZamereni', { type: 'check', l: 'Výstup ze zaměření pro zákazníka' }) +
-      inp('Z.rezervaZakladPct', { l: 'REZERVA základ', step: 0.01, u: '×' }) +
-      inp('Z.rezervaPriplatkyPct', { l: 'REZERVA příplatky', step: 0.01, u: '×' }), false, 'ock-prace');
+      /* Zámečník atyp je od 17. 8. večer JEDNA částka: pole „množství" zmizelo,
+       * v kalkulaci je řádek s množstvím vždy 1 a hodnotou z tohoto pole.
+       * Prázdné pole = řádek není (příp. ceníková sazba u starých zakázek
+       * s uloženými kusy); zaškrtnutí ATYP předvyplní 50 000 Kč. */
+      inp('Z.zamecnikAtypKc', { l: 'Zámečník atyp (prázdné = žádný)', step: 1000, u: 'Kč' }) +
+      inp('Z.engineeringKs', { type: 'anone', l: 'Engineering' }) +
+      inp('Z.vystupZamereni', { type: 'anone', l: 'Výstup ze zaměření pro zákazníka' }) +
+      /* REZERVY v procentech (17. 8. večer): 30 = +30 %. Základ se počítá
+       * z celého základu kalkulace, příplatky z příplatků — jako dosud,
+       * mění se jen zadávání (v datech zůstává desetinný podíl). */
+      inp('Z.rezervaZakladPct', { type: 'pct', l: 'REZERVA základ' }) +
+      inp('Z.rezervaPriplatkyPct', { type: 'pct', l: 'REZERVA příplatky' }), false, 'ock-prace');
+}
+
+/* Zaškrtnutí ATYP: předvyplnění rezerv a zámečníka (17. 8. 2026 večer).
+ * Stojí MIMO renderInputs — volá se z onchange, musí být globální. */
+function atypPrepni(zap) {
+  if (typeof zamekStop === 'function' && zamekStop()) return;
+  Z.atyp = !!zap;
+  Z.rezervaProfilyPct = zap ? 0.30 : 0;
+  Z.rezervaPlechyPct = zap ? 0.30 : 0;
+  Z.rezervaZakladPct = zap ? 0.30 : 0;
+  Z.rezervaPriplatkyPct = zap ? 0.30 : 0;
+  Z.zamecnikAtypKc = zap ? 50000 : null;
+  aktivniVarianta(ZAK).upraveno = new Date().toISOString();
+  render();
 }
 
 /* ---- klíč položky (původní název) do onchange handleru bezpečně ----

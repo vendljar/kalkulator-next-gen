@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Logo v hlavičce aplikace (17. 8. 2026 večer): tentýž znak dolaru jako
+       favicon, ale ve SVĚTLE ZELENÉ — hlavička je tmavě modrá a tmavě modrý
+       znak na ní nebyl vidět (zadání J. V.). Favicon na kartě prohlížeče
+       zůstává tmavě modrý (tam je podklad světlý). -->
+  <text x="32" y="34" text-anchor="middle" dominant-baseline="central"
+        font-family="Arial, Helvetica, sans-serif" font-size="56" font-weight="700"
+        fill="#86E8AD">$</text>
+</svg>

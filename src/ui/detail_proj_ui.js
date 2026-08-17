@@ -54,7 +54,7 @@ function renderDetailProj() {
     }
     radky.push(['CELKEM sekce', K(s.celkem), 'náklad + přirážka + doprava']);
     const krokCislo = 2 + i;
-    return dvKrok(krokCislo + '. ' + nazevBezZavorek(s.nazev), dvTab(radky), 'dvp-s' + i);
+    return dvKrok(krokCislo + '. ' + s.nazev, dvTab(radky), 'dvp-s' + i);
   }).join('');
 
   /* 3) od součtu sekcí ke koncové ceně */
