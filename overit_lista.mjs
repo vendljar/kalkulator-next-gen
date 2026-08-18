@@ -1397,15 +1397,19 @@ const listaVen = await p.evaluate(() => {
   Object.assign(ULO_STAV, zaloha); renderUkazkoveLista();
   return { bezSlozky, zapamatovana, pripojena };
 });
-ok(`bez složky lišta nabídne tlačítko pro její připojení („${listaVen.bezSlozky.popis}")`,
-   /_DB/.test(listaVen.bezSlozky.popis) && /uloPripojZnovu/.test(listaVen.bezSlozky.klik));
-ok('bez složky lišta pořád zmiňuje i Nastavení → Úložiště',
-   /Nastavení/.test(listaVen.bezSlozky.text));
-ok(`zapamatovaná složka bez práva nabídne „připojit znovu" („${listaVen.zapamatovana.popis}")`,
-   /znovu/i.test(listaVen.zapamatovana.popis) && /_DB/.test(listaVen.zapamatovana.popis)
-   && /uloPripojZnovu/.test(listaVen.zapamatovana.klik));
-ok('u zapamatované složky lišta říká, že přístup zapomněl prohlížeč',
-   /zapomněl/.test(listaVen.zapamatovana.text), listaVen.zapamatovana.text);
+/* Od 18. 8. 2026 (#150) složka _DB skončila: lišta už NIKDY nenabízí její
+ * připojení a ve všech stavech posílá za online databází (administrátor
+ * zveřejní ceník). Zkoušejí se tytéž tři stavy jako dřív. */
+ok('bez složky lišta nenabízí žádné připojování složky',
+   listaVen.bezSlozky.popis === '' && !/složk/i.test(listaVen.bezSlozky.text),
+   listaVen.bezSlozky.text);
+ok('bez složky lišta posílá za online databází',
+   /online datab/i.test(listaVen.bezSlozky.text) && /administrátor/i.test(listaVen.bezSlozky.text));
+ok('ani zapamatovaná složka nenabízí „připojit znovu"',
+   listaVen.zapamatovana.popis === '' && !/uloPripojZnovu/.test(listaVen.zapamatovana.klik),
+   listaVen.zapamatovana.popis);
+ok('u zapamatované složky platí stejná online věta',
+   /online datab/i.test(listaVen.zapamatovana.text), listaVen.zapamatovana.text);
 /* Připojená složka a přitom svítící lišta není chyba: varianta si nese ceník
  * zmrazený z doby svého vzniku. Tlačítko by tu nepomohlo, jen mátlo. */
 ok('u připojené složky se tlačítko nenabízí', listaVen.pripojena.popis === '');

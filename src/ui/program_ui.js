@@ -338,7 +338,7 @@ function cenikZverejniVse() {
   const slozka = typeof ULO_STAV !== 'undefined' && !!ULO_STAV.koren && ULO_STAV.pripraveno;
   const online = typeof ONLINE_STAV !== 'undefined' && !!ONLINE_STAV.ja;
   if (!slozka && !online) {
-    progZprava('Platný ceník žije na serveru — přihlaste se (případně připojte složku _DB) a zveřejněte znovu.', 'varovani');
+    progZprava('Platný ceník žije na serveru — přihlaste se a zveřejněte znovu.', 'varovani');
     render(); return Promise.resolve(false);
   }
   const pozn = prompt('Zveřejnit ceník aktivní varianty jako platný pro celý program?\n\n'
@@ -365,7 +365,7 @@ function renderCenikProgramKarta() {
       ? 'Platný ceník programu zatím není zveřejněný — platí ceník ze sestavení aplikace ('
         + ((typeof buildVerze === 'function' && buildVerze()) || 'build') + '). '
         + 'Proto se po každém novém sestavení vracejí jeho výchozí ceny: ZVEŘEJNĚTE svůj ceník a bude platit trvale.'
-      : 'Nepřihlášeno a bez složky — platí ceník ze sestavení aplikace.');
+      : 'Nepřihlášeno — platí ceník ze sestavení aplikace.');
   const hlasky = `${PROG_STAV.hlaska ? `<div class="${zapisTridaHlasky(PROG_STAV.hlaskaTyp)}">${esc(PROG_STAV.hlaska)}</div>` : ''}`;
   return card('Platný ceník programu (OCK i PROJ)',
     `<div class="note" style="margin-top:0">${esc(stav)}</div>

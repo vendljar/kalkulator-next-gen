@@ -123,6 +123,11 @@ function ukazkoveText(stav, pripojeni, jmeno, bezSlozky) {
         ? 'Ceny i firemní údaje jsou ukázkové, ne skutečné.'
         : (stav.ceny ? 'Ceny jsou ukázkové, ne skutečné.'
                      : 'Firemní údaje jsou ukázkové, ne skutečné.'));
+  /* Bez složky (od 18. 8. 2026 pro všechny — #150) se rada volí podle toho,
+   * co je opravdu špatně: zveřejnění ceníku nepomůže, když ceny sedí a
+   * ukázkové jsou jen firemní údaje — ty se doplňují v Nastavení → Firma. */
+  if (bezSlozky && !stav.prazdne && !stav.ceny)
+    return co + ' Skutečné firemní údaje doplňuje administrátor v Nastavení → Firma.';
   return co + ' ' + ukazkoveKudy(pripojeni, jmeno, bezSlozky);
 }
 

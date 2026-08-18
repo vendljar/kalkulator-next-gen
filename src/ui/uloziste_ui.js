@@ -46,8 +46,18 @@ const ULO_STAV = {
   timer: null,
 };
 
+/* Rozhodnutí 18. 8. 2026 (#150): jediná databáze je ONLINE. Složka _DB se
+ * už nepřipojuje — dvě databáze vedle sebe dvakrát způsobily „zmizelé" ceny
+ * (složka měla přednost a zastínila novější online ceník). Vypínač drží
+ * všechno složkové vypnuté: bez něj se nikdy nenastaví ULO_STAV.pripraveno,
+ * takže karta, autoukládání, odlévání záloh i čtení ceníku ze složky mlčí.
+ * Model v uloziste.js zůstává — jeho pojistky (zámky, kolize) sdílí i online
+ * kanál. Případné úplné vyříznutí kódu je samostatný úklid na pokyn. */
+const ULO_SLOZKA_POVOLENA = false;
+
 function uloPodporovano() {
-  return typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function';
+  return ULO_SLOZKA_POVOLENA
+    && typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function';
 }
 
 function uloZprava(text, typ) {
@@ -453,6 +463,7 @@ function uloStavPopis() {
 }
 
 function renderUlozisteKarta() {
+  if (!ULO_SLOZKA_POVOLENA) return '';   // #150: složka skončila, karta se nekreslí
   const zap = ULO_STAV.pripraveno;
   const tlacitka = !uloPodporovano() ? ''
     : !ULO_STAV.koren

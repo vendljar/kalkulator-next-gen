@@ -248,6 +248,19 @@ test('krátký text pro běžného uživatele pořád říká, že dokument nevz
   /nedá vytvořit/i.test(kBezSlozky), kBezSlozky);
 test('krátký text pro administrátora zůstal beze změny',
   ukazkoveKratce(prazdnyStav) === ukazkoveKratce(prazdnyStav, false));
+
+/* Od 18. 8. 2026 (#150) jde věta „bez složky" VŠEM — složka _DB skončila.
+ * Když jsou ukázkové jen firemní údaje (ceny sedí), nesmí lišta radit
+ * „požádejte o zveřejnění ceníku": ceník je v pořádku a zveřejnění by
+ * nepomohlo. Správná cesta jsou firemní údaje v Nastavení → Firma. */
+const jenUdaje = { jsou: true, prazdne: false, ceny: false, udaje: true, kde: ['firemní údaje'] };
+const tJenUdaje = ukazkoveText(jenUdaje, '', '', true);
+test('bez složky: při ukázkových firemních údajích se nemluví o ceníku',
+  !/cen[íi]k/i.test(tJenUdaje), tJenUdaje);
+test('bez složky: při ukázkových firemních údajích se posílá do Nastavení → Firma',
+  /administrátor/i.test(tJenUdaje) && /Firma/.test(tJenUdaje), tJenUdaje);
+test('bez složky: při ukázkových cenách se dál posílá za zveřejněním ceníku',
+  /zveřejn/i.test(ukazkoveText({ jsou: true, prazdne: false, ceny: true, udaje: false, kde: [] }, '', '', true)));
 test('u pouhých ukázkových cen se běžnému uživateli text nemění',
   ukazkoveKratce(jenCeny, true) === ukazkoveKratce(jenCeny));
 

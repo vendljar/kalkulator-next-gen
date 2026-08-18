@@ -44,7 +44,9 @@ function ukazkoveLista() {
   const s = ukazkoveStavAkt();
   if (!s.jsou) return '';
   /* Běžný uživatel: žádné tlačítko, jiná věta – viz ukazkoveSlozkaSmi(). */
-  if (!ukazkoveSlozkaSmi())
+  /* #150 (18. 8. 2026): složka _DB skončila — na složku se neposílá už nikdo,
+   * všem platí věta o online databázi (dřív jen běžným uživatelům). */
+  if (!ukazkoveSlozkaSmi() || !(typeof uloPodporovano === 'function' && uloPodporovano()))
     return `<div class="ukazkove-lista">
       <span class="ikona">⛔</span>
       <span>${esc(ukazkoveText(s, '', '', true))}</span>

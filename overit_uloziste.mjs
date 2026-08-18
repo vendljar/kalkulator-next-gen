@@ -24,26 +24,22 @@ stranka.on('pageerror', e => chyby.push(String(e)));
 await stranka.goto(soubor);
 await stranka.waitForTimeout(400);
 
-console.log('\nDatabáze ve složce');
+console.log('\nDatabáze ve složce (od 18. 8. 2026 vypnutá — #150)');
 
-// 1. karta na stránce Zakázka
+// 1. karta na stránce Zakázka se už NEvykresluje a složka se nedá připojit
 await stranka.evaluate(() => prepniTab('zakazka'));
 await stranka.waitForTimeout(120);
 const textZakazky = await stranka.evaluate(() => document.getElementById('page-zakazka').innerText);
-zkus('karta databáze je na stránce Zakázka', /Databáze zakázek/i.test(textZakazky));
-zkus('karta říká, že složka není vybraná', /nen[íi] vybran/i.test(textZakazky));
-zkus('karta nabízí výběr složky', textZakazky.includes('Vybrat složku'));
-
-// 2. modál
-await stranka.evaluate(() => otevriUloziste());
-await stranka.waitForTimeout(120);
-zkus('panel se otevřel', await stranka.evaluate(() =>
-  document.getElementById('uloziste-overlay').style.display !== 'none'));
-zkus('panel má hledání', await stranka.evaluate(() => !!document.getElementById('ulozisteHledat')));
-await stranka.evaluate(() => zavriUloziste());
-await stranka.waitForTimeout(80);
-zkus('panel se zavřel', await stranka.evaluate(() =>
-  document.getElementById('uloziste-overlay').style.display === 'none'));
+zkus('karta „Databáze zakázek (složka)" na stránce Zakázka není', !/Databáze zakázek \(složka\)/i.test(textZakazky));
+zkus('nikde se nenabízí „Vybrat složku"', !textZakazky.includes('Vybrat složku'));
+zkus('složka je vypnutá i s podstrčeným showDirectoryPicker', await stranka.evaluate(() => {
+  window.showDirectoryPicker = () => Promise.reject(new Error('nesmí se volat'));
+  return uloPodporovano() === false;
+}));
+zkus('kanál uložení bez přihlášení je soubor, nikdy složka', await stranka.evaluate(() => {
+  const k = zakKanal();
+  return k === 'soubor' || k === 'online';
+}));
 
 // 3. hledání nad rejstříkem (bez složky – rejstřík nasypeme rovnou do stavu)
 const nalezeno = await stranka.evaluate(() => {

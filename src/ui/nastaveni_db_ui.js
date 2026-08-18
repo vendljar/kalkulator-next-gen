@@ -246,6 +246,9 @@ function nastdbStavPopis() {
 }
 
 function nastdbBlok() {
+  /* #150 (18. 8. 2026): složková databáze skončila — bez připojitelné složky
+   * by karta jen mátla radou „Připojit ji jde na záložce Zakázky". */
+  if (typeof ULO_SLOZKA_POVOLENA !== 'undefined' && !ULO_SLOZKA_POVOLENA) return '';
   const jede = nastdbSlozkaJede();
   const tlacitka = !jede ? '' : (NASTDB_STAV.kolize
     ? `<button class="primary" onclick="nastdbZahod()">Načíst verzi ze složky</button>
