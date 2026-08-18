@@ -39,7 +39,7 @@ function renderDetail() {
   catch (e) { el.innerHTML = `<div class="card"><div class="body neg">Chyba výpočtu: ${esc(e.message)}</div></div>`; return; }
   const o = r.odvozene, p = r.parametry, ext = Z.typSachty === 'exteriérová';
   const M = num, K = fmt, K0 = fmt0;
-  const rezim = OCK.fixes ? 'opravený výpočet' : '1:1 jako Excel (kompatibilní režim)';
+  const rezim = OCK.fixes ? 'Model 2 – opravený výpočet' : 'Model 1 – 1:1 jako Excel (kompatibilní režim)';
 
   /* 1) vstupy */
   const krVstup = dvKrok('1. Vstupní zadání (šachta)', dvTab([

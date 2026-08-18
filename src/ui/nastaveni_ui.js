@@ -161,7 +161,7 @@ function nastObecne() {
     'Ceník nákladů OCK a Ceník nákladů PROJ (celé záložky)',
     'Editace jednotkových cen přímo v kalkulaci (obousměrně s ceníkem)',
     'Globální přirážka a sloupce <b>Náklad</b> / <b>Přirážka</b>',
-    'Režim výpočtu (opravený / 1:1 jako Excel)',
+    'Režim výpočtu (Model 2 – opravený / Model 1 – 1:1 jako Excel)',
     'Rezervy a záložka <b>Detail výpočtu</b>',
     'Záložka <b>Technická specifikace OCK Data</b> (editace číselníků a výchozích hodnot)',
     '<b>Import / Export dat</b> – ceník do/z Excelu, export dat specifikace (jen administrátor)',

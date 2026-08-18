@@ -301,6 +301,15 @@ test('součtový řádek nese závorku až ZA slovem CELKEM',
       && !radky.some(r => /\(pro 1 ks výtahu\) CELKEM/.test(r));
   }));
 
+test('režimy výpočtu nesou označení Model 1 / Model 2 (výběr i štítek)',
+  await p.evaluate(() => {
+    const sel = (document.getElementById('kalk-hlavicka') || {}).innerHTML || '';
+    const pill = (document.getElementById('rezimPill') || {}).textContent || '';
+    const maSelect = /Model 2 – opravený/.test(sel) && /Model 1 – 1:1 jako Excel/.test(sel);
+    const maPill = /výpočet: Model [12] – /.test(pill);
+    return maSelect && maPill;
+  }));
+
 test('aplikace nehlásila chybu do konzole', konzole.length === 0, konzole.slice(0, 3).join(' | '));
 
 await b.close();

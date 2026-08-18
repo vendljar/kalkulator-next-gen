@@ -393,9 +393,9 @@ function zakazkaHlavicka(ock) {
     <select onchange="varAktivuj(this.value)" title="přepnout počítanou variantu">${opts}</select></div>`;
   const ridiciBtn = akt.ridici ? '' : `<div class="row"><label></label><button class="mini noprint" onclick="varRidici('${akt.id}')">nastavit jako řídící (platná je „${esc(rid.nazev)}")</button></div>`;
   const rezimRow = `<div class="row"><label>Režim výpočtu</label>
-    <select onchange="set('OCK.fixes', this.value==='fix')" title="přepnutí opravený / 1:1 jako Excel">
-      <option value="fix" ${OCK.fixes ? 'selected' : ''}>opravený</option>
-      <option value="compat" ${!OCK.fixes ? 'selected' : ''}>1:1 jako Excel</option></select></div>`;
+    <select onchange="set('OCK.fixes', this.value==='fix')" title="přepnutí Model 2 – opravený / Model 1 – 1:1 jako Excel">
+      <option value="fix" ${OCK.fixes ? 'selected' : ''}>Model 2 – opravený</option>
+      <option value="compat" ${!OCK.fixes ? 'selected' : ''}>Model 1 – 1:1 jako Excel</option></select></div>`;
   const datumRow = `<div class="row na-konec"><label>Datum vytvoření</label>
     <input type="date" value="${esc(ZAK.datum)}" onchange="set('ZAK.datum', this.value)"></div>`;
 
@@ -519,11 +519,11 @@ function renderRezimPill() {
   const el = document.getElementById('rezimPill');
   if (!el) return;
   const opraveno = !!(OCK && OCK.fixes);
-  el.textContent = opraveno ? 'výpočet: opravený' : 'výpočet: 1:1 jako Excel (vč. jeho chyb)';
+  el.textContent = opraveno ? 'výpočet: Model 2 – opravený' : 'výpočet: Model 1 – 1:1 jako Excel (vč. jeho chyb)';
   el.className = 'pill' + (opraveno ? '' : ' warn');
   el.title = opraveno
-    ? 'Opravený režim: odstraněny známé chyby vzorců v šabloně. Výsledky se mohou lišit od starých nabídek počítaných v Excelu.'
-    : 'Režim shody s Excelem: vzorce se chovají přesně jako šablona VZOR, včetně jejích osmi zdokumentovaných chyb. Vhodné pro porovnání se staršími nabídkami. Přepnout lze v hlavičce kalkulace.';
+    ? 'Model 2 – opravený režim: odstraněny známé chyby vzorců v šabloně. Výsledky se mohou lišit od starých nabídek počítaných v Excelu.'
+    : 'Model 1 – režim shody s Excelem: vzorce se chovají přesně jako šablona VZOR, včetně jejích osmi zdokumentovaných chyb. Vhodné pro porovnání se staršími nabídkami. Přepnout lze v hlavičce kalkulace.';
 }
 
 function renderKalkHlavicka() {
