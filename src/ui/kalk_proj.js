@@ -217,11 +217,16 @@ function renderProj() {
       /* Poznámka je interní (pravidlo #37) – do nabídky ani do krycího listu
        * nejde, a proto ji nevidí ani běžný uživatel. Vypadá všude stejně,
        * ať už je vyplněná, nebo v ní svítí jen nápověda. */
+      /* Vlastní řádek smí upravit i ten, kdo ho směl přidat (19. 8. 2026,
+       * právo kalk.pridatPolozku) — viz stejné pravidlo v Kalkulaci OCK. */
+      const vlEd = !col.admin && p.vlastni && smiZobrazit('kalk.pridatPolozku');
       const nazev = col.admin
         ? `<div class="vol-name">${grip}<input type="text" class="nazev-ed" value="${esc(p.nazev)}" onchange="pjSet(${i}, 'polozky.${j}.nazev', this.value)">${del}</div>`
           + `<input type="text" class="pozn-ed noprint" value="${esc(p.pozn || '')}" placeholder="poznámka (interní)"
                onchange="pjPozn(${i},${j},this.value)" title="proč je tu tahle částka – do nabídky ani do krycího listu nejde">`
-        : esc(p.nazev);
+        : vlEd
+          ? `<input type="text" class="nazev-ed" style="width:70%" value="${esc(p.nazev)}" onchange="pjSet(${i}, 'polozky.${j}.nazev', this.value)">${del}`
+          : esc(p.nazev);
       const pocitat = col.admin
         ? `<td class="admincol"><input type="checkbox" class="noprint" ${p.vyrazeno ? '' : 'checked'}
             onchange="pjVyrazeno(${i},${j},!this.checked)"
@@ -243,7 +248,7 @@ function renderProj() {
              ${p.sazbaPrepsana ? `<button class="mini noprint" onclick="pjPrepis(${i},${j},'sazbaPrepis','')" title="vrátit sazbu z ceníku (${num(p.sazbaZCeniku)} Kč)">↺</button>` : ''}`
           : num(p.sazbaKc);
         return `${tr}<td>${nazev}</td>
-          <td>${col.admin ? `<input type="number" step="1" style="width:66px" value="${p.hodiny}" onchange="pjSet(${i}, 'polozky.${j}.hodiny', +this.value)">` : num(p.hodiny)}</td>
+          <td>${(col.admin || vlEd) ? `<input type="number" step="1" style="width:66px" value="${p.hodiny}" onchange="pjSet(${i}, 'polozky.${j}.hodiny', +this.value)">` : num(p.hodiny)}</td>
           <td>${col.admin ? `<input type="number" step="1" style="width:66px" value="${p.rezerva}" onchange="pjSet(${i}, 'polozky.${j}.rezerva', +this.value)">` : num(p.rezerva)}</td>
           <td>${num(p.hodinyCelkem)}</td>
           <td style="white-space:nowrap">${sazbaEd}</td>
@@ -260,7 +265,9 @@ function renderProj() {
                title="cena jen pro tuto zakázku (prázdné = ${num(p.cenaZCeniku)} Kč z Ceníku nákladů PROJ)">
              ${p.cenaPrepsana ? `<button class="mini noprint" onclick="pjPrepis(${i},${j},'cenaPrepis','')" title="vrátit cenu z ceníku (${num(p.cenaZCeniku)} Kč)">↺</button>` : ''}`
           : `<input type="number" step="500" style="width:86px" value="${p.cena}" onchange="pjSet(${i}, 'polozky.${j}.cena', +this.value)">`)
-        : num(p.cenaEfekt);
+        : (vlEd && !p.fixKey
+          ? `<input type="number" step="500" style="width:86px" value="${p.cena}" title="částka této položky (jen pro tuto zakázku)" onchange="pjSet(${i}, 'polozky.${j}.cena', +this.value)">`
+          : num(p.cenaEfekt));
       return `${tr}<td>${nazev}</td>
         <td colspan="3" class="note" style="text-align:right">${p.fixKey
           ? (p.cenaPrepsana ? 'fixní částka – přepsáno pro tuto zakázku' : 'fixní částka (ceník PROJ)')
@@ -292,7 +299,7 @@ function renderProj() {
           ? `<tr><td>Doprava${zdroj.doprava.mimoPrahu ? ' (mimo Prahu)' : ''}</td><td>${num(zdroj.doprava.km)}</td><td class="note">km</td><td></td>
              <td class="note">${zdroj.doprava.mimoPrahu ? fmt(mimoKc) : '—'}${rucniPill}</td>${penize(s.dopravaKc, null, s.dopravaKc)}</tr>` : '');
 
-    const pridat = col.admin
+    const pridat = (col.admin || smiZobrazit('kalk.pridatPolozku'))
       ? `<tr class="pridat noprint"><td colspan="${NC}">
            <button class="mini" onclick="pjPolozkaAdd(${i}, 'hod')">+ přidat hodinovou položku do sekce</button>
            <button class="mini" onclick="pjPolozkaAdd(${i}, 'fix')">+ přidat fixní položku do sekce</button></td></tr>`

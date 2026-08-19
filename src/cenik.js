@@ -102,6 +102,14 @@ const CENIK_DEF = [
     ['C.priplatky.leseniHlavaKc', 'Lešení – dokončení hlavy šachty', 'Kč/m',
      'Nástavba už postaveného lešení – fixní část se u ní neúčtuje.'],
   ]],
+  /* Kurz EUR (#155, 19. 8. 2026): jediná položka sekce Cizí měna. Kurz je
+   * součást ceníku — verzuje se a zveřejňuje jako každá cena, takže u staré
+   * nabídky jde doložit, jakým kurzem odešla. V dokumentu se kurz NIKDE
+   * neukazuje (rozhodnutí J. V.), přepočítávají se jím jen částky. */
+  ['CIZÍ MĚNA', [
+    ['C.kurzEurKc', 'Kurz EUR', 'Kč/EUR',
+     'přepočet cen pro nabídky v jiné než české mutaci; prázdné = cizojazyčný tisk se zastaví'],
+  ]],
 ];
 
 const CENIK_DEF_PROJ = [
@@ -139,6 +147,11 @@ const CENIK_DEF_PROJ = [
      * číslo bez účinku je přesně past, která se opravovala 2. 8. 2026.
      * Klíč v datech ceníku zůstává kvůli starým uloženým ceníkům. */
   ]],
+  /* Kurz EUR — viz poznámka u sekce Cizí měna v ceníku OCK (#155). */
+  ['CIZÍ MĚNA', [
+    ['PC.kurzEurKc', 'Kurz EUR', 'Kč/EUR',
+     'přepočet cen pro nabídky v jiné než české mutaci; prázdné = cizojazyčný tisk se zastaví'],
+  ]],
 ];
 
 /* Ceníkové klíče, u kterých je prázdno platná hodnota („nenastaveno").
@@ -146,7 +159,11 @@ const CENIK_DEF_PROJ = [
  * v ceníku znamená položku zdarma a to se nemá stát omylem při importu
  * z tabulky. Mechanismus tu zůstává, aby se u prvního takového klíče nemusel
  * vymýšlet znovu. */
-const CENIK_SMI_BYT_PRAZDNY = new Set();
+const CENIK_SMI_BYT_PRAZDNY = new Set([
+  /* Kurz EUR (#155): prázdno = „nenastaveno" a je to platný stav — blokuje
+   * jen cizojazyčný tisk. Nula od importu by naopak vypadala jako kurz. */
+  'C.kurzEurKc', 'PC.kurzEurKc',
+]);
 
 /* přístup do konkrétního ceníkového objektu podle cesty „C.a.b" / „PC.a.b" */
 function cenikGet(obj, cesta) {

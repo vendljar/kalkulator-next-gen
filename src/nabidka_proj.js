@@ -269,9 +269,16 @@ function nabidkaProjData(zak, varianta, lang) {
   const pj = d.proj || {};
   const r = vypocetProj(pj.zadani || DEFAULT_ZADANI_PROJ, pj.cenik || DEFAULT_CENIK_PROJ);
 
-  /* #14 krok 3: formát bydlí ve format.js (záložka pro samostatný Node běh) */
-  const kc = (typeof formatKc2 === 'function') ? formatKc2
-    : n => (+n || 0).toLocaleString('cs-CZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kč';
+  /* #14 krok 3: formát bydlí ve format.js (záložka pro samostatný Node běh).
+   * Měna (#155 + dorovnání 19. 8. večer): CZ = koruny; jiná mutace = eura
+   * kurzem z ceníku varianty. Převádějí se ČÍSLA po sekcích (celá eura
+   * nahoru, mena.na) a součty se sčítají z převedených sekcí — rozpad sedí
+   * na euro. Kurz se v dokumentu neukazuje; bez kurzu chyba. */
+  const mena = (typeof menaDokumentu === 'function') ? menaDokumentu(L, (pj.cenik || {}).kurzEurKc)
+    : { eur: false, na: n => n,
+        fmt: (typeof formatKc2 === 'function') ? formatKc2
+          : n => (+n || 0).toLocaleString('cs-CZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kč' };
+  const kc = mena.fmt;
   const datumCz = iso => {
     if (!iso) return '';
     const [y, m, dd] = String(iso).split('-');
@@ -304,6 +311,10 @@ function nabidkaProjData(zak, varianta, lang) {
   r.sekce.forEach(s => {
     cenyPred[s.key] = zaokr(s.celkem);                 // cena sekce před slevou
     cenyPo[s.key] = zaokr(s.celkem * (1 - pSleva));    // a po ní
+    if (mena.eur) {                                    // eura po SEKCÍCH — součty se pak sčítají
+      cenyPred[s.key] = mena.na(cenyPred[s.key]);
+      cenyPo[s.key] = mena.na(cenyPo[s.key]);
+    }
   });
   const cenaSekce = key => (cenyPo[key] == null ? null : cenyPo[key]);
 
@@ -322,9 +333,12 @@ function nabidkaProjData(zak, varianta, lang) {
    * celkem" na korunu; jinak by v nabídce zbyl haléřový rozdíl, který nemá
    * kam patřit. */
   const slevaKcNum = Math.round((soucetSekci - celkemBezDph) * 100) / 100;
-  /* #14 krok 1: DPH jedinou funkcí (záložka pro Node test bez zaokrouhleni.js) */
-  const dphKc = (typeof cenaSDph === 'function')
-    ? cenaSDph(celkemBezDph, dphPct / 100).dphKc : celkemBezDph * dphPct / 100;
+  /* #14 krok 1: DPH jedinou funkcí. V eurech se DPH počítá z PŘEVEDENÉHO
+   * základu a zaokrouhluje nahoru — celkem s DPH je pak přesný součet. */
+  const dphKc = mena.eur
+    ? Math.ceil(celkemBezDph * dphPct / 100)
+    : (typeof cenaSDph === 'function')
+      ? cenaSDph(celkemBezDph, dphPct / 100).dphKc : celkemBezDph * dphPct / 100;
 
   /* Částka jedné činnosti pro šablonu. Prázdná (neoceněná) činnost se v
    * dokumentu pojmenuje slovy, ne nulou — viz komentář u symbolů níž. */
@@ -404,7 +418,7 @@ function nabidkaProjData(zak, varianta, lang) {
     }
     /* typ === 'cena' */
     const pausal = b.pausal ? NABIDKA_PROJ_SAZBY[b.pausal] : null;
-    const hodnota = pausal != null ? pausal : cenaSekce(b.sekce);
+    const hodnota = pausal != null ? mena.na(pausal) : cenaSekce(b.sekce);
     const neuvedena = pausal == null && !hodnota;
     return { typ: 'cena', nadpis: P(b.nadpis), popis: P(b.popis), sekce: b.sekce || null,
       castka: neuvedena ? P('není součástí této nabídky') : kc(hodnota)
@@ -436,6 +450,8 @@ function nabidkaProjData(zak, varianta, lang) {
    * ze dvou dokumentů jiné číslo. Kopie objektu, ať se do dat nic nezapíše. */
   const h = Object.assign({}, hZaklad);
   if (typeof projCisloNabidky === 'function') h.cislo = projCisloNabidky(zak);
+  /* Číslo varianty ≥ 2 tečkou (…-555.2) — zadání 19. 8. 2026, OCK i PROJ. */
+  if (typeof cisloSVariantou === 'function') h.cislo = cisloSVariantou(zak, varianta, h.cislo);
   const placeholders = {
     OBJEDNATEL: h.objednatel || '…',
     OBJEDNATEL_KONTAKT: h.kontakt || '…',
@@ -467,8 +483,8 @@ function nabidkaProjData(zak, varianta, lang) {
     PROJ_CENA_KOLAUDACE: cenaSymbol('kolaudace'),
     PROJ_CENA_GEODET: cenaSymbol('geodet'),
     /* Paušály z ceníku nabídky — ve vzoru byly napsané natvrdo v textu. */
-    PROJ_CENA_VARIANTA: kc(NABIDKA_PROJ_SAZBY.variantaSpKc),
-    PROJ_CENA_AD: kc(NABIDKA_PROJ_SAZBY.autorskyDozorKcMesic),
+    PROJ_CENA_VARIANTA: kc(mena.na(NABIDKA_PROJ_SAZBY.variantaSpKc)),
+    PROJ_CENA_AD: kc(mena.na(NABIDKA_PROJ_SAZBY.autorskyDozorKcMesic)),
     PROJ_CELKEM_BEZ_DPH: kc(celkemBezDph),
     /* Rozpad slevy projekce. Prázdné, dokud žádná schválená sleva není —
      * nula v dokumentu vypadá jako „slevu jsme dali a byla nulová". */

@@ -89,8 +89,14 @@ zE.ico = '00177041';
 test('výstupní hlavička PROJ doplní IČO z OCK', projHlavickaEfektivni(zE).ico === '00177041',
   projHlavickaEfektivni(zE).ico);
 zE.projHlavicka.ico = '45274649';
-test('vyplněné IČO PROJ má přednost před OCK', projHlavickaEfektivni(zE).ico === '45274649',
+/* Od 19. 8. 2026 je hlavička jedna společná: vyplněné pole OCK má přednost;
+ * stará hodnota z dob oddělené hlavičky PROJ se použije, jen když je OCK prázdné. */
+test('společná hlavička: OCK má přednost před starým polem PROJ', projHlavickaEfektivni(zE).ico === '00177041',
   projHlavickaEfektivni(zE).ico);
+zE.ico = '';
+test('prázdné OCK zachrání stará hodnota PROJ', projHlavickaEfektivni(zE).ico === '45274649',
+  projHlavickaEfektivni(zE).ico);
+zE.ico = '00177041';
 
 /* ---------- 3) staré soubory ---------- */
 

@@ -20,6 +20,7 @@ const DEFAULT_CENIK_PROJ = {  // HODNOTY VYNULOVÁNY pro GitHub (pripravit_githu
   sazby: { projektant: 0, statik: 0, zamereni: 0 },
   dopravaKmKc: 0,                    // Kč/km
   dopravaPausalKc: 0,                // paušál mimo Prahu (po Praze 0)
+  kurzEurKc: 0,                      // Kč/EUR — cizojazyčné dokumenty (#155); 0 = nenastaveno, tisk se zastaví
   fixy: {                            // fixní náklady po sekcích (Kč)
     pamatkari: 0,                    // PROJEDNÁNÍ STUDIE
     uzemniRozvoj: 0,

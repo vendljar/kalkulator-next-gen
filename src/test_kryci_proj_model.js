@@ -235,8 +235,8 @@ test('neznámá činnost zůstane bez odpovědi, ne „není součástí nabídk
 test('prázdné pole hlavičky PROJ se pro list dočte z hlavičky OCK',
   c.hl.nazevAkce === zak.nazevAkce && c.hl.objednatel === zak.objednatel,
   JSON.stringify([c.hl.nazevAkce, c.hl.objednatel]));
-test('popisek zdroje přizná, že hodnota přišla z hlavičky OCK',
-  c.hlSrc('nazevAkce') === 'z hlavičky kalkulace OCK', c.hlSrc('nazevAkce'));
+test('popisek zdroje říká, že hlavička je společná (sjednoceno 19. 8. 2026)',
+  /společná/.test(c.hlSrc('nazevAkce')), c.hlSrc('nazevAkce'));
 
 const zakVlastni = zk.novaZakazka();
 zakVlastni.cislo = '2026 - OVP - CN - 402';
@@ -244,10 +244,12 @@ zakVlastni.nazevAkce = 'Akce podle hlavičky OCK';
 zakVlastni.objednatel = 'Zkušební ocelárna s.r.o.';
 zakVlastni.projHlavicka.objednatel = 'Zkušební projekce s.r.o.';
 const cVlastni = kp.kryciProjCtx(zakVlastni, zakVlastni.varianty[0]);
-test('vyplněná hlavička PROJ má přednost před OCK',
-  cVlastni.hl.objednatel === 'Zkušební projekce s.r.o.', cVlastni.hl.objednatel);
-test('popisek zdroje přizná, že hodnota je z hlavičky PROJ',
-  cVlastni.hlSrc('objednatel') === 'hlavička Kalkulace PROJ', cVlastni.hlSrc('objednatel'));
+/* Sjednocení 19. 8. 2026: společné pole OCK má přednost před starou
+ * hodnotou z dob oddělené hlavičky PROJ. */
+test('společná hlavička má přednost před starým polem PROJ',
+  cVlastni.hl.objednatel === 'Zkušební ocelárna s.r.o.', cVlastni.hl.objednatel);
+test('popisek zdroje je jednotný (společná hlavička)',
+  /společná/.test(cVlastni.hlSrc('objednatel')), cVlastni.hlSrc('objednatel'));
 /* Číslo nabídky se zatím přebírá z hlavičky OCK – jedna zakázka, jedno
  * číslo. Přepsat se přitom smí jen v hlavičce, ne v krycím listu. */
 test('číslo nabídky v listu je číslo z hlavičky OCK',

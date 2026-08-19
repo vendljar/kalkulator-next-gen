@@ -214,5 +214,8 @@ function renderTechspec() {
       <div class="note noprint">Pole se štítkem „z kalkulace“ se přepočítávají podle zadání OCK.
       Jakmile pole přepíšete, platí ruční hodnota (štítek „ručně“); tlačítkem ↺ vrátíte automatiku.
       Vlastní hodnoty lze psát do všech polí, rozbalovací návrhy odpovídají číselníkům ze šablony.</div>
-    </div>`;
+    </div>
+    ${typeof nabidkaDokumentyBlok === 'function'
+      ? `<div class="noprint" style="margin-top:14px">${card('Cenová nabídka a smlouva o dílo (OCK)', nabidkaDokumentyBlok())}</div>`
+      : ''}`;
 }

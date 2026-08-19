@@ -19,9 +19,17 @@ function nabidkaData(zak, varianta, jekly, lang) {
   const L = lang || 'cz';
   const P = t => (L !== 'cz' && typeof tr === 'function') ? tr(t, L) : t;
 
-  /* #14 krok 3: formát bydlí ve format.js (záložka pro samostatný Node běh) */
-  const kc = (typeof formatKc2 === 'function') ? formatKc2
-    : n => n.toLocaleString('cs-CZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kč';
+  /* #14 krok 3: formát bydlí ve format.js (záložka pro samostatný Node běh).
+   * Měna (#155 + dorovnání 19. 8. večer): CZ = koruny; jiná mutace = eura
+   * kurzem z ceníku varianty. Převádějí se ČÍSLA po položkách (celá eura
+   * nahoru, mena.na) a součty se skládají z převedených čísel — rozpad
+   * v dokumentu proto sedí na euro. Kurz se v dokumentu neukazuje; bez
+   * kurzu se hodí srozumitelná chyba a dokument nevznikne. */
+  const mena = (typeof menaDokumentu === 'function') ? menaDokumentu(L, Cv.kurzEurKc)
+    : { eur: false, na: n => n,
+        fmt: (typeof formatKc2 === 'function') ? formatKc2
+          : n => n.toLocaleString('cs-CZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Kč' };
+  const kc = mena.fmt;
   const cislo = (typeof formatCislo === 'function') ? (n => formatCislo(n, 3))
     : n => (+n).toLocaleString('cs-CZ', { maximumFractionDigits: 3 });
   const datumCz = iso => {
@@ -42,7 +50,7 @@ function nabidkaData(zak, varianta, jekly, lang) {
 
   const prip = key => {
     const p = r.priplatky.find(x => x.key === key);
-    return p ? kc(p.sMarzi) : P('v základní ceně');
+    return p ? kc(mena.na(p.sMarzi)) : P('v základní ceně');
   };
 
   /* Koncová cena: základní cena → schválená sleva (ZAK-10; neschválená ani
@@ -57,16 +65,31 @@ function nabidkaData(zak, varianta, jekly, lang) {
   /* Do dokumentu jdou ZAOKROUHLENÉ částky (#135): cena před slevou i koncová
    * cena, a sleva jako jejich rozdíl. Rozpad tím sedí na korunu a v nabídce
    * nemusí být řádek „obchodní zaokrouhlení", který zákazníkovi nic neříká. */
-  const cenaPredSlevou = cn ? cn.zakladZaokr : r.souhrn.zakladCena;
-  const cenaBezDphNum = cn ? cn.cena : cenaPredSlevou * (1 - slevaP);
-  const slevaKcNum = cn ? cn.slevaKcVykaz : cenaPredSlevou - cenaBezDphNum;
+  let cenaPredSlevou = cn ? cn.zakladZaokr : r.souhrn.zakladCena;
+  let cenaBezDphNum = cn ? cn.cena : cenaPredSlevou * (1 - slevaP);
+  let slevaKcNum = cn ? cn.slevaKcVykaz : cenaPredSlevou - cenaBezDphNum;
+  /* DPH jedinou funkcí (#14 krok 1); v eurech se počítá až z PŘEVEDENÉHO
+   * základu (nahoru), aby platilo bez DPH + DPH = s DPH na euro přesně. */
+  let dphKcNum = (typeof cenaSDph === 'function'
+    ? cenaSDph(cenaBezDphNum, Cv.dph) : { dphKc: cenaBezDphNum * Cv.dph }).dphKc;
+  let cenaSDphNum = (typeof cenaSDph === 'function'
+    ? cenaSDph(cenaBezDphNum, Cv.dph) : { sDph: cenaBezDphNum * (1 + Cv.dph) }).sDph;
+  if (mena.eur) {
+    cenaPredSlevou = mena.na(cenaPredSlevou);
+    cenaBezDphNum = mena.na(cenaBezDphNum);
+    slevaKcNum = cenaPredSlevou - cenaBezDphNum;   // rozdíl převedených částek — sedí na euro
+    dphKcNum = Math.ceil(cenaBezDphNum * Cv.dph);
+    cenaSDphNum = cenaBezDphNum + dphKcNum;
+  }
 
   const placeholders = {
     OBJEDNATEL: zak.objednatel || '…',
     OBJEDNATEL_KONTAKT: zak.kontakt || '…',
     DATUM: datumCz(zak.datum),
     NAZEV_AKCE: zak.nazevAkce || TSv.nazevAkce || '…',
-    CISLO_NABIDKY: (zak.cislo || '').replace(/\s+/g, ''),
+    /* Číslo varianty ≥ 2 se připojuje tečkou (…-555.2) — zadání 19. 8. 2026. */
+    CISLO_NABIDKY: String((typeof cisloSVariantou === 'function'
+      ? cisloSVariantou(zak, varianta) : zak.cislo) || '').replace(/\s+/g, ''),
     ADRESA: zak.adresa || '…',
 
     TS_UMISTENI: ts('umisteni'), TS_UMISTENI_STROJE: ts('umisteniStroje'),
@@ -109,9 +132,8 @@ function nabidkaData(zak, varianta, jekly, lang) {
     CENA_BEZ_DPH: kc(cenaBezDphNum),
     DPH_SAZBA: String(Math.round(Cv.dph * 100)),
     DPH_NAZEV: P(Cv.dph <= 0.15 ? 'snížená' : 'základní'),
-    /* #14 krok 1: DPH jedinou funkcí (záložka pro Node test bez zaokrouhleni.js) */
-    DPH_KC: kc((typeof cenaSDph === 'function' ? cenaSDph(cenaBezDphNum, Cv.dph) : { dphKc: cenaBezDphNum * Cv.dph }).dphKc),
-    CENA_S_DPH: kc((typeof cenaSDph === 'function' ? cenaSDph(cenaBezDphNum, Cv.dph) : { sDph: cenaBezDphNum * (1 + Cv.dph) }).sDph),
+    DPH_KC: kc(dphKcNum),
+    CENA_S_DPH: kc(cenaSDphNum),
     CENA_PRED_SLEVOU: kc(cenaPredSlevou),
     SLEVA_PROC: slevaP ? String(Math.round(slevaP * 10000) / 100) : '0',
     SLEVA_KC: kc(slevaKcNum),
@@ -151,7 +173,7 @@ function nabidkaData(zak, varianta, jekly, lang) {
   const priplatkyList = r.priplatky.filter(p => !vynech.includes(p.key)).map(p => ({
     nazev: P(p.nazev),
     popis: P('množství') + ': ' + cislo(p.mnozstvi) + (p.pozn ? ' (' + P(p.pozn) + ')' : ''),
-    cena: kc(p.sMarzi),
+    cena: kc(mena.na(p.sMarzi)),
   }));
 
   const nazevSouboru = 'NABÍDKA_' + (placeholders.CISLO_NABIDKY || 'CN')

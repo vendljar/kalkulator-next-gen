@@ -49,7 +49,10 @@ const KRYCI_SEKCE = [
      * zůstává (↺ vrátí automatiku). */
     { id: 'obchodnik', label: 'Jméno obchodníka', verze: ['bo', 'techdata'], prefill: c => kryciObchodnikJmeno(c.firma), src: 'přihlášený uživatel / Nastavení → Firma' },
     { id: 'nazevAkce', label: 'Název akce', verze: ['bo', 'techdata'], bind: 'ZAK.nazevAkce', prefill: c => c.zak.nazevAkce, src: 'hlavička kalkulace' },
-    { id: 'cisloCN', label: 'Číslo nabídky (CN)', verze: ['bo', 'techdata'], bind: 'ZAK.cislo', prefill: c => c.zak.cislo, src: 'hlavička kalkulace' },
+    { id: 'cisloCN', label: 'Číslo nabídky (CN)', verze: ['bo', 'techdata'], bind: 'ZAK.cislo',
+      /* varianta ≥ 2 nese příponu .N (19. 8. 2026) */
+      prefill: c => (typeof cisloSVariantou === 'function' ? cisloSVariantou(c.zak, c.varianta) : c.zak.cislo),
+      src: 'hlavička kalkulace' },
     { id: 'adresaStavby', label: 'Adresa stavby', verze: ['bo', 'techdata'], bind: 'ZAK.adresa', prefill: c => c.zak.adresa, src: 'hlavička kalkulace' },
     /* KL-2: jen část OCK po slevě. Projekce má vlastní krycí list PROJ. */
     { id: 'hodnotaBezDph', label: 'Hodnota zakázky bez DPH', verze: ['bo', 'techdata'], prefill: c => c.hodnota, src: 'z nabídky OCK (po slevě)' },
@@ -207,6 +210,39 @@ const KRYCI_DPH_SAZBY = [12, 21];
 /* KL-7: řádek „Sazba DPH" byl do 5. 8. 2026 volný text, takže v zakázkách
  * můžou být uložené ruční hodnoty („21%", „19 %"). Od té doby se nečtou, ale
  * není důvod je vozit zakázkou dál — jen by mátly při pohledu do dat. */
+/* ---------- dopočet dílčí faktury č. 2 (19. 8. 2026) ----------
+ * Záloha + dílčí č. 2 + konečná = 100 %. Zadání J. V.: prostřední fakturu
+ * dopočítávej podle toho, kolik zbývá po volbě zálohy, resp. po změně
+ * konečné faktury. Dovětek („– po zahájení montáže") se zachovává; když
+ * procenta nejdou přečíst nebo zbytek nedává smysl, vrací se null a nic
+ * se nepřepisuje — vymyšlené číslo do platebních podmínek nepatří. */
+function kryciFaktura2Dopocet(zaloha1, fakturaKonc, stavajici) {
+  const proc = t => {
+    const s = String(t == null ? '' : t);
+    if (/bez\s+zálohy/i.test(s)) return 0;
+    const m = /^\s*(\d+(?:[.,]\d+)?)\s*%/.exec(s);
+    return m ? parseFloat(m[1].replace(',', '.')) : null;
+  };
+  const a = proc(zaloha1), b = proc(fakturaKonc);
+  if (a == null || b == null) return null;
+  const zbytek = Math.round((100 - a - b) * 100) / 100;
+  if (!(zbytek >= 0 && zbytek <= 100)) return null;
+  const m = /^\s*\d+(?:[.,]\d+)?\s*%\s*(.*)$/.exec(String(stavajici == null ? '' : stavajici));
+  const dovetek = (m && m[1].trim()) ? m[1].trim() : '– po zahájení montáže';
+  const cislo = (zbytek % 1) ? String(zbytek).replace('.', ',') : String(zbytek);
+  return cislo + ' % ' + dovetek;
+}
+
+/* Totéž nad ručními hodnotami krycího listu: kde ruční hodnota není, platí
+ * výchozí znění polí (záloha KRYCI_ZALOHY[2], konečná „10 % – po předání"). */
+function kryciFaktura2Sync(hodnoty) {
+  const h = hodnoty || {};
+  const zal = (h.zaloha1 != null && h.zaloha1 !== '') ? h.zaloha1 : KRYCI_ZALOHY[2];
+  const kon = (h.fakturaKonc != null && h.fakturaKonc !== '') ? h.fakturaKonc : '10 % – po předání';
+  const sta = (h.faktura2 != null && h.faktura2 !== '') ? h.faktura2 : '40 % – po zahájení montáže';
+  return kryciFaktura2Dopocet(zal, kon, sta);
+}
+
 function kryciMigraceSazbaDph(h) {
   if (h && h.sazbaDph !== undefined) delete h.sazbaDph;
   return h;
@@ -288,7 +324,7 @@ function kryciCtx(zak, varianta, jekly) {
 
   const firma = (typeof firmaAktualni === 'function') ? firmaAktualni() : {};
   return {
-    zak, ext: Zv.typSachty === 'exteriérová', dph: Math.round((Cv.dph || 0) * 100),
+    zak, varianta, ext: Zv.typSachty === 'exteriérová', dph: Math.round((Cv.dph || 0) * 100),
     hodnota, priplatky, firma, typProduktu,
     sken3d: kryciSken3d(d, rOck),
     projAno: key => (projSekce[key] > 0 ? 'Ano' : 'Ne'),
@@ -425,4 +461,5 @@ if (typeof module !== 'undefined')
   module.exports = { KRYCI_SEKCE, KRYCI_NABIDKA_SEKCE, KRYCI_DPH_SAZBY, KRYCI_POKUTY, kryciCtx, kryciHodnota,
     kryciData, kryciMigraceZadrzne, kryciMigraceSazbaDph,
     PODM_PREFIX, kryciSymbolId, kryciCisloZTextu, kryciProcentoZTextu,
-    kryciSymbolyZeSekci, kryciPodminkoveSymboly };
+    kryciSymbolyZeSekci, kryciPodminkoveSymboly,
+    kryciFaktura2Dopocet, kryciFaktura2Sync };

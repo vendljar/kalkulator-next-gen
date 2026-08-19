@@ -188,8 +188,10 @@ test('doplnění z OCK nezapisuje do hlavičky PROJ',
   !zak2.projHlavicka.nazevAkce && !zak2.projHlavicka.adresa,
   JSON.stringify(zak2.projHlavicka));
 zak2.projHlavicka.nazevAkce = 'Jiný název pro projekci';
-test('vlastní hodnota v hlavičce PROJ má přednost',
-  najdi(kp.kryciProjData(zak2, v2, JEKLY, 'bo'), 'Název akce') === 'Jiný název pro projekci',
+/* Sjednocení hlaviček 19. 8. 2026: společné pole (OCK) má přednost i před
+ * starou hodnotou PROJ — dokument říká totéž co obrazovka. */
+test('společná hlavička má přednost před starou hodnotou PROJ',
+  najdi(kp.kryciProjData(zak2, v2, JEKLY, 'bo'), 'Název akce') === 'Testovací 123',
   najdi(kp.kryciProjData(zak2, v2, JEKLY, 'bo'), 'Název akce'));
 zak2.projHlavicka.nazevAkce = '';
 test('smazáním se vrátí hodnota z hlavičky OCK',
@@ -197,7 +199,7 @@ test('smazáním se vrátí hodnota z hlavičky OCK',
 /* popisek zdroje má říct, odkud hodnota přišla – jinak není poznat, že se
  * v krycím listu čte cizí hlavička */
 const ctxFb = kp.kryciProjCtx(zak2, v2);
-test('popisek zdroje hlásí převzetí z hlavičky OCK', /OCK/.test(ctxFb.hlSrc('nazevAkce')), ctxFb.hlSrc('nazevAkce'));
+test('popisek zdroje je jednotný (společná hlavička)', /společná/.test(ctxFb.hlSrc('nazevAkce')), ctxFb.hlSrc('nazevAkce'));
 zak2.projHlavicka.nazevAkce = 'Vlastní';
 const ctxFb2 = kp.kryciProjCtx(zak2, v2);
 test('popisek zdroje u vlastní hodnoty neuvádí OCK', !/OCK/.test(ctxFb2.hlSrc('nazevAkce')), ctxFb2.hlSrc('nazevAkce'));

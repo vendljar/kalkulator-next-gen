@@ -8,6 +8,14 @@
 function klSet(id, v) {
   if (!KL.hodnoty) KL.hodnoty = {};
   if (v === '' || v == null) delete KL.hodnoty[id]; else KL.hodnoty[id] = v;
+  /* Dopočet dílčí faktury č. 2 (19. 8. 2026): záloha + dílčí 2 + konečná
+   * = 100 %. Změna zálohy nebo konečné faktury prostřední hodnotu dopočte;
+   * dovětek („– po zahájení montáže") zůstává. Když procenta nejdou přečíst,
+   * nic se nepřepisuje. */
+  if ((id === 'zaloha1' || id === 'fakturaKonc') && typeof kryciFaktura2Sync === 'function') {
+    const novy = kryciFaktura2Sync(KL.hodnoty);
+    if (novy != null) KL.hodnoty.faktura2 = novy;
+  }
   aktivniVarianta(ZAK).upraveno = new Date().toISOString();
   render();
 }

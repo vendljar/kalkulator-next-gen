@@ -454,5 +454,32 @@ test('úklid sazby DPH nespadne na prázdném vstupu',
   });
 }
 
+/* ---------- dopočet dílčí faktury č. 2 (19. 8. 2026) ----------
+ * Zadání: „v platebních podmínkách ock dopočítávej dílčí fakturu č. 2 podle
+ * toho kolik zbývá po volbě zálohové faktury, resp. případné změně výše
+ * konečné faktury." Tři čísla mají dát dohromady 100 %; prostřední se dopočte. */
+const f2 = kr.kryciFaktura2Dopocet;
+test('50 % záloha + 10 % konečná → dílčí 2 je 40 %',
+  f2('50 % – po podpisu smlouvy', '10 % – po předání', '40 % – po zahájení montáže') === '40 % – po zahájení montáže');
+test('70 % záloha + 10 % konečná → dílčí 2 je 20 %',
+  f2('70 % – po podpisu smlouvy', '10 % – po předání', '40 % – po zahájení montáže') === '20 % – po zahájení montáže',
+  f2('70 % – po podpisu smlouvy', '10 % – po předání', '40 % – po zahájení montáže'));
+test('změna konečné na 30 % → dílčí 2 je 20 %',
+  f2('50 % – po podpisu smlouvy', '30 % – po předání', '40 % – po zahájení montáže') === '20 % – po zahájení montáže');
+test('„Bez zálohy" se počítá jako 0 %',
+  f2('Bez zálohy', '10 % – po předání', '40 % – po zahájení montáže') === '90 % – po zahájení montáže',
+  f2('Bez zálohy', '10 % – po předání', '40 % – po zahájení montáže'));
+test('vlastní dovětek dílčí faktury se zachová',
+  f2('50 % – po podpisu smlouvy', '10 % – po předání', '40 % – po dodání materiálu') === '40 % – po dodání materiálu');
+test('nečitelné procento konečné faktury dopočet zastaví (nic se nevymýšlí)',
+  f2('50 % – po podpisu smlouvy', 'po dohodě', '40 % – po zahájení montáže') === null);
+test('záporný zbytek dopočet zastaví',
+  f2('70 % – po podpisu smlouvy', '40 % – po předání', '40 %') === null);
+test('kryciFaktura2Sync doplní i výchozí hodnoty (nic ručně nezadáno)',
+  kr.kryciFaktura2Sync({}) === '40 % – po zahájení montáže', kr.kryciFaktura2Sync({}));
+test('kryciFaktura2Sync reaguje na ruční zálohu 70 %',
+  kr.kryciFaktura2Sync({ zaloha1: '70 % – po podpisu smlouvy' }) === '20 % – po zahájení montáže',
+  kr.kryciFaktura2Sync({ zaloha1: '70 % – po podpisu smlouvy' }));
+
 console.log('\n' + ok + ' prošlo, ' + fail + ' selhalo');
 process.exit(fail ? 1 : 0);

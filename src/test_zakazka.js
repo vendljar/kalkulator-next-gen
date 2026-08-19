@@ -246,12 +246,14 @@ test('odlišné hlavičky se hlásí jako odlišné', zk.zakazkaHlavickyShodne(z
 const ef = zk.projHlavickaEfektivni(zh);
 test('prázdné pole hlavičky PROJ se pro výstup dočte z OCK',
   ef.nazevAkce === 'Zkušební vestavba šachty' && ef.adresa === 'Zkušební 1, Zkušebín', JSON.stringify(ef));
-test('vyplněné pole hlavičky PROJ má přednost před OCK',
-  ef.objednatel === 'Zkušební projekce s.r.o.', ef.objednatel);
+/* Od 19. 8. 2026 je hlavička jedna společná — vyplněné pole OCK má přednost,
+ * stará hodnota PROJ zachraňuje jen prázdné společné pole. */
+test('společná hlavička: OCK má přednost před starým polem PROJ',
+  ef.objednatel === zh.objednatel, ef.objednatel);
 test('čtení efektivní hlavičky nic nezapíše do dat',
   zh.projHlavicka.nazevAkce === '', JSON.stringify(zh.projHlavicka.nazevAkce));
-test('popisek pozná, že hodnota přišla z hlavičky OCK',
-  zk.projHlavickaZOck(zh, 'nazevAkce') === true && zk.projHlavickaZOck(zh, 'objednatel') === false);
+test('popisek „z OCK" skončil se sjednocením hlaviček (vrací vždy false)',
+  zk.projHlavickaZOck(zh, 'nazevAkce') === false && zk.projHlavickaZOck(zh, 'objednatel') === false);
 /* Nedopsaná předloha čísla se za vyplněnou nepovažuje – jinak by se do
  * dokumentu dostal útržek místo čísla z druhé hlavičky. */
 test('nedopsaná předloha čísla v PROJ se nahradí číslem z OCK',
@@ -481,6 +483,44 @@ test('název souboru neobsahuje mezery ani lomítka', !/[\s/\\:*?"<>|]/.test(naz
 test('zakázka bez čísla dostane náhradní název souboru',
   zk.StorageAdapter.nazevSouboru({}) === 'zakazka_nova.json', zk.StorageAdapter.nazevSouboru({}));
 test('úložiště se hlásí jako souborové', zk.StorageAdapter.typ === 'file');
+
+/* ---------- číslo nabídky s číslem varianty (19. 8. 2026) ---------- */
+{
+  const z = zk.novaZakazka();
+  z.cislo = '2026 - OPR - CN - 555';
+  const v2 = zk.novaVarianta('Varianta 2');
+  const v3 = zk.novaVarianta('Varianta 3');
+  z.varianty.push(v2, v3);
+  test('první varianta bez přípony', zk.cisloSVariantou(z, z.varianty[0]) === '2026 - OPR - CN - 555');
+  test('druhá varianta nese .2', zk.cisloSVariantou(z, v2) === '2026 - OPR - CN - 555.2', zk.cisloSVariantou(z, v2));
+  test('třetí varianta nese .3', zk.cisloSVariantou(z, v3) === '2026 - OPR - CN - 555.3');
+  test('bez varianty se číslo nemění', zk.cisloSVariantou(z, null) === '2026 - OPR - CN - 555');
+  z.cislo = zk.ZAK_CISLO_PREDLOHA;
+  test('nedopsaná předloha příponu nedostane', zk.cisloSVariantou(z, v2) === zk.ZAK_CISLO_PREDLOHA.trim(),
+    zk.cisloSVariantou(z, v2));
+  z.cislo = '2026 - OVP - CN - 9';
+  test('základ jde předat třetím parametrem (projCisloNabidky)',
+    zk.cisloSVariantou(z, v2, '2026 - OVP - CN - 9') === '2026 - OVP - CN - 9.2');
+}
+
+/* ---------- duplicitní číslo a název proti rejstříku (19. 8. 2026) ---------- */
+{
+  const z = zk.novaZakazka();
+  z.cislo = '2026 - OPR - CN - 555'; z.nazevAkce = 'Výtah Anděl';
+  const rej = [
+    { soubor: '2026-OPR-CN-555.json', cislo: '2026-OPR-CN-555', nazevAkce: 'vytah   ANDEL' },
+    { soubor: 'jina.json', cislo: '2026 - OPR - CN - 556', nazevAkce: 'Jiná akce' },
+  ];
+  const d = zk.zakazkaDuplicita(z, rej, '');
+  test('duplicitní číslo se pozná i přes mezery', d.cislo === '2026-OPR-CN-555.json', d.cislo);
+  test('duplicitní název se pozná i bez diakritiky', d.nazevAkce === '2026-OPR-CN-555.json', d.nazevAkce);
+  const d2 = zk.zakazkaDuplicita(z, rej, '2026-OPR-CN-555.json');
+  test('vlastní soubor není duplikát sebe sama', d2.cislo === '' && d2.nazevAkce === '');
+  z.cislo = zk.ZAK_CISLO_PREDLOHA; z.nazevAkce = '';
+  const d3 = zk.zakazkaDuplicita(z, rej, '');
+  test('předloha čísla a prázdný název se nehlásí', d3.cislo === '' && d3.nazevAkce === '');
+  test('bez rejstříku se nic nehlásí', zk.zakazkaDuplicita(z, null, '').cislo === '');
+}
 
 console.log('\n' + ok + ' prošlo, ' + fail + ' selhalo');
 process.exit(fail ? 1 : 0);

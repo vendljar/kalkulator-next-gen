@@ -115,8 +115,12 @@ test('neúplná matice se u chybějícího prvku vrátí k dnešku',
  * se sice vykreslují, ale jsou nedostupné (celé ozubené kolo je admin-only),
  * nevidí běžný uživatel nic z tohoto seznamu. */
 const dnesViditelne = Z.ZOBRAZENI_PRVKY.filter(p => ROLE.some(r => p.vychozi[r])).map(p => p.klic);
-test('dnes je pro běžné role viditelné jen to, co je zdokumentované jako nedopatření',
-  dnesViditelne.every(k => k === 'nastaveni.slevy' || k === 'nastaveni.sablony'), dnesViditelne);
+/* kalk.pridatPolozku je od 19. 8. 2026 ZÁMĚRNĚ výchozí pro obchodníka
+ * i vedoucího (zadání J. V.: „umožni obchodníkům a vedoucím přidávat
+ * položku do sekcí") — není to nedopatření, patří do výjimek. */
+test('dnes je pro běžné role viditelné jen to, co je zdokumentované jako výjimka',
+  dnesViditelne.every(k => k === 'nastaveni.slevy' || k === 'nastaveni.sablony'
+    || k === 'kalk.pridatPolozku'), dnesViditelne);
 test('vedoucí dnes nemá proti obchodníkovi v zobrazení žádnou výhodu',
   Z.ZOBRAZENI_PRVKY.every(p => p.vychozi['Vedoucí'] === p.vychozi['Obchodník']));
 

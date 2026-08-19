@@ -251,8 +251,11 @@ function kryciProjCtx(zak, varianta) {
   /* Číslo nabídky PROJ = číslo nabídky OCK (zadání 29. 7. 2026). Kdyby se
    * pravidlo změnilo, mění se projCisloNabidky v zakazka.js, ne tohle místo. */
   if (typeof projCisloNabidky === 'function') hl.cislo = projCisloNabidky(zak);
-  const hlSrc = klic => (typeof projHlavickaZOck === 'function' && projHlavickaZOck(zak, klic))
-    ? 'z hlavičky kalkulace OCK' : 'hlavička Kalkulace PROJ';
+  /* Číslo varianty ≥ 2 tečkou (…-555.2) — zadání 19. 8. 2026, OCK i PROJ. */
+  if (typeof cisloSVariantou === 'function') hl.cislo = cisloSVariantou(zak, varianta, hl.cislo);
+  /* Od 19. 8. 2026 je hlavička jedna společná — popisek zdroje je pro
+   * všechna pole stejný a nikam neposílá. */
+  const hlSrc = klic => 'hlavička zakázky (společná)';
   return { zak, hl, hlSrc, sekce, hodnota, ocenene, neocenene, dph, firma, sazby };
 }
 

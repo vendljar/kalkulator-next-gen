@@ -194,7 +194,6 @@ function hodnotaBezpecna(v) {
 const PROVERENO = {
   'common.js': {
     'label': 'popisek pole ve formulářové šabloně txt(path, label) – volá se s literály',
-    'klic': 'klíč hlavičky PROJ v txtProj(klic, label) – volá se výhradně s literály (cislo, nazevAkce, …)',
   },
   'detail_ui.js': {
     'nazev': 'název kroku výpočtu z pevného seznamu DETAIL_KROKY',

@@ -20,7 +20,8 @@ const ARES_CEKANI = 12000;   // rejstřík odpovídá do vteřiny; delší ticho
 /* Které hlavičce ta odpověď patří. 'ock' jsou pole přímo na zakázce,
  * 'proj' je oddělená hlavička projekce (ZAK.projHlavicka). */
 function aresHlavicka(kde) {
-  if (kde === 'proj') { zajistiProjHlavicku(ZAK); return ZAK.projHlavicka; }
+  /* Od 19. 8. 2026 je hlavička jedna společná — ARES z obou kalkulací
+   * píše do týchž polí ZAK.*; `kde` dál rozlišuje jen otevřený panel. */
   return ZAK;
 }
 

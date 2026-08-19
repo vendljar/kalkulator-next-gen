@@ -117,6 +117,16 @@ const ZOBRAZENI_PRVKY = [
         + 'vidět, že je nabídka pod minimální marží (viz varovná lišta níž).',
   },
   {
+    klic: 'kalk.pridatPolozku', skupina: 'cisla', nazev: 'Přidávání vlastních položek do sekcí kalkulace',
+    kde: 'Kalkulace OCK i PROJ – tlačítko „+ přidat položku do sekce"',
+    popis: 'Vlastní řádek s názvem, množstvím/hodinami a jednotkovou cenou; platí jen pro otevřenou zakázku, ceník nemění.',
+    vychozi: { 'Obchodník': true, 'Vedoucí': true },
+    navrh: { 'Obchodník': true, 'Vedoucí': true },
+    proc: 'Zadání 19. 8. 2026: obchodník i vedoucí potřebují do nabídky doplnit práci, kterou ceník '
+        + 'nezná, aniž by čekali na administrátora. Zapsaná jednotková cena je cena té položky '
+        + 'v této zakázce — nákladový ceník firmy tím zůstává skrytý i nedotčený.',
+  },
+  {
     klic: 'pole.prirazka', skupina: 'cisla', nazev: 'Pole Globální přirážka',
     kde: 'Kalkulace OCK i PROJ – karta souhrnu',
     popis: 'Procento, o které se zvedá nákup na prodejní cenu. Změna přepočítá celou nabídku.',

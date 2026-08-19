@@ -64,6 +64,10 @@ const DEFAULT_CENIK = {  // HODNOTY VYNULOVÁNY pro GitHub (pripravit_github.py)
   ukazkove: true,
   prazdny: true,
   marze: 0, dph: 0,            // dph = zákonná sazba, ne naše cena
+  /* Kurz EUR (#155, 19. 8. 2026): přepočet cen pro dokumenty v jiné než
+   * české mutaci. 0 = nenastaveno → cizojazyčný tisk se zastaví (ceny se
+   * nevymýšlejí). Do výpočtu nevstupuje — kalkulace je vždy v Kč. */
+  kurzEurKc: 0,
   profilasKgKc: 0,                // Kč/kg profily
   powertechExt: 0, powertechInt: 0, // Kč/kg plechy
   montazniNosnik: 0, lemovaniKgKc: 0,

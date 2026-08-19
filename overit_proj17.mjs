@@ -324,10 +324,12 @@ test('tlačítka nabídky PROJ jsou poskládaná jako v OCK (modrý tisk, Word b
 test('smlouvy a plná moc mají modrá (primary) tlačítka',
   await p.evaluate(() => {
     const proj = document.getElementById('page-proj').innerHTML;
-    prepniTab('kalk'); render();
-    const kalk = document.getElementById('page-kalk').innerHTML;
+    /* Smlouva OCK se 19. 8. 2026 přestěhovala s dokumentovou sekcí na konec
+     * Technické specifikace — modrá zůstává, jen se hledá tam. */
+    prepniTab('spec'); if (typeof renderTechspec === 'function') renderTechspec();
+    const spec = document.getElementById('page-spec').innerHTML;
     const prim = (html, volani) => new RegExp('class="primary"[^>]*onclick="' + volani.replace(/[()']/g, x => '\\' + x) + '"').test(html);
-    return prim(proj, "sodWord('sodProj')") && prim(proj, "sodWord('plnaMoc')") && prim(kalk, "sodWord('sod')");
+    return prim(proj, "sodWord('sodProj')") && prim(proj, "sodWord('plnaMoc')") && prim(spec, "sodWord('sod')");
   }));
 
 test('hlídka verze: štítek je bez rozdílu skrytý a s rozdílem svítí červeně',
@@ -357,25 +359,111 @@ test('zpracovatel bez přihlášení nechává FIRMA_ZPRACOVAL* prázdné (žád
     return s.FIRMA_ZPRACOVAL === '' && s.FIRMA_ZPRACOVAL_TEL === '' && s.FIRMA_ZPRACOVAL_EMAIL === '';
   }));
 
-test('hlavička PROJ ukazuje po načtení tytéž údaje jako OCK (převzaté hodnoty + štítek „z OCK")',
+test('hlavička je JEDNA společná pro OCK i PROJ (tatáž pole, žádné štítky, zápis do ZAK.*)',
   await p.evaluate(() => {
     ZAK.cislo = '2026 - OPR - CN - 0777'; ZAK.nazevAkce = 'Zkouška hlavičky';
     ZAK.objednatel = 'Objednatel s.r.o.'; ZAK.ico = '25596641';
-    ZAK.projHlavicka.cislo = ZAK_CISLO_PREDLOHA; ZAK.projHlavicka.nazevAkce = '';
-    ZAK.projHlavicka.objednatel = ''; ZAK.projHlavicka.ico = '';
     prepniTab('proj'); render();
     const bar = document.querySelector('#page-proj .zak-bar');
     const html = bar ? bar.innerHTML : '';
     const maHodnoty = html.includes('2026 - OPR - CN - 0777')
       && html.includes('Zkouška hlavičky') && html.includes('Objednatel s.r.o.')
       && html.includes('25596641');
-    const stitky = (html.match(/z OCK/g) || []).length >= 4;
-    ZAK.projHlavicka.nazevAkce = 'Vlastní PROJ název'; render();
-    const html2 = document.querySelector('#page-proj .zak-bar').innerHTML;
-    const vlastni = html2.includes('Vlastní PROJ název')
-      && !html2.includes('Zkouška hlavičky');
-    ZAK.projHlavicka.nazevAkce = '';
-    return maHodnoty && stitky && vlastni;
+    const bezStitku = !/z OCK/.test(html);
+    const piseDoSpolecne = html.includes("set('ZAK.nazevAkce'")
+      && !html.includes("set('ZAK.projHlavicka.nazevAkce'");
+    return maHodnoty && bezStitku && piseDoSpolecne;
+  }));
+
+test('ceníky OCK i PROJ mají sekci CIZÍ MĚNA s Kurzem EUR',
+  await p.evaluate(() => {
+    const ock = JSON.stringify(CENIK_DEF), proj = JSON.stringify(CENIK_DEF_PROJ);
+    return ock.includes('C.kurzEurKc') && ock.includes('CIZÍ MĚNA')
+      && proj.includes('PC.kurzEurKc') && proj.includes('Kurz EUR')
+      && DEFAULT_CENIK.kurzEurKc === 0 && DEFAULT_CENIK_PROJ.kurzEurKc === 0;
+  }));
+
+test('cizí mutace bez kurzu se zastaví; s kurzem nese jen celá eura',
+  await p.evaluate(() => {
+    let chyba = '';
+    try { menaKc('en', 0); } catch (e) { chyba = e.message; }
+    const eur = menaKc('en', 25.2);
+    return /Kurz EUR/.test(chyba) && eur(96000) === '€ 3 810'.replace(' ', ' ')
+      || (/Kurz EUR/.test(chyba) && /^€ /.test(eur(96000)) && !/[.,]\d/.test(eur(96000)));
+  }));
+
+test('karta Dimenze profilů je ve výchozím stavu sbalená (a jde rozbalit)',
+  await p.evaluate(() => {
+    prepniTab('kalk'); render();
+    const karta = document.getElementById('ock-profily');
+    const sbalena = karta && karta.classList.contains('closed');
+    karta.classList.toggle('closed');
+    const rozbalena = !karta.classList.contains('closed');
+    karta.classList.add('closed');
+    return sbalena && rozbalena;
+  }));
+
+test('obchodník smí přidat položku do sekce (výchozí právo, OCK i PROJ)',
+  await p.evaluate(() => {
+    const prvek = ZOBRAZENI_PRVKY.find(x => x.klic === 'kalk.pridatPolozku');
+    return !!prvek && prvek.vychozi['Obchodník'] === true && prvek.vychozi['Vedoucí'] === true
+      && document.getElementById('page-kalk').innerHTML.includes('přidat položku do sekce')
+      && document.getElementById('page-proj').innerHTML.includes('přidat hodinovou položku do sekce');
+  }));
+
+test('ATYP předvyplní hodiny navíc (montáž 30 % z celkových, projekce 30 % ze základu)',
+  await p.evaluate(() => {
+    Z.montazZakladHod = 24; Z.projekceZakladHod = 50;
+    Z.montazAtypHod = 0; Z.projekceAtypHod = 0;
+    atypPrepni(true);
+    const navic = vypocet(Z, C, JEKLY, OCK.fixes).montaz.hodinyNavicCelkem || 0;
+    const okMont = Z.montazAtypHod === Math.round(0.30 * (24 + navic));
+    const okProj = Z.projekceAtypHod === 15;
+    atypPrepni(false);
+    const zpet = Z.montazAtypHod === 0 && Z.projekceAtypHod === 0;
+    return okMont && okProj && zpet;
+  }));
+
+test('dokumentová sekce OCK je na konci Technické specifikace a v kartě CN ji nahradilo tlačítko',
+  await p.evaluate(() => {
+    prepniTab('spec'); if (typeof renderTechspec === 'function') renderTechspec();
+    const spec = document.getElementById('page-spec').innerHTML;
+    const veSpec = spec.includes('nabidkaOckDokument()') && spec.includes("sodWord('sod')")
+      && spec.includes('Cenová nabídka a smlouva o dílo (OCK)');
+    prepniTab('kalk'); render();
+    const kalk = document.getElementById('page-kalk').innerHTML;
+    const tlacitko = kalk.includes('>Technická specifikace</button>');
+    const bezTisku = !kalk.includes('nabidkaOckDokument()');
+    return veSpec && tlacitko && bezTisku;
+  }));
+
+test('dílčí faktura č. 2 se dopočítává (záloha 70 % → 20 %, Bez zálohy → 90 %)',
+  await p.evaluate(() =>
+    kryciFaktura2Dopocet('70 % – po podpisu smlouvy', '10 % – po předání', '40 % – po zahájení montáže')
+      === '20 % – po zahájení montáže'
+    && kryciFaktura2Dopocet('Bez zálohy', '10 % – po předání', '40 % – po zahájení montáže')
+      === '90 % – po zahájení montáže'));
+
+test('duplicitní číslo a název se hlásí štítkem u hlavičky',
+  await p.evaluate(() => {
+    ZAK.cislo = '2026 - OPR - CN - 555'; ZAK.nazevAkce = 'Výtah Anděl';
+    ONLINE_STAV.rejstrik = [{ soubor: 'cizi.json', cislo: '2026-OPR-CN-555', nazevAkce: 'vytah andel' }];
+    ONLINE_STAV.soubor = '';
+    render();
+    const html = document.querySelector('#page-kalk .zak-bar').innerHTML;
+    const sviti = (html.match(/duplicitní/g) || []).length >= 2;
+    ONLINE_STAV.rejstrik = []; render();
+    const zhaslo = !document.querySelector('#page-kalk .zak-bar').innerHTML.includes('duplicitní');
+    return sviti && zhaslo;
+  }));
+
+test('číslo varianty ≥ 2 nese příponu .N v dokumentech OCK i PROJ',
+  await p.evaluate(() => {
+    const v2 = novaVarianta('Varianta 2'); ZAK.varianty.push(v2);
+    const okc = cisloSVariantou(ZAK, v2) === '2026 - OPR - CN - 555.2';
+    const prvni = cisloSVariantou(ZAK, ZAK.varianty[0]) === '2026 - OPR - CN - 555';
+    ZAK.varianty.pop();
+    return okc && prvni;
   }));
 
 test('aplikace nehlásila chybu do konzole', konzole.length === 0, konzole.slice(0, 3).join(' | '));

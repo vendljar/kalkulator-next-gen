@@ -45,7 +45,10 @@ function renderInputs() {
        * profilů/plechů. V datech zůstává desetinný podíl (0,30) — staré
        * zakázky se počítají beze změny, jen zadávání je lidské. */
       inp('Z.rezervaProfilyPct', { type: 'pct', l: 'Rezerva profily (atyp)' }) +
-      inp('Z.rezervaPlechyPct', { type: 'pct', l: 'Rezerva plechy (atyp)' }), false, 'ock-profily') +
+      /* Karta je od 19. 8. 2026 ve výchozím stavu SBALENÁ (zadání J. V.):
+       * dimenze se mění zřídka a obchodníka při běžné práci jen ruší.
+       * Kliknutím na nadpis se karta kdykoli rozbalí. */
+      inp('Z.rezervaPlechyPct', { type: 'pct', l: 'Rezerva plechy (atyp)' }), true, 'ock-profily') +
     card('Práce a režie',
       inp('Z.montazZakladHod', { l: 'Montáž – základ (1 os.)', step: 1, u: 'hod' }) +
       inp('Z.montazAtypHod', { l: 'Montáž – atyp navíc', step: 1, u: 'hod' }) +
@@ -77,6 +80,19 @@ function atypPrepni(zap) {
   Z.rezervaZakladPct = zap ? 0.30 : 0;
   Z.rezervaPriplatkyPct = zap ? 0.30 : 0;
   Z.zamecnikAtypKc = zap ? 50000 : null;
+  /* Hodiny navíc při ATYP (zadání 19. 8. 2026): projekce +30 % ze základních
+   * hodin; montáž +30 % z CELKOVÝCH hodin potřebných pro montáž (základ +
+   * hodiny navíc vypočtené z konstrukce — světlíky, přechody atd.).
+   * Předvyplňuje se při zaškrtnutí; políčka jdou pak ručně doladit. */
+  if (zap) {
+    let navic = 0;
+    try { navic = vypocet(Z, C, JEKLY, OCK.fixes).montaz.hodinyNavicCelkem || 0; } catch (e) { navic = 0; }
+    Z.montazAtypHod = Math.round(0.30 * ((+Z.montazZakladHod || 0) + navic));
+    Z.projekceAtypHod = Math.round(0.30 * (+Z.projekceZakladHod || 0));
+  } else {
+    Z.montazAtypHod = 0;
+    Z.projekceAtypHod = 0;
+  }
   aktivniVarianta(ZAK).upraveno = new Date().toISOString();
   render();
 }
@@ -262,8 +278,20 @@ function radekKalk(r, sekceKey) {
   const { admin, showCost } = kalkSloupce();
   const key = radekKey(r);
   const dz = admin ? ` ondragover="dragOver(event)" ondrop="dragDrop(event,'${sekceKey}','${keyAttr(key)}')"` : '';
-  let c = `<td style="white-space:normal">${admin ? `<div class="vol-name">${gripHtml(r, sekceKey)}${bunkaNazev(r, sekceKey)}${bezCenyHtml(r)}</div>` : esc(r.nazev) + poznHtml(r) + bezCenyHtml(r)}</td>`;
-  c += `<td style="white-space:nowrap">${admin ? bunkaMnozstvi(r) : num(r.mnozstvi, 3)}</td>`;
+  /* Vlastní položku smí upravit i ten, kdo ji směl přidat (19. 8. 2026,
+   * právo kalk.pridatPolozku) — jinak by obchodník přidal řádek, který sám
+   * nedokáže pojmenovat ani ocenit. Jednotková cena vlastní položky se mu
+   * ukazuje přímo u názvu (nákladové sloupce nevidí). */
+  const vlastniEd = !admin && r.vlastni && smiZobrazit('kalk.pridatPolozku');
+  let c = `<td style="white-space:normal">${admin
+    ? `<div class="vol-name">${gripHtml(r, sekceKey)}${bunkaNazev(r, sekceKey)}${bezCenyHtml(r)}</div>`
+    : vlastniEd
+      ? `<input type="text" class="nazev-ed" style="width:55%" value="${esc(r.nazev)}" onchange="vlastniSet('${r.sekce}', ${r.idx}, 'nazev', this.value)">
+         à <input type="number" step="any" style="width:96px" value="${+(+r.cena).toFixed(2)}" title="jednotková cena této položky (jen pro tuto zakázku)"
+           onchange="vlastniSet('${r.sekce}', ${r.idx}, 'cena', this.value)"> Kč
+         <button class="mini noprint" title="odebrat vlastní položku" onclick="vlastniDel('${r.sekce}', ${r.idx})">✕</button>`
+      : esc(r.nazev) + poznHtml(r) + bezCenyHtml(r)}</td>`;
+  c += `<td style="white-space:nowrap">${(admin || vlastniEd) ? bunkaMnozstvi(r) : num(r.mnozstvi, 3)}</td>`;
   if (admin) c += `<td style="white-space:nowrap">${bunkaCena(r)}</td>`;
   if (showCost) c += `<td>${fmt(r.naklad)}</td><td>${fmt(r.marze)}</td>`;
   c += `<td>${fmt(r.sMarzi)}</td>`;
@@ -290,7 +318,7 @@ function tbl(rows, sum, nazevSekce, sekceKey) {
   // id řádku s názvem sekce = cíl kotvy v klouzající liště (kalkLista)
   return `<tr class="sechd" id="ock-sek-${sekceKey}"><td colspan="${NC}">${nazevSekce}</td></tr>` +
     rows.map(r => radekKalk(r, sekceKey)).join('') +
-    (admin ? radekPridat(sekceKey, 'přidat položku do sekce') : '') +
+    ((admin || smiZobrazit('kalk.pridatPolozku')) ? radekPridat(sekceKey, 'přidat položku do sekce') : '') +
     /* ATYP má vlastní sekci v zadání i v ceníku, ale v kalkulaci a v nabídce
      * spadá do HRUBÉ OCK – zákazník má vidět jednu ocelovou konstrukci, ne
      * účet za „něco navíc". Tlačítko je proto tady, ne ve vlastní tabulce (#7). */

@@ -249,10 +249,14 @@ await p.waitForTimeout(500);
 const prehledText = await p.locator('#page-zakazka').innerText();
 ok('přehled obsahuje kartu Cenová nabídka OCK (CN)', /cenová nabídka ock \(cn\)/i.test(prehledText));
 ok('přehled obsahuje kartu Cenová nabídka PROJ (OVP-CN)', /cenová nabídka proj \(ovp-cn\)/i.test(prehledText));
-ok('karta OCK v přehledu má tlačítko generování',
-   await p.locator('#page-zakazka button:has-text("Kompletní náhled a tisk nabídky")').count() >= 2);
-ok('stavový řádek nabídky je v aplikaci 2× (třída, ne id)',
-   await p.locator('.nabidkaStav').count() === 2 && await p.locator('#nabidkaStav').count() === 0);
+/* Dokumentová sekce OCK se 19. 8. 2026 přestěhovala na konec Technické
+ * specifikace — v přehledu tiskne jen PROJ a karta OCK vede tlačítkem
+ * „Technická specifikace" na místo, kde se nabídka OCK nově tvoří. */
+ok('v přehledu tiskne PROJ a karta OCK vede na Technickou specifikaci',
+   await p.locator('#page-zakazka button:has-text("Kompletní náhled a tisk nabídky")').count() >= 1
+   && await p.locator('#page-zakazka button:has-text("Technická specifikace")').count() >= 1);
+ok('stavový řádek nabídky OCK je nově jen u dokumentové sekce v Technické specifikaci',
+   await p.locator('.nabidkaStav').count() === 1 && await p.locator('#nabidkaStav').count() === 0);
 ok('poznámka vysvětluje, že se nabídky neukládají', prehledText.includes('generují se vždy živě'));
 
 /* --- #34 zámek odeslané nabídky -------------------------------------------
@@ -1147,8 +1151,11 @@ const icoVazby = await p.evaluate(() => {
   return out;
 });
 ok('IČO OCK zapisuje do ZAK.ico', icoVazby.some(s => s.includes("'ZAK.ico'")));
-ok('IČO PROJ zapisuje do ZAK.projHlavicka.ico',
-   icoVazby.some(s => s.includes("'ZAK.projHlavicka.ico'")));
+/* Hlavička je od 19. 8. 2026 jedna společná — i pole na PROJ straně píše
+ * do ZAK.ico; oddělená hlavička PROJ skončila. */
+ok('IČO PROJ zapisuje do společného ZAK.ico (žádná oddělená hlavička)',
+   icoVazby.every(s => !s.includes("'ZAK.projHlavicka.ico'"))
+   && icoVazby.filter(s => s.includes("'ZAK.ico'")).length >= 1, icoVazby.join(' | '));
 
 /* Neplatné IČO má rozsvítit štítek u pole – a nesmí nic zablokovat
  * (KONTROLY_UROVEN = 2, zadání „pouze rozsviť varování"). */
@@ -1238,7 +1245,8 @@ const ares = await p.evaluate(async () => {
   ZAK = novaZakazka(); syncVarianta(); NAST.uzivatel = ''; render();
   return out;
 });
-ok(`tlačítko ARES stojí u obou hlaviček (nalezeno ${ares.tlacitek})`, ares.tlacitek === 2);
+/* V přehledu zůstala jediná (společná) hlavička — jedno tlačítko ARES. */
+ok(`tlačítko ARES stojí u společné hlavičky (nalezeno ${ares.tlacitek})`, ares.tlacitek === 1);
 ok('bez vyplněného IČO je tlačítko zhasnuté', ares.zhaslychBezIco === ares.tlacitek);
 ok('neplatné IČO se do rejstříku vůbec neodešle', ares.volaniPriNeplatnem === 0);
 ok('u neplatného IČO panel mluví o kontrolní číslici',
@@ -1324,7 +1332,7 @@ const zarovnani = await p.evaluate(() => {
              pole: vstupy[0].getBoundingClientRect().right };
   });
 });
-ok(`tlačítko ARES je na obou kartách hlavičky (${zarovnani.length})`, zarovnani.length === 2);
+ok(`tlačítko ARES je na kartě společné hlavičky (${zarovnani.length})`, zarovnani.length === 1);
 zarovnani.forEach((z, i) => ok(
   `tlačítko ARES má pravý okraj v řadě s ostatními buňkami (karta ${i + 1}: `
   + `${z ? Math.round(z.tlacitko) + ' vs ' + Math.round(z.pole) : 'neměřeno'})`,
@@ -1363,7 +1371,9 @@ const zab = await p.evaluate(() => {
 /* Na přehledu zakázky stojí obě nabídky vedle sebe (OCK i PROJ) a každá má
  * zábranu nad svými tlačítky – jeden panel na kartu, tedy dva. Kdyby byl jen
  * jeden, znamenalo by to, že jedna z nabídek zhasla bez vysvětlení. */
-ok(`nad nenahraným ceníkem se ukáže zábrana u obou nabídek (panelů: ${zab.panel})`, zab.panel === 2);
+/* Karta OCK v přehledu už dokumenty negeneruje (jsou v Technické
+ * specifikaci) — zábranu tu nese jen nabídka PROJ. */
+ok(`nad nenahraným ceníkem se ukáže zábrana u nabídky PROJ (panelů: ${zab.panel})`, zab.panel === 1);
 ok('zábrana řekne, že dokument nevznikne', /nevznikne|nedá vytvořit/i.test(zab.panelText), zab.panelText);
 ok('zábrana pošle uživatele pro složku _DB', /_DB/.test(zab.panelText), zab.panelText);
 ok(`tlačítka nabídky zhasla (${zab.zhaslych}/${zab.tlacitek})`,

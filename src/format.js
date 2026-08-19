@@ -64,6 +64,48 @@ function prepisPlati(v) {
   return !(v === undefined || v === null || v === '');
 }
 
+/* ---------- měna dokumentu (#155, 19. 8. 2026) ----------
+ * Jazyk tisku CZ → koruny beze změny. Jiná mutace (EN/DE/FR) → všechny
+ * částky v EURECH kurzem z ceníku: CELÁ EURA NAHORU (stejná filozofie jako
+ * zaokrouhlování na tisíce Kč — nikdy dolů pod spočtenou cenu), v dokumentu
+ * VŽDY jen eura a kurz se NIKDE neukazuje (rozhodnutí J. V. 19. 8. 2026;
+ * kurz je vidět a fixuje se jen v kalkulaci/ceníku). Bez kurzu se
+ * cizojazyčný dokument nevytvoří — vymyšlený kurz je vymyšlená cena. */
+/* menaDokumentu — DOROVNANÝ převod (19. 8. 2026 večer, zadání J. V.:
+ * „součet všech položek po zaokrouhlení musí sedět jak v cenové nabídce,
+ * tak v kalkulaci"). Generátory proto převádějí ČÍSLA po položkách (`na`,
+ * celá eura nahoru) a součty SČÍTAJÍ z převedených položek — stejný princip
+ * jako #135 u korunového zaokrouhlování. DPH se počítá až z eurového
+ * základu (nahoru); `fmt` už jen formátuje, nic nepřevádí. */
+function menaDokumentu(lang, kurzEurKc) {
+  if (!lang || lang === 'cz')
+    return { eur: false, na: n => n, fmt: formatKc2 };
+  const kurz = +kurzEurKc || 0;
+  if (!(kurz > 0)) {
+    const e = new Error('Cizojazyčná nabídka se tiskne v eurech, ale v ceníku chybí Kurz EUR '
+      + '(sekce Cizí měna). Doplňte ho a zveřejněte ceník — kurz se nikdy neodhaduje.');
+    e.kod = 'CHYBI_KURZ_EUR';
+    throw e;
+  }
+  return {
+    eur: true,
+    na: n => Math.ceil((+n || 0) / kurz),
+    fmt: n => '€ ' + Math.round(+n || 0).toLocaleString('cs-CZ'),
+  };
+}
+
+function menaKc(lang, kurzEurKc) {
+  if (!lang || lang === 'cz') return formatKc2;
+  const kurz = +kurzEurKc || 0;
+  if (!(kurz > 0)) {
+    const e = new Error('Cizojazyčná nabídka se tiskne v eurech, ale v ceníku chybí Kurz EUR '
+      + '(sekce Cizí měna). Doplňte ho a zveřejněte ceník — kurz se nikdy neodhaduje.');
+    e.kod = 'CHYBI_KURZ_EUR';
+    throw e;
+  }
+  return n => '€ ' + Math.ceil((+n || 0) / kurz).toLocaleString('cs-CZ');
+}
+
 if (typeof module !== 'undefined')
   module.exports = { formatKc2, formatKc0, formatCislo, formatPctTypo, formatKcTypo,
-                     prepisPlati };
+                     prepisPlati, menaKc, menaDokumentu };

@@ -118,33 +118,21 @@ function renderZakazka() {
     /* Složka _DB je věc administrátora (zadání 4. 8. 2026): běžný uživatel
      * pracuje čistě s online databází a mapování Disku nikdy nevidí. */
     (smiZobrazit('uloziste.slozka') && typeof renderUlozisteKarta === 'function' ? renderUlozisteKarta() : '') +
-    card('Zakázka – hlavička PROJ (cenová nabídka projekce)',
-      inp('ZAK.projHlavicka.cislo', { type: 'text', l: 'Číslo nabídky (CN)' }) +
-      inp('ZAK.projHlavicka.nazevAkce', { type: 'text', l: 'Název akce' }) +
-      inp('ZAK.projHlavicka.adresa', { type: 'text', l: 'Adresa stavby' }) +
-      inp('ZAK.projHlavicka.objednatel', { type: 'text', l: 'Objednatel' }) +
-      // KL-2: sídlo objednatele je jiná adresa než stavba (viz hlavička OCK)
-      inp('ZAK.projHlavicka.adresaObjednatele', { type: 'text', l: 'Adresa (sídlo) objednatele' }) +
-      inp('ZAK.projHlavicka.kontakt', { type: 'text', l: 'Kontaktní osoba objednatele' }) +
-      inp('ZAK.projHlavicka.ico', { type: 'text', l: 'IČO objednatele' }) +
-      (typeof aresRadek === 'function' ? aresRadek('proj', true) : '') +
-      inp('ZAK.projHlavicka.datum', { type: 'date', l: 'Datum' }) +
-      `<div class="row" style="margin-top:8px"><label>Zakázka je jen projekce (bez OCK)</label>
+    card('Zakázka PROJ — nastavení',
+      /* Oddělená hlavička PROJ skončila 19. 8. 2026 (zadání J. V.): hlavička
+       * je JEDNA SPOLEČNÁ — nabídka projekce i OCK nesou tytéž údaje z karty
+       * „Zakázka – hlavička OCK" výše. Zůstává jen to, co je opravdu
+       * projekční: přepínač „jen projekce". */
+      `<div class="row" style="margin-top:2px"><label>Zakázka je jen projekce (bez OCK)</label>
         <input type="checkbox" ${ZAK.jenProj ? 'checked' : ''} onchange="set('ZAK.jenProj', this.checked)"><span class="u"></span></div>
       <div class="note">Projekce se někdy prodává samostatně (2. 8. 2026). Se zaškrtnutím přestanou
         platit kontroly nad zadáním OCK, sleva ZAK-10 (počítá se z ceny šachty) a část OCK
         v porovnání variant i v marži nabídky — čistě projekční nabídka tak nesvítí varováními
         o šachtě, kterou nikdo neprodává. Data OCK zůstávají, jen se nikam nepočítají;
         odškrtnutím se vše vrátí.</div>
-      <div class="btns" style="margin-top:10px">
-        <button onclick="zakHlavickaKopiruj('doProj')">⇦ Převzít údaje z hlavičky OCK</button>
-        <button onclick="zakHlavickaKopiruj('doOck')">⇨ Přenést tyto údaje do hlavičky OCK</button>
-      </div>
-      <div class="note">Projekční část má vlastní číslo nabídky, náplň i objednatele, proto je tato
-      hlavička <b>oddělená</b> od hlavičky OCK a nic se mezi nimi nepropisuje samo. Když se obě části
-      řeší společně, přeneste údaje jedním z tlačítek výše a pak je doupravte — je to jediné místo
-      v aplikaci, kde se hlavičky přenášejí (z lišty obou kalkulací tato tlačítka 5. 8. 2026 zmizela).
-      Tato pole se používají v cenové nabídce PROJ (OVP-CN) a v krycím listu zakázky PROJ.</div>`) +
+      <div class="note">Hlavička zakázky je od 19. 8. 2026 <b>společná pro OCK i PROJ</b> —
+      vyplňuje se jednou v kartě výše a platí pro cenovou nabídku OCK (CN), nabídku PROJ (OVP-CN)
+      i oba krycí listy.</div>`) +
     seznamKarta() +
     /* #37 – interní zápisník zakázky. Stojí nad kartami nabídek schválně:
      * „proč jsme šli s cenou dolů" je potřeba mít na očích právě ve chvíli,
@@ -512,7 +500,21 @@ function nabidkaKarta() {
     <div class="note" style="font-weight:600;margin-top:8px">Co se vyplní do nabídky (živý náhled):</div>
     ${nahled}
     ${typeof kryciPodminkyBlok === 'function' ? kryciPodminkyBlok() : ''}
-    ${nabidkaFotoKarta()}
+    <div class="btns" style="margin-top:12px">
+      <button class="primary" onclick="prepniTab('spec'); window.scrollTo(0, 0)">Technická specifikace</button>
+    </div>
+    <div class="note" style="margin-top:6px">Úvodní fotka, kontroly, <b>tisk nabídky</b> i <b>smlouva o dílo</b>
+      se 19. 8. 2026 přestěhovaly na konec záložky <b>Technická specifikace OCK</b> — tlačítko výše vás na ni
+      přenese; specifikaci projdete odshora a dole nabídku rovnou vytisknete.</div>`;
+}
+
+/* Blok generování dokumentů OCK (úvodní fotka, kontroly, tisk nabídky, Word,
+ * smlouva o dílo). Do 19. 8. 2026 stál na konci karty Cenová nabídka (CN);
+ * na pokyn J. V. se přestěhoval na KONEC záložky Technická specifikace OCK —
+ * obchodník projde specifikaci a rovnou pod ní dokument vytvoří. */
+function nabidkaDokumentyBlok() {
+  const zab = (typeof ukazkoveZabranaAttr === 'function') ? ukazkoveZabranaAttr() : '';
+  return `${nabidkaFotoKarta()}
     ${typeof kontrolyPanel === 'function' ? kontrolyPanel() : ''}
     ${typeof ukazkoveZabranaPanel === 'function' ? ukazkoveZabranaPanel() : ''}
     <div class="btns" style="margin-top:10px">

@@ -364,45 +364,38 @@ function zakazkaHlavicka(ock) {
   zajistiProjHlavicku(ZAK);   // starší zakázka hlavičku PROJ ještě nemá – doplní se
   const opts = ZAK.varianty.map(v =>
     `<option value="${v.id}" ${v.id === akt.id ? 'selected' : ''}>${esc(v.nazev)}${v.ridici ? ' · řídící' : ''}</option>`).join('');
-  const txt = (path, label) => `<div class="row"><label>${label}</label>
+  const txt = (path, label, pill) => `<div class="row"><label>${label}${pill || ''}</label>
     <input type="text" value="${esc(get(path))}" onchange="set('${path}', this.value)"></div>`;
 
-  /* Hlavička PROJ s přebíráním z OCK (zadání 19. 8. 2026: „po načtení zůstává
-   * hlavička prázdná — potřebuji, aby se info načítalo stejně jako v OCK").
-   * Pole, které v hlavičce PROJ nikdo nevyplnil, UKAZUJE hodnotu z hlavičky
-   * OCK a nese štítek „z OCK" — přesně tak už dávno počítají dokumenty
-   * (projHlavickaEfektivni). Do dat se nic nepropisuje: přepsáním začne
-   * platit vlastní hodnota PROJ, smazáním se zase vrátí ta z OCK. */
-  const txtProj = (klic, label) => {
-    const p = ZAK.projHlavicka || {};
-    const zOck = (typeof projHlavickaZOck === 'function') && projHlavickaZOck(ZAK, klic);
-    const hodnota = zOck ? (ZAK[klic] || '') : (p[klic] == null ? '' : p[klic]);
-    const pill = zOck ? `<span class="pill mut" style="margin-left:12px"
-      title="hlavička PROJ má tohle pole prázdné, hodnota se přebírá z hlavičky OCK; přepsáním začne platit vlastní, smazáním se OCK hodnota vrátí">z OCK</span>` : '';
-    return `<div class="row"><label>${label}${pill}</label>
-      <input type="text" value="${esc(hodnota)}" onchange="set('ZAK.projHlavicka.${klic}', this.value)"></div>`;
-  };
+  /* Kontrola duplicit (19. 8. 2026): číslo i název se porovnávají s online
+   * rejstříkem zakázek; kolize svítí štítkem hned u pole, kde se opravuje.
+   * Tvrdá pojistka je na serveru (cizí zakázku pod stejným číslem odmítne). */
+  const dup = (typeof zakazkaDuplicita === 'function' && typeof ONLINE_STAV !== 'undefined')
+    ? zakazkaDuplicita(ZAK, ONLINE_STAV.rejstrik, ONLINE_STAV.soubor)
+    : { cislo: '', nazevAkce: '' };
+  const dupPill = (soubor, co) => !soubor ? '' : `<span class="pill warn" style="margin-left:12px"
+    title="Stejné ${co} už má uložená zakázka ${esc(soubor)}. Server uložení pod cizím číslem odmítne — zvolte vlastní.">duplicitní</span>`;
+  const dupCislo = dupPill(dup.cislo, 'číslo nabídky');
+  const dupNazev = dupPill(dup.nazevAkce, 'název akce');
+
+  /* Hlavička je od 19. 8. 2026 JEDNA SPOLEČNÁ pro OCK i PROJ (zadání J. V.:
+   * „prostě je to stejná hlavička jako v OCK… to že svítí stejná hlavička
+   * v obou kalkulacích není problém"). Obě kalkulace čtou i píší tatáž pole
+   * ZAK.* — obchodník v každé záložce jen počítá odpovídající část. */
 
   /* IČO objednatele (zadání z 30. 7. 2026) – v hlavičce stojí mezi kontaktní
    * osobou a sazbou DPH. Vedle popisku svítí štítek, když je vyplněné IČO
    * neplatné podle kontrolní číslice. NEBLOKUJE se nic: pole jde uložit
    * i s chybou a nabídka se z něj vytiskne. Stejná chyba se objeví i v panelu
    * kontrol (#33) – tady je hned u pole, kde se opravuje. */
-  const icoRow = (path) => {
-    let h = get(path);
-    /* IČO v hlavičce PROJ přebírá hodnotu z OCK stejně jako textová pole
-     * (txtProj) — jen zobrazení, zápis míří vždy do hlavičky PROJ. */
-    const zOck = path.indexOf('projHlavicka') >= 0
-      && (typeof projHlavickaZOck === 'function') && projHlavickaZOck(ZAK, 'ico');
-    if (zOck) h = ZAK.ico || '';
+  const icoRow = (path, kdeAres) => {
+    const h = get(path);
     const spatne = (typeof icoVyplneno === 'function') && icoVyplneno(h) && !icoPlatne(h);
-    const pill = (spatne ? `<span class="pill warn" style="margin-left:12px"
-      title="osm číslic a kontrolní číslice nesedí – zkontrolujte překlep">neplatné IČO</span>` : '')
-      + (zOck ? `<span class="pill mut" style="margin-left:12px"
-      title="hlavička PROJ má IČO prázdné, hodnota se přebírá z hlavičky OCK; přepsáním začne platit vlastní">z OCK</span>` : '');
+    const pill = spatne ? `<span class="pill warn" style="margin-left:12px"
+      title="osm číslic a kontrolní číslice nesedí – zkontrolujte překlep">neplatné IČO</span>` : '';
     /* Pod polem stojí dotaz do rejstříku (#10). Je to nabídka, ne krok
      * v postupu – hlavička se dá vyplnit ručně a nabídka odejde i tak. */
-    const kde = path.indexOf('projHlavicka') >= 0 ? 'proj' : 'ock';
+    const kde = kdeAres || (path.indexOf('projHlavicka') >= 0 ? 'proj' : 'ock');
     const ares = (typeof aresRadek === 'function') ? aresRadek(kde) : '';
     return `<div class="row"><label>IČO objednatele${pill}</label>
       <input type="text" value="${esc(h)}" placeholder="8 číslic"
@@ -438,8 +431,7 @@ function zakazkaHlavicka(ock) {
     <select onchange="set('PC.dph', +this.value)">
       <option value="0.12" ${PC.dph === 0.12 ? 'selected' : ''}>12 % snížená</option>
       <option value="0.21" ${PC.dph === 0.21 ? 'selected' : ''}>21 % základní</option></select></div>`;
-  const datumRowProj = `<div class="row na-konec"><label>Datum vytvoření</label>
-    <input type="date" value="${esc(ZAK.projHlavicka.datum)}" onchange="set('ZAK.projHlavicka.datum', this.value)"></div>`;
+  /* datumRowProj zanikl 19. 8. 2026 — hlavička je jedna společná (ZAK.datum). */
 
   /* Globální přirážka PROJ (zadání 31. 7. 2026) – stejné místo i chování jako
    * v hlavičce OCK. Do 31. 7. se nastavovala jen v záložce Ceník nákladů PROJ,
@@ -468,10 +460,10 @@ function zakazkaHlavicka(ock) {
     // aby byla vidět při počítání nabídky; sazby zůstávají v Ceníku nákladů PROJ.
     const inner = `<div class="zak-head">
         <div class="zak-head-col">
-          ${txtProj('cislo', 'Číslo nabídky (CN)')}${txtProj('nazevAkce', 'Název akce')}${txtProj('adresa', 'Adresa stavby')}${datumRowProj}
+          ${txt('ZAK.cislo', 'Číslo nabídky (CN)', dupCislo)}${txt('ZAK.nazevAkce', 'Název akce', dupNazev)}${txt('ZAK.adresa', 'Adresa stavby')}${datumRow}
         </div>
         <div class="zak-head-col">
-          ${txtProj('objednatel', 'Objednatel')}${txtProj('kontakt', 'Kontaktní osoba')}${icoRow('ZAK.projHlavicka.ico')}${dphRowProj}
+          ${txt('ZAK.objednatel', 'Objednatel')}${txt('ZAK.kontakt', 'Kontaktní osoba')}${icoRow('ZAK.ico', 'proj')}${dphRowProj}
         </div>
         <div class="zak-head-col">${variantaRow}${ridiciBtn}${prirazkaRowProj}</div>
       </div>${puvodRadek}
@@ -488,7 +480,7 @@ function zakazkaHlavicka(ock) {
 
   const inner = `<div class="zak-head">
       <div class="zak-head-col">
-        ${txt('ZAK.cislo', 'Číslo nabídky (CN)')}${txt('ZAK.nazevAkce', 'Název akce')}${txt('ZAK.adresa', 'Adresa stavby')}${datumRow}
+        ${txt('ZAK.cislo', 'Číslo nabídky (CN)', dupCislo)}${txt('ZAK.nazevAkce', 'Název akce', dupNazev)}${txt('ZAK.adresa', 'Adresa stavby')}${datumRow}
       </div>
       <div class="zak-head-col">
         ${txt('ZAK.objednatel', 'Objednatel')}${txt('ZAK.kontakt', 'Kontaktní osoba')}${icoRow('ZAK.ico')}${dphRow}
