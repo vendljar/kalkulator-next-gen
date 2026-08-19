@@ -367,16 +367,39 @@ function zakazkaHlavicka(ock) {
   const txt = (path, label) => `<div class="row"><label>${label}</label>
     <input type="text" value="${esc(get(path))}" onchange="set('${path}', this.value)"></div>`;
 
+  /* Hlavička PROJ s přebíráním z OCK (zadání 19. 8. 2026: „po načtení zůstává
+   * hlavička prázdná — potřebuji, aby se info načítalo stejně jako v OCK").
+   * Pole, které v hlavičce PROJ nikdo nevyplnil, UKAZUJE hodnotu z hlavičky
+   * OCK a nese štítek „z OCK" — přesně tak už dávno počítají dokumenty
+   * (projHlavickaEfektivni). Do dat se nic nepropisuje: přepsáním začne
+   * platit vlastní hodnota PROJ, smazáním se zase vrátí ta z OCK. */
+  const txtProj = (klic, label) => {
+    const p = ZAK.projHlavicka || {};
+    const zOck = (typeof projHlavickaZOck === 'function') && projHlavickaZOck(ZAK, klic);
+    const hodnota = zOck ? (ZAK[klic] || '') : (p[klic] == null ? '' : p[klic]);
+    const pill = zOck ? `<span class="pill mut" style="margin-left:12px"
+      title="hlavička PROJ má tohle pole prázdné, hodnota se přebírá z hlavičky OCK; přepsáním začne platit vlastní, smazáním se OCK hodnota vrátí">z OCK</span>` : '';
+    return `<div class="row"><label>${label}${pill}</label>
+      <input type="text" value="${esc(hodnota)}" onchange="set('ZAK.projHlavicka.${klic}', this.value)"></div>`;
+  };
+
   /* IČO objednatele (zadání z 30. 7. 2026) – v hlavičce stojí mezi kontaktní
    * osobou a sazbou DPH. Vedle popisku svítí štítek, když je vyplněné IČO
    * neplatné podle kontrolní číslice. NEBLOKUJE se nic: pole jde uložit
    * i s chybou a nabídka se z něj vytiskne. Stejná chyba se objeví i v panelu
    * kontrol (#33) – tady je hned u pole, kde se opravuje. */
   const icoRow = (path) => {
-    const h = get(path);
+    let h = get(path);
+    /* IČO v hlavičce PROJ přebírá hodnotu z OCK stejně jako textová pole
+     * (txtProj) — jen zobrazení, zápis míří vždy do hlavičky PROJ. */
+    const zOck = path.indexOf('projHlavicka') >= 0
+      && (typeof projHlavickaZOck === 'function') && projHlavickaZOck(ZAK, 'ico');
+    if (zOck) h = ZAK.ico || '';
     const spatne = (typeof icoVyplneno === 'function') && icoVyplneno(h) && !icoPlatne(h);
-    const pill = spatne ? `<span class="pill warn" style="margin-left:12px"
-      title="osm číslic a kontrolní číslice nesedí – zkontrolujte překlep">neplatné IČO</span>` : '';
+    const pill = (spatne ? `<span class="pill warn" style="margin-left:12px"
+      title="osm číslic a kontrolní číslice nesedí – zkontrolujte překlep">neplatné IČO</span>` : '')
+      + (zOck ? `<span class="pill mut" style="margin-left:12px"
+      title="hlavička PROJ má IČO prázdné, hodnota se přebírá z hlavičky OCK; přepsáním začne platit vlastní">z OCK</span>` : '');
     /* Pod polem stojí dotaz do rejstříku (#10). Je to nabídka, ne krok
      * v postupu – hlavička se dá vyplnit ručně a nabídka odejde i tak. */
     const kde = path.indexOf('projHlavicka') >= 0 ? 'proj' : 'ock';
@@ -445,10 +468,10 @@ function zakazkaHlavicka(ock) {
     // aby byla vidět při počítání nabídky; sazby zůstávají v Ceníku nákladů PROJ.
     const inner = `<div class="zak-head">
         <div class="zak-head-col">
-          ${txt('ZAK.projHlavicka.cislo', 'Číslo nabídky (CN)')}${txt('ZAK.projHlavicka.nazevAkce', 'Název akce')}${txt('ZAK.projHlavicka.adresa', 'Adresa stavby')}${datumRowProj}
+          ${txtProj('cislo', 'Číslo nabídky (CN)')}${txtProj('nazevAkce', 'Název akce')}${txtProj('adresa', 'Adresa stavby')}${datumRowProj}
         </div>
         <div class="zak-head-col">
-          ${txt('ZAK.projHlavicka.objednatel', 'Objednatel')}${txt('ZAK.projHlavicka.kontakt', 'Kontaktní osoba')}${icoRow('ZAK.projHlavicka.ico')}${dphRowProj}
+          ${txtProj('objednatel', 'Objednatel')}${txtProj('kontakt', 'Kontaktní osoba')}${icoRow('ZAK.projHlavicka.ico')}${dphRowProj}
         </div>
         <div class="zak-head-col">${variantaRow}${ridiciBtn}${prirazkaRowProj}</div>
       </div>${puvodRadek}

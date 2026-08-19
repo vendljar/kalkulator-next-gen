@@ -357,6 +357,27 @@ test('zpracovatel bez přihlášení nechává FIRMA_ZPRACOVAL* prázdné (žád
     return s.FIRMA_ZPRACOVAL === '' && s.FIRMA_ZPRACOVAL_TEL === '' && s.FIRMA_ZPRACOVAL_EMAIL === '';
   }));
 
+test('hlavička PROJ ukazuje po načtení tytéž údaje jako OCK (převzaté hodnoty + štítek „z OCK")',
+  await p.evaluate(() => {
+    ZAK.cislo = '2026 - OPR - CN - 0777'; ZAK.nazevAkce = 'Zkouška hlavičky';
+    ZAK.objednatel = 'Objednatel s.r.o.'; ZAK.ico = '25596641';
+    ZAK.projHlavicka.cislo = ZAK_CISLO_PREDLOHA; ZAK.projHlavicka.nazevAkce = '';
+    ZAK.projHlavicka.objednatel = ''; ZAK.projHlavicka.ico = '';
+    prepniTab('proj'); render();
+    const bar = document.querySelector('#page-proj .zak-bar');
+    const html = bar ? bar.innerHTML : '';
+    const maHodnoty = html.includes('2026 - OPR - CN - 0777')
+      && html.includes('Zkouška hlavičky') && html.includes('Objednatel s.r.o.')
+      && html.includes('25596641');
+    const stitky = (html.match(/z OCK/g) || []).length >= 4;
+    ZAK.projHlavicka.nazevAkce = 'Vlastní PROJ název'; render();
+    const html2 = document.querySelector('#page-proj .zak-bar').innerHTML;
+    const vlastni = html2.includes('Vlastní PROJ název')
+      && !html2.includes('Zkouška hlavičky');
+    ZAK.projHlavicka.nazevAkce = '';
+    return maHodnoty && stitky && vlastni;
+  }));
+
 test('aplikace nehlásila chybu do konzole', konzole.length === 0, konzole.slice(0, 3).join(' | '));
 
 await b.close();
