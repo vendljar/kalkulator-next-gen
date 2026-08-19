@@ -250,8 +250,8 @@ SPOLECNA.forEach(id => {
 });
 
 // KL-4: obchodník z Nastavení → Firma
-test('KL-4 jméno obchodníka z Nastavení → Firma',
-  najdi(bo, 'Jméno obchodníka') === D.zpracoval, najdi(bo, 'Jméno obchodníka'));
+test('KL-4 jméno obchodníka bez přihlášení prázdné (nese ho uživatel, 19. 8.)',
+  !najdi(bo, 'Jméno obchodníka'), najdi(bo, 'Jméno obchodníka'));
 
 // KL-6: scoring je odkaz
 const poleScoringP = kp.KRYCI_PROJ_SEKCE.flatMap(s => s.pole).find(p => p.id === 'scoring');
@@ -260,8 +260,8 @@ test('KL-6 scoring je typu link', poleScoringP && poleScoringP.typ === 'link', p
 // KL-7: patička s podpisem v obou verzích
 test('KL-7 BO obsahuje sekci Podpis', sekBo.includes('Podpis'), sekBo.join('|'));
 test('KL-7 Techdata obsahuje sekci Podpis', sekTd.includes('Podpis'), sekTd.join('|'));
-test('KL-7 podpis obchodníka předvyplněn',
-  najdi(bo, 'Podpis obchodníka') === D.zpracoval, najdi(bo, 'Podpis obchodníka'));
+test('KL-7 podpis obchodníka bez přihlášení prázdný (nese ho uživatel, 19. 8.)',
+  !najdi(bo, 'Podpis obchodníka'), najdi(bo, 'Podpis obchodníka'));
 
 // 7) ruční přepis má přednost a nemíchá se s krycím listem OCK
 v.data.kryci = { hodnoty: { obchodnik: 'Jan Novák' } };

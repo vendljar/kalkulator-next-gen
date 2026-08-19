@@ -36,13 +36,16 @@ odhlas();
 test('bez přihlášení není zpracovatel', Z.zpracovatelAktualni() === null);
 {
   const p = Z.zpracovatelPlaceholders(F);
-  test('ZPRAC_JMENO ze zálohy', p.ZPRAC_JMENO === F.zpracoval, p.ZPRAC_JMENO);
-  test('ZPRAC_TEL ze zálohy', p.ZPRAC_TEL === F.zpracovalTelefon, p.ZPRAC_TEL);
-  test('ZPRAC_EMAIL ze zálohy', p.ZPRAC_EMAIL === F.zpracovalEmail, p.ZPRAC_EMAIL);
+  /* Od 19. 8. 2026 je jediným zdrojem přihlášený uživatel — firemní záloha
+   * (Nastavení → Firma → Zpracovatel nabídky) skončila. Bez přihlášení je
+   * blok „Vypracoval" prázdný; dokumenty stejně vznikají jen přihlášené. */
+  test('ZPRAC_JMENO bez přihlášení prázdné', p.ZPRAC_JMENO === '', p.ZPRAC_JMENO);
+  test('ZPRAC_TEL bez přihlášení prázdný', p.ZPRAC_TEL === '', p.ZPRAC_TEL);
+  test('ZPRAC_EMAIL bez přihlášení prázdný', p.ZPRAC_EMAIL === '', p.ZPRAC_EMAIL);
   test('ZPRAC_FUNKCE zůstává prázdná', p.ZPRAC_FUNKCE === '', p.ZPRAC_FUNKCE);
-  /* Firemní symboly se bez přihlášení NEPŘEPISUJÍ – jinak by starší šablony
-   * (v5) najednou ukazovaly něco jiného než dnes. */
-  test('FIRMA_ZPRACOVAL se nepřepisuje', p.FIRMA_ZPRACOVAL === undefined, p.FIRMA_ZPRACOVAL);
+  /* FIRMA_ZPRACOVAL* se vyplňují VŽDY (i prázdné) — ve starší šabloně nesmí
+   * zůstat viset syrový symbol {{FIRMA_ZPRACOVAL}} ani stará osoba. */
+  test('FIRMA_ZPRACOVAL je vždy vyplněný (prázdnem)', p.FIRMA_ZPRACOVAL === '', p.FIRMA_ZPRACOVAL);
   test('bez podpisu se obrázek neposílá',
     JSON.stringify(Z.zpracovatelObrazky()) === '{}', JSON.stringify(Z.zpracovatelObrazky()));
 }
@@ -77,9 +80,9 @@ test('mezery navíc se ořežou', Z.zpracovatelPlaceholders(F).ZPRAC_JMENO === '
 prihlas({ telefon: '' });
 {
   const p = Z.zpracovatelPlaceholders(F);
-  /* Telefon si kolega doplní v Můj profil. Než to udělá, je lepší poslat
-   * firemní číslo na centrálu než nabídku bez jediného kontaktu. */
-  test('chybějící telefon nahradí firemní', p.ZPRAC_TEL === F.zpracovalTelefon, p.ZPRAC_TEL);
+  /* Telefon si kolega doplní v Můj profil — firemní záloha skončila 19. 8.
+   * 2026, do té doby zůstává místo v dokumentu prázdné (nic se nevymýšlí). */
+  test('chybějící telefon zůstává prázdný', p.ZPRAC_TEL === '', p.ZPRAC_TEL);
   test('jméno zůstává uživatelovo', p.ZPRAC_JMENO === 'Ing. Jan Zkušební');
 }
 prihlas({ funkce: '' });
@@ -88,9 +91,9 @@ test('chybějící funkce nic nevymýšlí', Z.zpracovatelPlaceholders(F).ZPRAC_
 prihlas({ jmeno: '', titul: '' });
 {
   const p = Z.zpracovatelPlaceholders(F);
-  /* Účet bez jména je krajní případ (založí se e-mailem). Nabídka pak radši
-   * ukáže firemní jméno, než aby v patičce svítila e-mailová adresa. */
-  test('účet bez jména padá na firemní údaj', p.ZPRAC_JMENO === F.zpracoval, p.ZPRAC_JMENO);
+  /* Účet bez jména je krajní případ (založí se e-mailem). Jméno se nevymýšlí
+   * ani nebere z firmy — administrátor ho doplní v profilu uživatele. */
+  test('účet bez jména nechává jméno prázdné', p.ZPRAC_JMENO === '', p.ZPRAC_JMENO);
 }
 
 prihlas({ podpis: '' });
@@ -98,10 +101,10 @@ test('uživatel bez podpisu neposílá obrázek', JSON.stringify(Z.zpracovatelOb
 
 /* ---------- 4) záloha pro krycí list ---------- */
 odhlas();
-test('krycí list bez přihlášení bere firmu', Z.zpracovatelJmenoProKryci(F) === F.zpracoval);
-test('kontakt bez přihlášení bere firmu',
-  Z.zpracovatelKontaktProKryci(F) === [F.zpracoval, F.zpracovalTelefon, F.zpracovalEmail].join(', '),
-  Z.zpracovatelKontaktProKryci(F));
+test('krycí list bez přihlášení nechává obchodníka prázdného',
+  Z.zpracovatelJmenoProKryci(F) === '', Z.zpracovatelJmenoProKryci(F));
+test('kontakt bez přihlášení je prázdný',
+  Z.zpracovatelKontaktProKryci(F) === '', Z.zpracovatelKontaktProKryci(F));
 prihlas({});
 test('krycí list ukáže přihlášeného', Z.zpracovatelJmenoProKryci(F) === 'Ing. Jan Zkušební');
 test('kontakt ukáže přihlášeného',

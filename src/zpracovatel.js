@@ -13,9 +13,9 @@
  * přihlášení a mění v okně Můj profil) a překládá ho na symboly {{ZPRAC_…}}
  * pro šablonu. Nic si nepamatuje – jediný zdroj pravdy je přihlášení.
  *
- * Firemní údaje zůstávají jako ZÁLOHA. Kalkulačka umí běžet i bez přihlášení
- * (offline, jednosouborové HTML na ploše) a v takovém případě je lepší poslat
- * nabídku s údaji na centrálu než s prázdnou patičkou.
+ * Firemní záloha z Nastavení → Firma SKONČILA 19. 8. 2026 (zadání J. V.);
+ * bez přihlášení zůstává blok „Vypracoval" prázdný — dokumenty stejně
+ * vznikají výhradně přihlášené (online databáze je jediná, #150).
  * ============================================================ */
 
 /* Profil přihlášeného uživatele, nebo null. ONLINE_STAV existuje jen
@@ -37,30 +37,25 @@ function zpracovatelJmeno(z) {
   return [z.titul, z.jmeno].filter(Boolean).join(' ').trim();
 }
 
-function zpracFirma(f, id) {
-  if (typeof firmaHodnota === 'function') return firmaHodnota(f, id) || '';
-  return (f && f[id]) || '';
-}
-
-/* Symboly do šablony. Vrací vždycky ZPRAC_*; FIRMA_ZPRACOVAL* přepisuje jen
- * tehdy, když je někdo přihlášený – starší šablony (v5, v6) mají v bloku
- * „Vypracoval“ právě je a mají ukázat téhož člověka jako nová šablona.
- * Bez přihlášení se firemní symboly nechávají na pokoji, aby se nabídka
- * vygenerovaná offline nezměnila proti tomu, co uživatel zná. */
+/* Symboly do šablony. Od 19. 8. 2026 (zadání J. V.: „měla by se vždy
+ * vyplňovat podle uživatele, který zpracovává nabídku") je JEDINÝM zdrojem
+ * přihlášený uživatel — firemní záloha z Nastavení → Firma skončila spolu
+ * se sekcí „Zpracovatel nabídky" (dávalo smysl, dokud aplikace uživatele
+ * neznala; dnes je online databáze jediná a dokumenty vznikají přihlášené).
+ * FIRMA_ZPRACOVAL* se vyplňují VŽDY (i prázdné) — starší šablony (v5, v6)
+ * je mají v bloku „Vypracoval" a nesmí v nich zůstat viset stará osoba ani
+ * syrový symbol {{…}}. Parametr f zůstává kvůli volajícím, už se nečte. */
 function zpracovatelPlaceholders(f) {
   const z = zpracovatelAktualni();
-  const jmeno = zpracovatelJmeno(z);
   const p = {
-    ZPRAC_JMENO: jmeno || zpracFirma(f, 'zpracoval'),
+    ZPRAC_JMENO: zpracovatelJmeno(z),
     ZPRAC_FUNKCE: (z && z.funkce) || '',
-    ZPRAC_TEL: (z && z.telefon) || zpracFirma(f, 'zpracovalTelefon'),
-    ZPRAC_EMAIL: (z && z.email) || zpracFirma(f, 'zpracovalEmail'),
+    ZPRAC_TEL: (z && z.telefon) || '',
+    ZPRAC_EMAIL: (z && z.email) || '',
   };
-  if (jmeno) {
-    p.FIRMA_ZPRACOVAL = p.ZPRAC_JMENO;
-    p.FIRMA_ZPRACOVAL_TEL = p.ZPRAC_TEL;
-    p.FIRMA_ZPRACOVAL_EMAIL = p.ZPRAC_EMAIL;
-  }
+  p.FIRMA_ZPRACOVAL = p.ZPRAC_JMENO;
+  p.FIRMA_ZPRACOVAL_TEL = p.ZPRAC_TEL;
+  p.FIRMA_ZPRACOVAL_EMAIL = p.ZPRAC_EMAIL;
   return p;
 }
 
@@ -79,7 +74,7 @@ function zpracovatelObrazky() {
  * Dnes ho zná, takže krycí list ukazuje téhož člověka jako nabídka –
  * ruční přepis samozřejmě zůstává (↺ vrátí automatiku). */
 function zpracovatelJmenoProKryci(f) {
-  return zpracovatelJmeno(zpracovatelAktualni()) || zpracFirma(f, 'zpracoval');
+  return zpracovatelJmeno(zpracovatelAktualni());
 }
 function zpracovatelKontaktProKryci(f) {
   const p = zpracovatelPlaceholders(f);

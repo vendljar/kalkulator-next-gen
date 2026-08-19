@@ -64,15 +64,14 @@ const FIRMA_POLE = [
   { id: 'zpusobFakturaceProj', sekce: 'Smluvní standardy', label: 'Způsob fakturace — projekce', symbol: 'FIRMA_FAKTURACE_PROJ' },
   { id: 'rozsahDefinice', sekce: 'Smluvní standardy', label: 'Rozsah díla — čím je definován', symbol: 'FIRMA_ROZSAH' },
 
-  /* --- zpracovatel nabídky (podepsaná osoba v patičce dokumentu) --- */
-  { id: 'zpracoval', sekce: 'Zpracovatel nabídky', label: 'Vypracoval', symbol: 'FIRMA_ZPRACOVAL' },
-  { id: 'zpracovalTelefon', sekce: 'Zpracovatel nabídky', label: 'Telefon zpracovatele', symbol: 'FIRMA_ZPRACOVAL_TEL' },
-  { id: 'zpracovalEmail', sekce: 'Zpracovatel nabídky', label: 'E-mail zpracovatele', symbol: 'FIRMA_ZPRACOVAL_EMAIL' },
+  /* Sekce „Zpracovatel nabídky" zrušena 19. 8. 2026 (zadání J. V.):
+   * zpracovatel se vždy bere z přihlášeného uživatele (zpracovatel.js),
+   * symboly FIRMA_ZPRACOVAL* plní on — firemní pole by jen mátla. */
 ];
 
 /* Pořadí sekcí ve formuláři i v náhledech. */
 const FIRMA_SEKCE = ['Identifikace', 'Sídlo', 'Korespondenční adresa', 'Bankovní spojení',
-  'Kontakty', 'Smluvní standardy', 'Zpracovatel nabídky'];
+  'Kontakty', 'Smluvní standardy'];
 
 /* UKÁZKOVÉ ÚDAJE, NE SKUTEČNÉ.
  *
@@ -116,10 +115,6 @@ const DEFAULT_FIRMA = {
   zpusobFakturaceOck: 'Náš standard / měsíční',
   zpusobFakturaceProj: 'po dokončení jednotlivých stupňů dokumentace',
   rozsahDefinice: 'je definován přílohou ke smlouvě (specifikace)',
-
-  zpracoval: 'Jan Vzorový',
-  zpracovalTelefon: '+420 000 000 000',
-  zpracovalEmail: 'jan.vzorovy@priklad.cz',
 
   /* logo: data URL (obrázek se ukládá přímo v konfiguraci, aby šel přenést) */
   logo: '', logoNazev: '',
@@ -220,7 +215,8 @@ function firmaRadky(f, prekl) {
   pridej('Telefon', firmaHodnota(f, 'telefon'));
   pridej('E-mail', firmaHodnota(f, 'email'));
   pridej('Web', firmaHodnota(f, 'web'));
-  pridej('Vypracoval', firmaHodnota(f, 'zpracoval'));
+  /* „Vypracoval" tu byl do 19. 8. 2026 — teď ho nese přihlášený uživatel
+   * (zpracovatel.js), do firemního výpisu nepatří. */
   return radky;
 }
 

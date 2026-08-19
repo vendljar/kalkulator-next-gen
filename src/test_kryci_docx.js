@@ -66,7 +66,8 @@ test('prefill Zhotovitel z firemních údajů', najdi(bo, 'Zhotovitel') === D.na
 test('prefill Sídlo zhotovitele', najdi(bo, 'Sídlo zhotovitele') === SIDLO, najdi(bo, 'Sídlo zhotovitele'));
 test('prefill IČO / DIČ zhotovitele', najdi(bo, 'IČO / DIČ zhotovitele') === 'IČO: ' + D.ico, najdi(bo, 'IČO / DIČ zhotovitele'));
 test('Techdata NEobsahuje bankovní spojení zhotovitele', najdi(td, 'Bankovní spojení zhotovitele') === null);
-test('prefill Nabídku vypracoval', (najdi(bo, 'Nabídku vypracoval') || '').includes(D.zpracoval), najdi(bo, 'Nabídku vypracoval'));
+test('prefill Nabídku vypracoval je bez přihlášení prázdný (od 19. 8. nese zpracovatele uživatel)',
+  !najdi(bo, 'Nabídku vypracoval'), najdi(bo, 'Nabídku vypracoval'));
 
 /* ---------- opravy krycího listu (#23) ---------- */
 
@@ -109,7 +110,8 @@ test('KL-3 hodnota bez OCK neobsahuje cenu projekce',
   ctxP.hodnota.indexOf(Math.round(rProj.souhrn.celkem).toLocaleString('cs-CZ')) === -1, ctxP.hodnota);
 
 // KL-4: pole, která aplikace zná, se předvyplní
-test('KL-4 jméno obchodníka z Nastavení → Firma', najdi(bo, 'Jméno obchodníka') === D.zpracoval, najdi(bo, 'Jméno obchodníka'));
+test('KL-4 jméno obchodníka bez přihlášení prázdné (nese ho uživatel, 19. 8.)',
+  !najdi(bo, 'Jméno obchodníka'), najdi(bo, 'Jméno obchodníka'));
 test('KL-4 zaměření strojovna z technické specifikace', najdi(bo, 'Zaměření strojovna') === 'Ano', najdi(bo, 'Zaměření strojovna'));
 test('KL-4 prováděcí dokumentace z kalkulace PROJ (DPS)',
   ['Ano', 'Ne'].includes(najdi(bo, 'Prováděcí dokumentace')), najdi(bo, 'Prováděcí dokumentace'));
@@ -137,7 +139,8 @@ test('KL-6 scoring je typu link', poleScoring && poleScoring.typ === 'link', pol
 // KL-7: patička s podpisem
 test('KL-7 BO obsahuje sekci Podpis', sekBo.includes('Podpis'), sekBo.join('|'));
 test('KL-7 Techdata obsahuje sekci Podpis', sekTd.includes('Podpis'), sekTd.join('|'));
-test('KL-7 podpis obchodníka předvyplněn', najdi(bo, 'Podpis obchodníka') === D.zpracoval, najdi(bo, 'Podpis obchodníka'));
+test('KL-7 podpis obchodníka bez přihlášení prázdný (nese ho uživatel, 19. 8.)',
+  !najdi(bo, 'Podpis obchodníka'), najdi(bo, 'Podpis obchodníka'));
 test('KL-7 řádek Informován', labely.includes('Informován'), labely.join('|'));
 
 // 4) ruční přepis má přednost

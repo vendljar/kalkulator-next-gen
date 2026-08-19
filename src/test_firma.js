@@ -100,8 +100,9 @@ test('prázdná země se nepřekládá', fm.firmaPlaceholders({}, () => 'X').FIR
 const r = fm.firmaRadky(F);
 const labely = r.map(x => x[0]);
 test('řádky vynechávají prázdné hodnoty', !labely.includes('DIČ') && !labely.includes('Bankovní spojení'), labely.join('|'));
-test('řádky obsahují název, sídlo, telefon, web, vypracoval',
-  ['Název firmy', 'Sídlo', 'Telefon', 'Web', 'Vypracoval'].every(l => labely.includes(l)), labely.join('|'));
+test('řádky obsahují název, sídlo, telefon, web — a NE vypracoval (od 19. 8. ho nese uživatel)',
+  ['Název firmy', 'Sídlo', 'Telefon', 'Web'].every(l => labely.includes(l))
+  && !labely.includes('Vypracoval'), labely.join('|'));
 test('korespondenční adresa se při shodě se sídlem neduplikuje',
   !labely.includes('Korespondenční adresa'), labely.join('|'));
 test('korespondenční adresa se ukáže, liší-li se',

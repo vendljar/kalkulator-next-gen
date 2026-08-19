@@ -310,6 +310,53 @@ test('režimy výpočtu nesou označení Model 1 / Model 2 (výběr i štítek)'
     return maSelect && maPill;
   }));
 
+test('tlačítka nabídky PROJ jsou poskládaná jako v OCK (modrý tisk, Word bez barvy, tisk první)',
+  await p.evaluate(() => {
+    prepniTab('proj'); render();
+    const html = document.getElementById('page-proj').innerHTML;
+    const iNahled = html.indexOf('nabidkaProjNahled()');
+    const iWord = html.indexOf('nabidkaProjWord()');
+    const nahledPrimary = /class="primary"[^>]*onclick="nabidkaProjNahled\(\)"/.test(html);
+    const wordBezBarvy = !/class="primary"[^>]*onclick="nabidkaProjWord\(\)"/.test(html);
+    return iNahled >= 0 && iWord >= 0 && iNahled < iWord && nahledPrimary && wordBezBarvy;
+  }));
+
+test('smlouvy a plná moc mají modrá (primary) tlačítka',
+  await p.evaluate(() => {
+    const proj = document.getElementById('page-proj').innerHTML;
+    prepniTab('kalk'); render();
+    const kalk = document.getElementById('page-kalk').innerHTML;
+    const prim = (html, volani) => new RegExp('class="primary"[^>]*onclick="' + volani.replace(/[()']/g, x => '\\' + x) + '"').test(html);
+    return prim(proj, "sodWord('sodProj')") && prim(proj, "sodWord('plnaMoc')") && prim(kalk, "sodWord('sod')");
+  }));
+
+test('hlídka verze: štítek je bez rozdílu skrytý a s rozdílem svítí červeně',
+  await p.evaluate(() => {
+    const el = document.getElementById('verzePill');
+    const skryty = el && el.style.display === 'none';
+    ONLINE_STAV.serverVerze = '99.9.9';
+    renderVerzePill();
+    const sviti = el.style.display !== 'none' && /v99\.9\.9/.test(el.textContent)
+      && /[Oo]bnov/.test(el.textContent) && el.className.includes('stara');
+    ONLINE_STAV.serverVerze = '';
+    renderVerzePill();
+    const zaseSkryty = el.style.display === 'none';
+    return skryty && sviti && zaseSkryty;
+  }));
+
+test('Nastavení → Firma už nemá sekci Zpracovatel nabídky',
+  await p.evaluate(() =>
+    !FIRMA_SEKCE.includes('Zpracovatel nabídky')
+    && !JSON.stringify(FIRMA_POLE).includes('ZPRACOVAL')));
+
+test('zpracovatel bez přihlášení nechává FIRMA_ZPRACOVAL* prázdné (žádná firemní záloha)',
+  await p.evaluate(() => {
+    const zaloha = ONLINE_STAV.ja; ONLINE_STAV.ja = null;   // dřívější kontroly se přihlašují
+    const s = zpracovatelPlaceholders(typeof firmaAktualni === 'function' ? firmaAktualni() : null);
+    ONLINE_STAV.ja = zaloha;
+    return s.FIRMA_ZPRACOVAL === '' && s.FIRMA_ZPRACOVAL_TEL === '' && s.FIRMA_ZPRACOVAL_EMAIL === '';
+  }));
+
 test('aplikace nehlásila chybu do konzole', konzole.length === 0, konzole.slice(0, 3).join(' | '));
 
 await b.close();

@@ -65,10 +65,12 @@ function nabidkaProjKarta() {
     ${typeof kontrolyPanel === 'function' ? kontrolyPanel() : ''}
     ${typeof ukazkoveZabranaPanel === 'function' ? ukazkoveZabranaPanel() : ''}
     <div class="btns" style="margin-top:8px">
+      <!-- Pořadí i barvy od 19. 8. 2026 stejné jako v Kalkulaci OCK (zadání J. V.):
+           modrý (primary) je tisk nabídky, Word je vedlejší cesta bez barvy. -->
       <button class="primary"${typeof ukazkoveZabranaAttr === 'function' ? ukazkoveZabranaAttr() : ''}
-        onclick="nabidkaProjWord()">Vytvořit nabídku PROJ (Word)</button>
-      <button${typeof ukazkoveZabranaAttr === 'function' ? ukazkoveZabranaAttr() : ''}
         onclick="nabidkaProjNahled()">Kompletní náhled a tisk nabídky</button>
+      <button${typeof ukazkoveZabranaAttr === 'function' ? ukazkoveZabranaAttr() : ''}
+        onclick="nabidkaProjWord()">Vytvořit nabídku PROJ (Word)</button>
       ${typeof tiskJazykVyber === 'function' ? tiskJazykVyber() : ''}
     </div>
     <div class="note nabidkaProjStav" style="margin-top:6px"></div>

@@ -526,6 +526,22 @@ function renderRezimPill() {
     : 'Model 1 – režim shody s Excelem: vzorce se chovají přesně jako šablona VZOR, včetně jejích osmi zdokumentovaných chyb. Vhodné pro porovnání se staršími nabídkami. Přepnout lze v hlavičce kalkulace.';
 }
 
+/* Hlídka nasazené verze (19. 8. 2026): otevřená stránka × verze na serveru.
+ * Serverovou verzi plní online_ui ze sondy /api/zdravi (při startu a pak
+ * každých 10 minut) — porovnání dělá buildVerzeHlaska v build_info.js. */
+function renderVerzePill() {
+  const el = document.getElementById('verzePill');
+  if (!el) return;
+  const veta = (typeof buildVerzeHlaska === 'function')
+    ? buildVerzeHlaska(typeof buildVerze === 'function' ? buildVerze() : '',
+        (typeof ONLINE_STAV !== 'undefined' && ONLINE_STAV.serverVerze) || '')
+    : '';
+  el.style.display = veta ? '' : 'none';
+  el.textContent = veta;
+  el.title = veta ? 'Nasazení nové dávky otevřenou stránku samo nepřekreslí — obnovte ji. '
+    + 'Zakázka je uložená online, obnovením o nic nepřijdete.' : '';
+}
+
 function renderKalkHlavicka() {
   const el = document.getElementById('kalk-hlavicka');
   if (el) el.innerHTML = zakazkaHlavicka(true);   // v OCK i s přepínačem režimu výpočtu
@@ -1119,6 +1135,7 @@ function renderTelo() {
   if (typeof renderUkazkoveLista === 'function') renderUkazkoveLista();
   if (typeof renderBuildLista === 'function') renderBuildLista();
   renderRezimPill();
+  renderVerzePill();
   renderKalkHlavicka();
   renderInputs(); renderOutputs();
   renderNabidkaOck();

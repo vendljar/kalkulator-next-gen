@@ -67,5 +67,23 @@ test('ani jedna věta nic nepřikazuje ani neblokuje',
 test('čerstvé sestavení nemá co říct', buildStariText(st(0)) === '');
 test('věta bez vstupu nespadne', buildStariText(null) === '' && buildStariText({}) === '');
 
+/* ---------- 7) hlídka nasazené verze (19. 8. 2026) ----------
+ * Aplikace je stránka, která zůstává otevřená celé dny; mezitím se nasadí
+ * nová dávka a člověk počítá na staré verzi, aniž to tuší (v18.8.1 ×
+ * v18.8.2). Hlídka porovná verzi otevřené stránky s verzí ze serveru
+ * (/api/zdravi čte verze.txt z nasazeného repozitáře) a řekne, co dělat. */
+const { buildVerzeHlaska } = require('./build_info.js');
+test('shodné verze mlčí', buildVerzeHlaska('v18.8.2', '18.8.2') === '');
+test('rozdíl verzí vrátí větu s oběma čísly a výzvou k obnovení',
+  /v18\.8\.2/.test(buildVerzeHlaska('v18.8.1', '18.8.2'))
+  && /v18\.8\.1/.test(buildVerzeHlaska('v18.8.1', '18.8.2'))
+  && /[Oo]bnov/.test(buildVerzeHlaska('v18.8.1', '18.8.2')),
+  buildVerzeHlaska('v18.8.1', '18.8.2'));
+test('bez vlastní verze (vývoj, testy) mlčí', buildVerzeHlaska('', '18.8.2') === '');
+test('bez serverové verze mlčí', buildVerzeHlaska('v18.8.1', '') === ''
+  && buildVerzeHlaska('v18.8.1', null) === '');
+test('serverové „neznámá" mlčí', buildVerzeHlaska('v18.8.1', 'neznámá') === '');
+test('v/bez v na začátku nehraje roli', buildVerzeHlaska('18.8.2', 'v18.8.2') === '');
+
 console.log(`\n${ok} prošlo, ${fail} selhalo`);
 process.exit(fail ? 1 : 0);

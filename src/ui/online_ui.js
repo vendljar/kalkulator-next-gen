@@ -32,6 +32,7 @@
 const ONLINE_STAV = {
   bezi: false,       // /api/zdravi odpovědělo → běžíme na serveru s funkcemi
   sondaHotova: false,// první dotaz na /api/zdravi už doběhl (ať tak, či tak)
+  serverVerze: '',   // verze nasazená na serveru (hlídka zastaralé stránky, 19. 8. 2026)
   nouzove: false,    // uživatel vědomě pokračuje bez přihlášení (server neběží)
   /* { email, jmeno, titul, funkce, telefon, role, podpis } po přihlášení.
    * Od 5. 8. 2026 (#145) nese účet i to, čím se člověk podepisuje pod cenovou
@@ -137,6 +138,8 @@ function onlineStart() {
   fetch('/api/zdravi').then(r => (r.ok ? r.json() : null)).then(z => {
     if (!z || !z.ok) return null;
     ONLINE_STAV.bezi = true;
+    ONLINE_STAV.serverVerze = z.verze || '';
+    onlineVerzeHlidkaStart();
     // Cookie relace mohla přežít obnovení stránky – zeptáme se, kdo jsme.
     return fetch('/api/ja', { credentials: 'same-origin' })
       .then(r => (r.ok ? r.json() : null))
@@ -144,6 +147,25 @@ function onlineStart() {
       .catch(() => null);
   }).catch(() => null)
     .then(() => { ONLINE_STAV.sondaHotova = true; if (typeof render === 'function') render(); });
+}
+
+/* Hlídka nasazené verze (19. 8. 2026): stránka zůstává otevřená celé dny,
+ * nasazení nové dávky ji samo nepřekreslí. Každých 10 minut se server zeptáme
+ * na verzi; rozdíl ukáže červený štítek v hlavičce (renderVerzePill). */
+let onlineVerzeCasovac = null;
+function onlineVerzeHlidkaStart() {
+  if (onlineVerzeCasovac) return;
+  onlineVerzeCasovac = setInterval(onlineVerzeTik, 10 * 60 * 1000);
+}
+function onlineVerzeTik() {
+  return fetch('/api/zdravi').then(r => (r.ok ? r.json() : null)).then(z => {
+    if (!z || !z.ok) return false;
+    const nova = z.verze || '';
+    if (nova === ONLINE_STAV.serverVerze) return false;
+    ONLINE_STAV.serverVerze = nova;
+    if (typeof renderVerzePill === 'function') renderVerzePill();
+    return true;
+  }).catch(() => false);
 }
 
 function onlinePrihlas() {

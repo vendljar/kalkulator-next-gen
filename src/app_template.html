@@ -322,6 +322,7 @@
   .kpi-chk { transform:scale(.9); }
   .pill { display:inline-block; font-size:11px; padding:2px 8px; border-radius:99px; background:#e7efe9; color:var(--ok); font-weight:600; }
   .pill.warn { background:#fdf1e3; color:var(--warn); }
+  .pill.stara { background:#fdecec; color:#b3261e; }   /* hlídka zastaralé verze (19. 8. 2026) */
   .pill.mut { background:#eef1f5; color:var(--mut); }
   .note { color:var(--mut); font-size:12px; margin:6px 0; }
   button { font:inherit; padding:7px 14px; border-radius:7px; border:1px solid var(--line); background:#fff; cursor:pointer; }
@@ -629,7 +630,8 @@
   <h1>Kalkulačka __VERZE__</h1>
   <!-- Podtitulek s verzemi šablon zmizel 17. 8. 2026 večer (zadání J. V.) —
        zůstává jen štítek režimu výpočtu. -->
-  <span class="ver"><span id="rezimPill" class="pill warn">výpočet: 1:1 jako Excel (vč. jeho chyb)</span></span>
+  <span class="ver"><span id="rezimPill" class="pill warn">výpočet: 1:1 jako Excel (vč. jeho chyb)</span><span
+    id="verzePill" class="pill stara" style="display:none;margin-left:8px"></span></span>
   <span class="sp"></span>
   <div class="btns">
     <!-- Zpět/Znovu jsou jediná tlačítka hlavičky, která se používají pořád –

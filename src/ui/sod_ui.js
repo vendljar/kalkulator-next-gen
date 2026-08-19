@@ -109,7 +109,7 @@ function sodKarta() {
       smlouvy</b> – zůstane v dokumentu viditelně jako <code>{{SOD_…}}</code> a doplní se ve Wordu.
       Vytištěná smlouva variantu <b>uzamkne</b> stejně jako odeslaná nabídka.</div>
     <div class="btns" style="margin-top:6px">
-      <button${zab} onclick="sodWord('sod')">Vytvořit smlouvu o dílo (Word)</button>
+      <button class="primary"${zab} onclick="sodWord('sod')">Vytvořit smlouvu o dílo (Word)</button>
     </div>
     <div class="note sodStav_sod" style="margin-top:4px"></div>`;
 }
@@ -124,8 +124,8 @@ function sodProjKarta() {
       <b>Plná moc</b> je administrativa k objektu – nese firemní údaje zmocněnce a adresu stavby (z hlavičky
       PROJ, případně OCK); údaje zmocnitele <code>{{PM_…}}</code> se doplní ručně a varianta se <b>nezamyká</b>.</div>
     <div class="btns" style="margin-top:6px">
-      <button${zab} onclick="sodWord('sodProj')">Vytvořit smlouvu o dílo PROJ (Word)</button>
-      <button${zab} onclick="sodWord('plnaMoc')">Vytvořit plnou moc (Word)</button>
+      <button class="primary"${zab} onclick="sodWord('sodProj')">Vytvořit smlouvu o dílo PROJ (Word)</button>
+      <button class="primary"${zab} onclick="sodWord('plnaMoc')">Vytvořit plnou moc (Word)</button>
     </div>
     <div class="note sodStav_sodProj" style="margin-top:4px"></div>
     <div class="note sodStav_plnaMoc"></div>`;

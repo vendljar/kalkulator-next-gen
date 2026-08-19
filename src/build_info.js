@@ -71,6 +71,26 @@ function buildStariText(s) {
     : uvod + ' Není to nutně chyba, ale stojí za ověření, jestli mezitím nevyšel novější.';
 }
 
+/* ------------------------------------------------------------------
+ * HLÍDKA NASAZENÉ VERZE (19. 8. 2026)
+ *
+ * Aplikace je stránka, která zůstává v prohlížeči otevřená celé dny.
+ * Mezitím se na Netlify nasadí nová dávka — a otevřená stránka o tom nemá
+ * jak vědět, takže člověk počítá na starší verzi a diví se, že „aplikace
+ * nese jiný název než GitHub" (v18.8.1 × v18.8.2, hlášeno 19. 8. 2026).
+ * Server verzi zná (/api/zdravi čte verze.txt přibalené k funkcím), stránka
+ * zná tu svoji — tahle funkce je porovná a řekne, co dělat. Nic neblokuje:
+ * rozdělaná práce se obnovením stránky neztrácí (zakázka je online), ale
+ * rozhodnutí je na člověku. */
+function buildVerzeHlaska(moje, serverova) {
+  const ocisti = x => String(x == null ? '' : x).trim().replace(/^v/i, '');
+  const m = ocisti(moje), s = ocisti(serverova);
+  if (!m || !s || s === 'neznámá') return '';
+  if (m === s) return '';
+  return 'Na serveru je nasazená verze v' + s + ', tato otevřená stránka je v' + m
+    + '. Obnovte stránku (Ctrl+F5), ať nepočítáte na starší aplikaci.';
+}
+
 if (typeof module !== 'undefined')
   module.exports = { buildVerze, buildDatum, buildDniOd, buildStari, buildDatumCz,
-                     buildStariText, BUILD_STARI_DNU };
+                     buildStariText, BUILD_STARI_DNU, buildVerzeHlaska };
