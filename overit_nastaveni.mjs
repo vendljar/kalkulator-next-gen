@@ -296,24 +296,23 @@ zkus('do odpojené složky se nezapisuje', odpoj.zapisy === 0);
 zkus('odpojení ve složce nic nesmaže', odpoj.souboru > 0);
 zkus('stav se vyčistí', odpoj.razitko === '');
 
-// 20. karta v Nastavení se vykreslí a mluví srozumitelně
+// 20. karta v Nastavení se od 18. 8. 2026 (#150) NEkreslí — složka skončila
 const ui = await stranka.evaluate(async (pripoj) => {
   const bezSlozky = nastdbBlok();
   eval(pripoj);
   await nastdbNactiZeSlozky();
+  const seSlozkou = nastdbBlok();
   otevriNastaveni();
   const html = document.getElementById('nastaveni-panel').innerHTML;
   zavriNastaveni();
-  return { bezSlozky, jeVPanelu: html.indexOf('Nastavení ve složce') >= 0,
-           zminujeSoubor: html.indexOf('_nastaveni.json') >= 0,
-           zminujeProgram: html.indexOf('_program.json') >= 0,
-           maTlacitko: html.indexOf('nastdbUlozHned()') >= 0 };
+  return { bezSlozky, seSlozkou,
+           jeVPanelu: html.indexOf('Nastavení ve složce') >= 0,
+           radiPripojit: html.indexOf('Připojit ji jde') >= 0 };
 }, pripojSlozku);
-zkus('bez složky karta říká, že se nastavení ztratí', /jen pro tuto relaci/.test(ui.bezSlozky), ui.bezSlozky.slice(0, 80));
-zkus('karta je v Nastavení vidět', ui.jeVPanelu === true);
-zkus('řekne, do kterého souboru se ukládá', ui.zminujeSoubor === true);
-zkus('a že ceny jsou jinde', ui.zminujeProgram === true);
-zkus('nabídne uložení na povel', ui.maTlacitko === true);
+zkus('blok konfigurace ve složce je bez složky prázdný', ui.bezSlozky === '');
+zkus('blok je prázdný i s podstrčenou složkou', ui.seSlozkou === '');
+zkus('karta „Nastavení ve složce" v panelu není', ui.jeVPanelu === false);
+zkus('panel neradí složku připojovat', ui.radiPripojit === false);
 
 zkus('konzole je čistá', chyby.length === 0, chyby.slice(0, 3).join(' | '));
 
