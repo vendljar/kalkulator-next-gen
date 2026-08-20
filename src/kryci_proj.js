@@ -117,18 +117,55 @@ const KRYCI_PROJ_SEKCE = [
     { id: 'dodZpracoval', label: 'Nabídku vypracoval', verze: ['bo', 'techdata'], prefill: c => kryciProjObchodnikKontakt(c.firma), src: 'přihlášený uživatel / Nastavení → Firma' },
     { id: 'hlavniProjektant', label: 'Hlavní projektant (jméno, autorizace)', verze: ['bo', 'techdata'] },
   ] },
+  /* Terminologie i skladba sekce jsou stejné jako v krycím listu OCK
+   * (20. 8. 2026): v aplikaci ZÁKAZNÍK, bankovní údaje bez vlastního
+   * předělu. Pole se `bind` čtou a zapisují TÁŽ data jako OCK — oba krycí
+   * listy jsou tím provázané. */
   { sekce: 'Zákazník (smluvní partner)', pole: [
     { id: 'jmenoPrijmeni', label: 'Jméno a příjmení kontaktu', verze: ['bo'], prefill: c => c.hl.kontakt, src: 'z hlavičky Kalkulace PROJ' },
     { id: 'zakaznik', label: 'Zákazník (smluvní partner)', verze: ['bo', 'techdata'], prefill: c => c.hl.objednatel, src: 'z hlavičky Kalkulace PROJ' },
-    { id: 'kontaktObjednatel', label: 'Kontaktní údaje na objednatele (email, telefon)', verze: ['bo'] },
+    { id: 'kontaktZakaznikTel', label: 'Telefon na zákazníka', verze: ['bo'] },
+    { id: 'kontaktZakaznikEmail', label: 'E-mail na zákazníka', verze: ['bo'] },
     { id: 'ico', label: 'IČO', verze: ['bo'], prefill: c => c.hl.ico, src: 'z hlavičky Kalkulace PROJ' },
-    /* KL-1: sídlo objednatele, ne adresa stavby – ty se běžně liší. */
-    { id: 'adresaZakaznik', label: 'Adresa (sídlo) objednatele', verze: ['bo'], prefill: c => c.hl.adresaObjednatele, src: 'z hlavičky Kalkulace PROJ (sídlo)' },
-    { id: 'fakturacniEmail', label: 'Kontakt na fakturační oddělení (email, telefon)', verze: ['bo'] },
+    { id: 'dic', label: 'DIČ', verze: ['bo'], bind: 'ZAK.dic', prefill: c => c.zak.dic, src: 'hlavička zakázky' },
+    /* KL-1: sídlo zákazníka, ne adresa stavby – ty se běžně liší. */
+    { id: 'adresaZakaznik', label: 'Adresa (sídlo) zákazníka', verze: ['bo'], prefill: c => c.hl.adresaObjednatele, src: 'z hlavičky Kalkulace PROJ (sídlo)' },
+    { id: 'zastBanka', label: 'Bankovní spojení zákazníka', verze: ['bo'], bind: 'ZAK.zastupci.banka', src: 'hlavička zakázky' },
+    { id: 'zastUcet', label: 'Číslo účtu / směrový kód', verze: ['bo'], bind: 'ZAK.zastupci.ucet', src: 'hlavička zakázky' },
+    { id: 'zastZapis', label: 'Zápis v rejstříku (zákazník)', verze: ['bo'], bind: 'ZAK.zastupci.zapis', src: 'hlavička zakázky' },
     { id: 'kontaktStavba', label: 'Kontakt stavba (tel / email)', verze: ['bo', 'techdata'] },
     /* KL-6: ve formuláři je odkaz, ne popis */
     { id: 'scoring', label: 'Scoring Cribis / Pipedrive', verze: ['bo'], typ: 'link', ph: 'https://…' },
   ] },
+  /* Zástupci a kontakty ZÁKAZNÍKA (20. 8. 2026, zadání J. V.).
+   *
+   * Vstupy do smlouvy o dílo, které aplikace dosud neznala a dopisovaly se
+   * ve Wordu. Všechna pole mají `bind` na hlavičku zakázky (`ZAK.zastupci.*`),
+   * takže krycí list OCK a PROJ ukazují a zapisují TÁŽ data — provázání
+   * vzniká samo, nic se nesynchronizuje.
+   *
+   * Telefon a e-mail jsou VŽDY dvě samostatná pole. Slepenec „tel / mail"
+   * se nedá proklikat, vytřídit ani zkontrolovat.
+   *
+   * Osoba ve věcech smluvních je zároveň ta, která smlouvu PODEPISUJE —
+   * proto má pozici a žádná zvláštní podpisová pole tu nejsou. */
+  { sekce: 'Zástupci a kontakty zákazníka', pole: [
+    { id: 'zastSmluvniJmeno', label: 'Ve věcech smluvních — jméno', verze: ['bo'], bind: 'ZAK.zastupci.smluvniJmeno', src: 'hlavička zakázky' },
+    { id: 'zastSmluvniPozice', label: '— pozice (podepisuje smlouvu)', verze: ['bo'], bind: 'ZAK.zastupci.smluvniPozice', src: 'hlavička zakázky' },
+    { id: 'zastSmluvniTel', label: '— telefon', verze: ['bo'], bind: 'ZAK.zastupci.smluvniTel', src: 'hlavička zakázky' },
+    { id: 'zastSmluvniEmail', label: '— e-mail', verze: ['bo'], bind: 'ZAK.zastupci.smluvniEmail', src: 'hlavička zakázky' },
+    { id: 'zastObchodniJmeno', label: 'Ve věcech obchodních — jméno', verze: ['bo'], bind: 'ZAK.zastupci.obchodniJmeno', src: 'hlavička zakázky' },
+    { id: 'zastObchodniTel', label: '— telefon', verze: ['bo'], bind: 'ZAK.zastupci.obchodniTel', src: 'hlavička zakázky' },
+    { id: 'zastObchodniEmail', label: '— e-mail', verze: ['bo'], bind: 'ZAK.zastupci.obchodniEmail', src: 'hlavička zakázky' },
+    /* U technického zástupce chceme VŽDY aspoň jeden kontakt (zadání J. V.):
+     * bez telefonu i e-mailu se na stavbě nemá kdo ozvat. Hlídá kontroly.js. */
+    { id: 'zastTechnickyJmeno', label: 'Ve věcech technických — jméno', verze: ['bo', 'techdata'], bind: 'ZAK.zastupci.technickyJmeno', src: 'hlavička zakázky' },
+    { id: 'zastTechnickyTel', label: '— telefon (nutný telefon NEBO e-mail)', verze: ['bo', 'techdata'], bind: 'ZAK.zastupci.technickyTel', src: 'hlavička zakázky' },
+    { id: 'zastTechnickyEmail', label: '— e-mail (nutný telefon NEBO e-mail)', verze: ['bo', 'techdata'], bind: 'ZAK.zastupci.technickyEmail', src: 'hlavička zakázky' },
+    { id: 'zastFakturyEmail', label: 'Fakturace — e-mail', verze: ['bo'], bind: 'ZAK.zastupci.fakturyEmail', src: 'hlavička zakázky' },
+    { id: 'zastFakturyTel', label: 'Fakturace — telefon', verze: ['bo'], bind: 'ZAK.zastupci.fakturyTel', src: 'hlavička zakázky' },
+  ] },
+
   { sekce: 'Typ smlouvy', pole: [
     { id: 'typSmlouvy', label: 'Typ smlouvy', verze: ['bo'], typ: 'radio', o: ['Naše bez úprav', 'Naše s úpravami', 'Cizí'], prefill: () => 'Naše bez úprav', src: 'výchozí' },
     { id: 'typProjektu', label: 'Typ projektu', verze: ['bo', 'techdata'], typ: 'radio', o: ['Nový projekt (novostavba)', 'Rekonstrukce objektu'], prefill: () => 'Rekonstrukce objektu', src: 'výchozí' },

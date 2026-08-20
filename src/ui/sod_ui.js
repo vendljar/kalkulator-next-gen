@@ -105,8 +105,9 @@ function sodKarta() {
   return `<div class="note" style="font-weight:600;margin-top:14px">Smlouva o dílo — realizace (Word):</div>
     <div class="note">Smlouva se plní <b>stejnými daty jako cenová nabídka</b> (hlavička zakázky, cena bez DPH,
       platební podmínky z krycího listu, firemní údaje) – cenu si nikdy nepočítá sama, takže se s nabídkou
-      nemůže rozejít. Co aplikace nezná – <b>termíny, splátkový kalendář, zástupci objednatele, číslo
-      smlouvy</b> – zůstane v dokumentu viditelně jako <code>{{SOD_…}}</code> a doplní se ve Wordu.
+      nemůže rozejít. <b>Zástupci a kontakty zákazníka</b> i bankovní údaje se od 20. 8. 2026 berou z krycího
+      listu výše. Co aplikace nezná – <b>termíny, splátkový kalendář, číslo smlouvy</b> – zůstane
+      v dokumentu viditelně jako <code>{{SOD_…}}</code> a doplní se ve Wordu.
       Vytištěná smlouva variantu <b>uzamkne</b> stejně jako odeslaná nabídka.</div>
     <div class="btns" style="margin-top:6px">
       <button class="primary"${zab} onclick="sodWord('sod')">Vytvořit smlouvu o dílo (Word)</button>

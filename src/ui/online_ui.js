@@ -31,6 +31,8 @@
 
 const ONLINE_STAV = {
   bezi: false,       // /api/zdravi odpovědělo → běžíme na serveru s funkcemi
+  prostredi: 'ostre',   // 'ostre' | 'test' – z /api/zdravi (proměnná PROSTREDI)
+  prostrediPopis: '',   // volitelný text do pruhu (PROSTREDI_POPIS)
   sondaHotova: false,// první dotaz na /api/zdravi už doběhl (ať tak, či tak)
   serverVerze: '',   // verze nasazená na serveru (hlídka zastaralé stránky, 19. 8. 2026)
   nouzove: false,    // uživatel vědomě pokračuje bez přihlášení (server neběží)
@@ -139,6 +141,10 @@ function onlineStart() {
     if (!z || !z.ok) return null;
     ONLINE_STAV.bezi = true;
     ONLINE_STAV.serverVerze = z.verze || '';
+    /* Testovací web se musí poznat na první pohled (20. 8. 2026) — viz
+     * renderProstrediLista(). */
+    ONLINE_STAV.prostredi = z.prostredi || 'ostre';
+    ONLINE_STAV.prostrediPopis = z.popisProstredi || '';
     onlineVerzeHlidkaStart();
     // Cookie relace mohla přežít obnovení stránky – zeptáme se, kdo jsme.
     return fetch('/api/ja', { credentials: 'same-origin' })
@@ -215,6 +221,9 @@ function onlineOdhlas() {
     ONLINE_STAV.rejstrik = []; ONLINE_STAV.soubor = ''; ONLINE_STAV.razitko = ''; ONLINE_STAV.posledni = '';
     ONLINE_STAV.kdyUlozeno = null;
     ONLINE_STAV.uzivatele = []; ONLINE_STAV.uzivateleNacteno = false; ONLINE_STAV.formHeslo = '';
+    /* Náhled cizího uživatele se odhlášením ruší — po přihlášení nikdy
+     * nikdo nesmí zdědit cizí pohled po předchozím sezení (20. 8. 2026). */
+    if (typeof nahledVypni === 'function' && NAST.nahledUzivatel) { NAST.nahledUzivatel = null; NAST.nahledRole = ''; NAST.nahledMenu = false; }
     ONLINE_STAV.otisky = []; ONLINE_STAV.otiskyNacteno = false;
     ONLINE_STAV.sablonyRejstrik = null;   // šablony patří přihlášeným (#139)
     /* analytika (#26): případná zapnutá heat mapa po odhlášení zhasne
@@ -1073,12 +1082,67 @@ function renderOnlineLista() {
   /* Pořadí a barvy (17. 8. 2026 večer): jméno s funkcí SVĚTLE ZELENĚ, ať je
    * na tmavé liště vidět; přepínač heat mapy stojí až ZA „Změnit heslo". */
   const funkce = ONLINE_STAV.ja.funkce ? ' · ' + ONLINE_STAV.ja.funkce : '';
-  el.innerHTML = `<b style="color:#86e8ad">👤 ${esc(onlineJmenoSTitulem() || ONLINE_STAV.ja.email)}${esc(funkce)}</b>
-    <span style="color:#86e8ad;opacity:.85">(${esc(ONLINE_STAV.ja.role)})</span>
+  /* Jméno v liště je od 20. 8. 2026 zároveň PŘEPÍNAČ NÁHLEDU (zadání J. V.).
+   * Klik na postavičku/jméno rozbalí seznam účtů; v náhledu se zelená
+   * postavička 👤 změní na červené oko 👁 a v liště stojí jméno toho,
+   * jehož očima se administrátor dívá — aby si to nešlo splést s vlastním
+   * pohledem. Nabídka se kreslí jen tomu, kdo má nárok na pohled admina. */
+  const smiNahled = typeof smiPohledAdmina === 'function' && smiPohledAdmina();
+  const nahled = typeof nahledAktivni === 'function' && nahledAktivni();
+  const kdo = nahled ? (NAST.nahledUzivatel.jmeno || NAST.nahledUzivatel.email)
+    : (onlineJmenoSTitulem() || ONLINE_STAV.ja.email);
+  const role = nahled ? NAST.nahledUzivatel.role : ONLINE_STAV.ja.role;
+  const barva = nahled ? '#f87171' : '#86e8ad';
+  const ikona = nahled ? '👁' : '👤';
+  const titulek = nahled
+    ? 'náhled cizího pohledu — kliknutím ho ukončíte'
+    : (smiNahled ? 'kliknutím se podíváte na aplikaci očima jiného uživatele' : '');
+  const jmenoHtml = smiNahled
+    ? `<button class="mini" onclick="nahledMenuPrepni()" title="${esc(titulek)}"
+         style="background:transparent;border-color:${barva};color:${barva};font-weight:700">
+         ${ikona} ${esc(kdo)}${esc(nahled ? '' : funkce)} (${esc(role)})</button>`
+    : `<b style="color:${barva}">${ikona} ${esc(kdo)}${esc(funkce)}</b>
+       <span style="color:${barva};opacity:.85">(${esc(role)})</span>`;
+  el.innerHTML = jmenoHtml + nahledMenuHtml() + `
     <button class="mini" onclick="otevriMujProfil()">Můj profil</button>
     <button class="mini" onclick="otevriZmenaHesla()">Změnit heslo</button>
     ${typeof heatPrepinacHtml === 'function' ? heatPrepinacHtml() : ''}
     <button class="mini" onclick="onlineOdhlas()">Odhlásit</button>`;
+}
+
+/* Rozbalení nabídky náhledu. Seznam účtů si vyžádá, když ho ještě nemá —
+ * jinak by nabídka byla prázdná pro každého, kdo neotevřel Nastavení. */
+function nahledMenuPrepni() {
+  if (typeof smiPohledAdmina !== 'function' || !smiPohledAdmina()) return;
+  NAST.nahledMenu = !NAST.nahledMenu;
+  if (NAST.nahledMenu && !ONLINE_STAV.uzivateleNacteno && typeof onlineUzivateleNacti === 'function') {
+    Promise.resolve(onlineUzivateleNacti()).then(() => render()).catch(() => render());
+  }
+  render();
+}
+
+/* Nabídka pod jménem: „já" + všechny účty kromě mého. */
+function nahledMenuHtml() {
+  if (!NAST.nahledMenu) return '';
+  const nahled = typeof nahledAktivni === 'function' && nahledAktivni();
+  const ja = ONLINE_STAV.ja || {};
+  const ucty = (ONLINE_STAV.uzivatele || []).filter(u => u.email && u.email !== ja.email);
+  const radek = (text, popis, onclick, aktivni) => `<button class="mini" onclick="${onclick}"
+    style="display:block;width:100%;text-align:left;margin:2px 0;${aktivni ? 'font-weight:700' : ''}">
+    ${esc(text)}${popis ? ` <span class="note" style="display:inline">${esc(popis)}</span>` : ''}</button>`;
+  const seznam = ucty.length
+    ? ucty.map(u => radek((u.jmeno || u.email), '· ' + (u.role || 'Obchodník'),
+        `nahledZapni('${escJs(u.email)}')`, nahled && NAST.nahledUzivatel.email === u.email)).join('')
+    : `<div class="note" style="padding:4px 2px">${ONLINE_STAV.uzivateleNacteno
+        ? 'Žádný další účet – uživatele založíte v Nastavení → Uživatelé.'
+        : 'Načítám účty…'}</div>`;
+  return `<div class="nahled-menu noprint">
+    <div class="note" style="font-weight:600;margin-bottom:4px">Prohlížet aplikaci jako:</div>
+    ${radek('Já (' + (ja.jmeno || ja.email) + ')', '· skutečný pohled', 'nahledVypni()', !nahled)}
+    ${seznam}
+    <div class="note" style="margin-top:6px">V náhledu je aplikace jen ke čtení. Server dál ví,
+      že jste administrátor — náhledem se práva nezískávají.</div>
+  </div>`;
 }
 
 /* Jméno tak, jak patří pod nabídku: „Ing. Jiří Lauda". Titul je nepovinný,
@@ -1444,14 +1508,14 @@ function onlineRadekZakazky(z) {
 function onlinePanelZakazky() {
   const radky = uloHledej(ONLINE_STAV.rejstrik, ONLINE_STAV.hledat);
   return `<div class="seznam-ovladani">
-      <input type="text" class="seznam-hledat" placeholder="Hledat číslo, akci, objednatele…"
+      <input type="text" class="seznam-hledat" placeholder="Hledat číslo, akci, zákazníka…"
              value="${esc(ONLINE_STAV.hledat)}" oninput="onlineHledatSet(this.value)">
       <span class="note">${radky.length} z ${ONLINE_STAV.rejstrik.length}</span>
     </div>
     ${radky.length
     ? `<table class="vartbl archtbl">
         <tr><th style="text-align:left">Číslo</th><th style="text-align:left">Akce</th>
-            <th style="text-align:left">Objednatel</th><th>Datum</th><th>Variant</th>
+            <th style="text-align:left">Zákazník</th><th>Datum</th><th>Variant</th>
             <th>Odesláno</th><th>Uloženo</th><th></th></tr>
         ${radky.map(onlineRadekZakazky).join('')}</table>`
     : `<div class="seznam-prazdno">${ONLINE_STAV.rejstrik.length

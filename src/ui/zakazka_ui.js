@@ -94,11 +94,11 @@ function renderZakazka() {
       inp('ZAK.cislo', { type: 'text', l: 'Číslo nabídky (CN)' }) +
       inp('ZAK.nazevAkce', { type: 'text', l: 'Název akce' }) +
       inp('ZAK.adresa', { type: 'text', l: 'Adresa stavby' }) +
-      inp('ZAK.objednatel', { type: 'text', l: 'Objednatel' }) +
+      inp('ZAK.objednatel', { type: 'text', l: 'Zákazník' }) +
       // KL-2: sídlo objednatele je jiná adresa než stavba. Do krycího listu
       // (fakturace, smlouva) patří sídlo; prázdné pole se tam neuvede.
-      inp('ZAK.adresaObjednatele', { type: 'text', l: 'Adresa (sídlo) objednatele' }) +
-      inp('ZAK.kontakt', { type: 'text', l: 'Kontaktní osoba objednatele' }) +
+      inp('ZAK.adresaObjednatele', { type: 'text', l: 'Adresa (sídlo) zákazníka' }) +
+      inp('ZAK.kontakt', { type: 'text', l: 'Kontaktní osoba zákazníka' }) +
       // IČO stojí i tady hned za kontaktní osobou, aby se obě hlavičky četly
       // ve stejném pořadí jako lišta nad kalkulací (zadání z 30. 7. 2026).
       inp('ZAK.ico', { type: 'text', l: 'IČO objednatele' }) +

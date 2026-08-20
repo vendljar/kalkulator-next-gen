@@ -221,16 +221,30 @@ function renderKryci() {
     zakázky a technické specifikace; ruční přepis má přednost (↺ vrátí automatiku). Štítky <b>BO</b> / <b>Tech</b> / <b>BO+Tech</b>
     ukazují, do které verze výstupu pole patří.</div>
     ${typeof ukazkoveZabranaPanel === 'function' ? ukazkoveZabranaPanel() : ''}
-    <div class="btns noprint" style="margin-bottom:10px">
-      <button class="primary"${zab} onclick="kryciWord()">Generovat krycí list (Word) – obě verze</button>
-      <button${zab} onclick="kryciTiskPohled('bo')">Tisk PDF – Backoffice</button>
-      <button${zab} onclick="kryciTiskPohled('techdata')">Tisk PDF – Technické odd.</button>
-    </div>
-    <div class="note noprint" id="kryciStav">Vygenerují se <b>dva</b> soubory: <b>Backoffice</b> (obchodní část) a <b>Techdata</b> (technická část).</div>
     ${sekceHtml}
+    ${kryciTiskBlok(zab)}
   </div>
   ${typeof sodKarta === 'function'
     ? `<div class="noprint" style="margin-top:14px">${card('Smlouva o dílo (OCK)', sodKarta())}</div>` : ''}`;
+}
+
+/* Tisková tlačítka krycího listu (20. 8. 2026, zadání J. V.).
+ *
+ * Přestěhovala se z hlavičky záložky DOLŮ, nad sekci se smlouvou o dílo:
+ * krycí list se vyplňuje odshora dolů a dokument se tvoří až na konci,
+ * stejně jako u nabídky v technické specifikaci.
+ *
+ * „Generovat krycí list (Word) – obě verze" je schované: Word je vedlejší
+ * cesta a obě verze najednou nikdo nechtěl. Funkce `kryciWord()` zůstává —
+ * volá ji registr dokumentů i testy — jen na ni nevede tlačítko.
+ * Modré (primary) jsou obě tiskové cesty do PDF, protože ty se používají. */
+function kryciTiskBlok(zab) {
+  return `<div class="btns noprint" style="margin-top:14px">
+      <button class="primary"${zab} onclick="kryciTiskPohled('bo')">Tisk PDF – Backoffice</button>
+      <button class="primary"${zab} onclick="kryciTiskPohled('techdata')">Tisk PDF – Technické odd.</button>
+    </div>
+    <div class="note noprint" id="kryciStav">Každá verze je <b>samostatný soubor</b>:
+      <b>Backoffice</b> (obchodní část) a <b>Techdata</b> (technická část).</div>`;
 }
 
 /* Tiskový pohled krycího listu → PDF přes tisk prohlížeče. Vždy JEDNA verze

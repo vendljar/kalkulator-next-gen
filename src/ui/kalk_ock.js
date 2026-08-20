@@ -664,9 +664,12 @@ function renderOutputs() {
   document.getElementById('outputs').innerHTML =
     (elSouhrn ? '' : `<div class="card"><div class="body">${hlava}${marzeLista({ cast: 'ock' })}</div></div>`) +
     card('Cenová kalkulace', kalkulace, false, 'ock-kalkulace') +
-    card('Příplatkové položky (ceník variant)', prip, false, 'ock-priplatky') +
+    /* Obě karty mají od 20. 8. 2026 režim sekce (zobrazit/skrýt/srolovat)
+     * stejně jako sekce v tabulce kalkulace — dřív ho neměly, ačkoli je
+     * obchodník vidí jako úplně stejné bloky. */
+    kartaRezim('ock', 'priplatky', 'Příplatkové položky (ceník variant)', prip, 'ock-priplatky') +
     sirotciKarta(r) +
-    (col.admin ? card('Detail mezivýpočtů', det) : '');
+    (col.admin ? kartaRezim('ock', 'detailMezivypoctu', 'Detail mezivýpočtů', det, 'ock-detail') : '');
 }
 
 function zkontrolujTl(key) {

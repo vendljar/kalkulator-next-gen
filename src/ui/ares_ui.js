@@ -88,7 +88,7 @@ function aresRadek(kde, sJednotkou) {
   const muze = typeof icoVyplneno === 'function' && icoVyplneno(hl.ico);
   const tlacitko = `<button class="mini noprint" onclick="aresHledej('${kde}')"
     title="${muze ? 'zeptat se rejstříku ARES, jaká firma pod tímto IČO je'
-                  : 'nejdřív vyplňte IČO objednatele'}"${muze ? '' : ' disabled'}>🔎 Najít firmu v ARES</button>`;
+                  : 'nejdřív vyplňte IČO zákazníka'}"${muze ? '' : ' disabled'}>🔎 Najít firmu v ARES</button>`;
   const panel = (ARES.kde === kde) ? aresPanel(kde) : '';
   const jednotka = sJednotkou ? '<span class="u"></span>' : '';
   return `<div class="row"><label></label><div>${tlacitko}</div>${jednotka}</div>${panel}`;

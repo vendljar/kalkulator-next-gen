@@ -70,6 +70,11 @@ function zamekChranFunkce() {
     }
     if (puvodni._zamek) return;
     const obal = function (...args) {
+      /* Náhled cizího uživatele (20. 8. 2026) je JEN KE ČTENÍ — jinak by
+       * v zakázce zůstala změna, o které nikdo neví, kdo ji udělal.
+       * Ptá se dřív než zámek varianty: v náhledu neplatí ani to, co by
+       * u vlastní odemčené varianty prošlo. */
+      if (typeof nahledStop === 'function' && nahledStop(nazev)) return;
       if (zamekStop()) return;
       return puvodni.apply(this, args);
     };

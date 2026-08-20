@@ -153,13 +153,13 @@ sekZam.polozky.forEach((p, i) => { if (zamVyrazeno[i]) p.vyrazeno = true; });
 
 // KL-1: sídlo objednatele ≠ adresa stavby
 test('KL-1 sídlo objednatele zůstane prázdné, dokud se nevyplní',
-  najdi(bo, 'Adresa (sídlo) objednatele') === '', JSON.stringify(najdi(bo, 'Adresa (sídlo) objednatele')));
+  najdi(bo, 'Adresa (sídlo) zákazníka') === '', JSON.stringify(najdi(bo, 'Adresa (sídlo) zákazníka')));
 // hlavička PROJ je samostatný objekt (globály jsou doplněné nahoře)
 zk.zakazkaKopirujHlavicku(zak, 'doProj');
 zak.projHlavicka.adresaObjednatele = 'Radlická 3185/1c, 150 00 Praha 5';
 test('KL-1 sídlo objednatele se propíše z hlavičky PROJ',
-  najdi(kp.kryciProjData(zak, v, JEKLY, 'bo'), 'Adresa (sídlo) objednatele') === 'Radlická 3185/1c, 150 00 Praha 5',
-  najdi(kp.kryciProjData(zak, v, JEKLY, 'bo'), 'Adresa (sídlo) objednatele'));
+  najdi(kp.kryciProjData(zak, v, JEKLY, 'bo'), 'Adresa (sídlo) zákazníka') === 'Radlická 3185/1c, 150 00 Praha 5',
+  najdi(kp.kryciProjData(zak, v, JEKLY, 'bo'), 'Adresa (sídlo) zákazníka'));
 test('KL-1 hlavička PROJ nese i adresu stavby',
   najdi(kp.kryciProjData(zak, v, JEKLY, 'bo'), 'Adresa stavby') === 'Vzorová 163/17, Praha 10');
 test('KL-1 adresa stavby zůstává adresou stavby',

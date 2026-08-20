@@ -71,6 +71,25 @@ function novaZakazka() {
     // DIČ objednatele (19. 8. 2026): potřebují ho smlouvy o dílo
     // ({{OBJEDNATEL_DIC}}); dotáhne se z ARES spolu s IČO a sídlem.
     dic: '',
+    /* Zástupci a kontakty zákazníka (20. 8. 2026) — vstupy do smluv o dílo.
+     * Jsou vlastností ZAKÁZKY, ne kalkulace: jednatel ani technik na stavbě
+     * se nemění podle toho, jestli počítám šachtu, nebo projekci. Proto sedí
+     * v hlavičce, která je od 19. 8. jedna společná pro OCK i PROJ — oba
+     * krycí listy tak čtou a zapisují TÁŽ pole a jsou provázané samy od sebe.
+     *
+     * Telefon a e-mail mají VŽDY vlastní pole (zadání J. V. 20. 8.), nikdy
+     * jeden slepenec „tel / mail": jen tak se s nimi dá dál pracovat
+     * (proklik, hromadná korespondence, kontrola úplnosti).
+     *
+     * Osoba „ve věcech smluvních" je zároveň ta, která smlouvu podepisuje —
+     * proto má i pozici a žádná zvláštní podpisová pole nejsou. */
+    zastupci: {
+      smluvniJmeno: '', smluvniPozice: '', smluvniTel: '', smluvniEmail: '',
+      obchodniJmeno: '', obchodniTel: '', obchodniEmail: '',
+      technickyJmeno: '', technickyTel: '', technickyEmail: '',
+      fakturyEmail: '', fakturyTel: '',
+      banka: '', ucet: '', zapis: '',
+    },
     // KL-2: adresa stavby (`adresa`) a sídlo objednatele jsou dvě různé věci –
     // developer sídlí v Praze a staví v Ostravě. Krycí list potřebuje obě.
     // Prázdné = sídlo se neuvádí; nikdy se sem nedosazuje adresa stavby.
@@ -403,6 +422,16 @@ function importZakazka(obj) {
     // migrace: DIČ objednatele přibylo 19. 8. 2026 (smlouvy o dílo). Zůstává
     // PRÁZDNÉ ze stejného důvodu jako IČO – odhadnuté DIČ je horší než žádné.
     if (obj.dic == null) obj.dic = '';
+    /* migrace: zástupci a kontakty zákazníka přibyly 20. 8. 2026. Zůstávají
+     * PRÁZDNÉ — z ničeho se nedají odvodit a odhadnutý zástupce by skončil
+     * ve smlouvě. Doplňují se jednotlivě, ať starší zakázka nepřijde o nic,
+     * co v ní už je. */
+    if (!obj.zastupci || typeof obj.zastupci !== 'object') obj.zastupci = {};
+    ['smluvniJmeno', 'smluvniPozice', 'smluvniTel', 'smluvniEmail',
+     'obchodniJmeno', 'obchodniTel', 'obchodniEmail',
+     'technickyJmeno', 'technickyTel', 'technickyEmail',
+     'fakturyEmail', 'fakturyTel', 'banka', 'ucet', 'zapis']
+      .forEach(k => { if (obj.zastupci[k] == null) obj.zastupci[k] = ''; });
     // migrace: úvodní fotka nabídky OCK přibyla později
     if (obj.uvodniFoto == null) obj.uvodniFoto = '';
     if (obj.uvodniFotoNazev == null) obj.uvodniFotoNazev = '';

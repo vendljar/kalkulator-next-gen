@@ -253,6 +253,69 @@ test('a jde rozbalit — po kliknutí jsou řádky zase vidět',
 await page.evaluate(() => { sekceRezimSet('ock.rezie', 'skryt'); });
 await page.waitForTimeout(400);
 
+/* ---------- režim i u KARET, ne jen u sekcí tabulky (20. 8. 2026) ----------
+ * „Příplatkové položky" a „Detail mezivýpočtů" jsou z pohledu obchodníka
+ * stejné bloky jako sekce kalkulace, ale volbu zobrazit/skrýt/srolovat
+ * neměly (dotaz J. V.). Teď ji mají přes kartaRezim(). */
+test('karty Příplatkové položky i Detail mezivýpočtů mají select režimu',
+  await page.evaluate(() => {
+    prepniTab('kalk'); render();
+    const p = document.getElementById('ock-priplatky');
+    const d = document.getElementById('ock-detail');
+    return !!p && !!d && p.innerHTML.includes("sekceRezimSet('ock.priplatky'")
+      && d.innerHTML.includes("sekceRezimSet('ock.detailMezivypoctu'");
+  }));
+test('srolování karty ji zavře (třída closed) a jde rozbalit',
+  await page.evaluate(() => {
+    sekceRezimSet('ock.priplatky', 'srolovat');
+    prepniTab('kalk'); render();
+    const zavrena = document.getElementById('ock-priplatky').classList.contains('closed');
+    sekceRozbal('ock.priplatky');
+    const otevrena = !document.getElementById('ock-priplatky').classList.contains('closed');
+    sekceRezimSet('ock.priplatky', 'zobrazit');
+    return zavrena && otevrena;
+  }));
+
+/* ---------- tisková tlačítka krycích listů (20. 8. 2026) ----------
+ * Přestěhovala se dolů nad smlouvu, Word zmizel z obrazovky (funkce zůstala)
+ * a obě PDF cesty jsou modré. */
+test('krycí list OCK: PDF tlačítka jsou modrá, Word už tlačítko nemá',
+  await page.evaluate(() => {
+    prepniTab('kryci'); if (typeof renderKryci === 'function') renderKryci();
+    const h = document.getElementById('page-kryci').innerHTML;
+    return /class="primary"[^>]*onclick="kryciTiskPohled\('bo'\)"/.test(h)
+      && /class="primary"[^>]*onclick="kryciTiskPohled\('techdata'\)"/.test(h)
+      && !h.includes('kryciWord()') && typeof kryciWord === 'function';
+  }));
+test('a stojí až NAD sekcí se smlouvou o dílo',
+  await page.evaluate(() => {
+    const h = document.getElementById('page-kryci').innerHTML;
+    return h.indexOf("kryciTiskPohled('bo')") < h.indexOf('Smlouva o dílo (OCK)');
+  }));
+test('krycí list PROJ: totéž',
+  await page.evaluate(() => {
+    prepniTab('kryciproj'); if (typeof renderKryciProj === 'function') renderKryciProj();
+    const h = document.getElementById('page-kryciproj').innerHTML;
+    return /class="primary"[^>]*onclick="kryciProjTiskPohled\('bo'\)"/.test(h)
+      && !h.includes('kryciProjWord()') && typeof kryciProjWord === 'function'
+      && h.indexOf("kryciProjTiskPohled('bo')") < h.indexOf('Smlouva o dílo a plná moc (PROJ)');
+  }));
+test('krycí listy mluví o ZÁKAZNÍKOVI, ne o objednateli (objednatel je pojem smluvní)',
+  await page.evaluate(() => {
+    const h = document.getElementById('page-kryciproj').innerHTML;
+    prepniTab('kryci'); if (typeof renderKryci === 'function') renderKryci();
+    const o = document.getElementById('page-kryci').innerHTML;
+    const bezObjednatele = x => !/objednatel/i.test(x.replace(/OBJEDNATEL_[A-Z_]+/g, ''));
+    return bezObjednatele(h) && bezObjednatele(o)
+      && o.includes('Adresa (sídlo) zákazníka') && o.includes('Zástupci a kontakty zákazníka');
+  }));
+test('telefon a e-mail mají všude vlastní pole (žádný slepenec „tel / mail")',
+  await page.evaluate(() => {
+    const h = document.getElementById('page-kryci').innerHTML;
+    return h.includes('ZAK.zastupci.technickyTel') && h.includes('ZAK.zastupci.technickyEmail')
+      && h.includes('ZAK.zastupci.smluvniPozice');
+  }));
+
 /* ---------- sloupec Výchozí (20. 8. 2026) ----------
  * Zaškrtnutí neplatí pro otevřenou zakázku, ale pro každou NOVOU: ukládá se
  * do matice (klíč `vychozi`) a novou zakázku upraví zobrazeniVychoziAplikuj.

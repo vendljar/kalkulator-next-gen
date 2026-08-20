@@ -26,7 +26,12 @@ const KAM = '/home/claude/work/deliver';
  * a harness by pak kontroloval starou příručku a hlásil nesmyslné chyby. */
 const cislaVerze = (f) => (f.match(/v(\d+)\.(\d+)\.(\d+)/) || []).slice(1).map(Number);
 const soubor = readdirSync(KAM)
-  .filter((f) => /^MANUAL_OBCHODNIK_v.*\.html$/.test(f))
+  /* Od 20. 8. 2026 mají výstupy dávky jméno v ISO tvaru
+   * `RRRR-MM-DD_kalkulator_v<verze>_<druh>.<přípona>` — sorted podle jména
+   * je tak zároveň seřazeno podle času. Starší tvar `MANUAL_OBCHODNIK_v*.html`
+   * se dál uznává, ať se historické příručky nepřestanou hlídat. */
+  .filter((f) => /^MANUAL_OBCHODNIK_v.*\.html$/.test(f)
+    || /^\d{4}-\d{2}-\d{2}_kalkulator_v.*_MANUAL_OBCHODNIK\.html$/.test(f))
   .sort((a, b) => {
     const x = cislaVerze(a), y = cislaVerze(b);
     for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0);
@@ -52,7 +57,22 @@ test('obsahuje 25 zapečených snímků',
 test('kapitola o červené liště je uvnitř', /Vidím červenou lištu/.test(html));
 test('varování o zkušebních číslech je uvnitř',
   /nejsou naše ceny/i.test(html));
-test('příručka nese verzi aplikace v5.8', /v5\.8/.test(html));
+/* Verze se hlídá proti verze.txt, ne proti napsanému číslu (20. 8. 2026):
+ * pevné „v5.8" v testu znamenalo, že zastaralá příručka procházela zeleně
+ * ještě dva týdny po vydání nové aplikace. */
+const verzeApp = readFileSync(new URL('./verze.txt', import.meta.url), 'utf8').trim();
+test('příručka nese AKTUÁLNÍ verzi aplikace (v' + verzeApp + ')',
+  html.includes('v' + verzeApp), verzeApp);
+test('příručka popisuje obnovu rozpracované kalkulace',
+  /Rozpracovanou kalkulaci neztratíte|Obnovit rozpracovanou kalkulaci/.test(html));
+test('příručka popisuje přidávání položek (vlastní × trvalé)',
+  /\+ přidat položku trvale/.test(html) && /platí jen v téhle zakázce/i.test(html));
+test('příručka popisuje skryté a srolované sekce',
+  /srolovat/i.test(html) && /skrytá sekce <b>se dál počítá<\/b>|se dál počítá/i.test(html));
+test('příručka říká, kde se tvoří smlouva o dílo',
+  /Krycí list zakázky OCK/.test(html) && /Kde se tvoří dokumenty/.test(html));
+test('příručka používá pojem zákazník, ne objednatel',
+  /v aplikaci se všude říká „zákazník"|Zástupci a kontakty zákazníka/i.test(html));
 test('žádné skutečné ceníkové soubory v textu',
   !/cenik_skutecny|_soukrome/.test(html));
 test('žádná hesla v textu',

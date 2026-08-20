@@ -136,7 +136,55 @@ await page.fill('#onlineUzHeslo', 'ObchodniHeslo1');
 await page.click('#nastaveni-panel >> text=Založit účet');
 await page.waitForFunction(() => { try { return ONLINE_STAV.uzivatele.length === 2; } catch (e) { return false; } });
 await page.evaluate(() => zavriNastaveni());
+
+/* ---------- 1b) náhled POHLEDEM KONKRÉTNÍHO UŽIVATELE (20. 8. 2026) ----------
+ * Do 20. 8. šla přepnout jen ROLE („nějaký obchodník"). Zadání J. V.: chci
+ * vidět, co uvidí Petr Novák, a přepínat to klikem na jméno vpravo nahoře. */
+test('v liště je jméno klikací (přepínač náhledu) a postavička je zelená',
+  await page.evaluate(() => {
+    const h = document.getElementById('onlineLista').innerHTML;
+    return h.includes('nahledMenuPrepni()') && h.includes('👤') && h.includes('#86e8ad');
+  }));
+test('nabídka náhledu vypíše založený účet',
+  await page.evaluate(() => {
+    nahledMenuPrepni();
+    return document.getElementById('onlineLista').innerHTML.includes('obchodnik@engineers-cz.cz');
+  }));
+test('zapnutí náhledu převezme roli vybraného účtu',
+  await page.evaluate(() => {
+    nahledZapni('obchodnik@engineers-cz.cz');
+    return nahledAktivni() && NAST.nahledUzivatel.role === 'Obchodník'
+      && NAST.jeAdmin === false && zobrazeniRole() === 'Obchodník';
+  }));
+test('postavička se změní na červené oko a v liště svítí jméno náhledu',
+  await page.evaluate(() => {
+    const h = document.getElementById('onlineLista').innerHTML;
+    return h.includes('👁') && h.includes('#f87171') && h.includes('Petr Novák');
+  }));
+test('přes celou šířku svítí pruh náhledu',
+  await page.evaluate(() => {
+    const h = document.getElementById('nahledLista').innerHTML;
+    return h.includes('Náhled: Petr Novák') && h.includes('Ukončit náhled');
+  }));
+test('v náhledu se do zakázky nic nezapíše (jen ke čtení)',
+  await page.evaluate(() => {
+    const pred = ZAK.nazevAkce;
+    let hlaska = '';
+    const puvodniAlert = window.alert; window.alert = t => { hlaska = t; };
+    tsSet('nazevAkce', 'ZKOUŠKA V NÁHLEDU');
+    window.alert = puvodniAlert;
+    return ZAK.nazevAkce === pred && /náhledu se nic nezapisuje/.test(hlaska);
+  }));
+test('ukončení náhledu vrátí pohled administrátora',
+  await page.evaluate(() => {
+    nahledVypni();
+    return !nahledAktivni() && NAST.jeAdmin === true
+      && document.getElementById('nahledLista').innerHTML === '';
+  }));
+
 await odhlas();
+test('odhlášením se náhled zruší (nikdo nesmí zdědit cizí pohled)',
+  await page.evaluate(() => !nahledAktivni() && !NAST.nahledUzivatel));
 
 /* ---------- 2) obchodník: pohled administrátora nedostane ---------- */
 

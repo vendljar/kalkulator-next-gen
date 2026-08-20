@@ -139,5 +139,43 @@ const po = nahradPlaceholdery(xml, sod.placeholders);
 test('známý symbol se vyplní, neznámý zůstane viditelný',
   po.includes('SVJ Zkušební 9') && po.includes('{{SOD_TERMIN_MONTAZ_OD}}'), po);
 
+/* ---- zástupci a kontakty zákazníka (20. 8. 2026) ---------------------------
+ * Symboly, které do 20. 8. zůstávaly ve smlouvě prázdné. Sada hlídá tři věci:
+ * telefon a e-mail jsou v aplikaci DVĚ pole a slepenec vzniká až tady;
+ * osoba ve věcech smluvních plní i podpisovou doložku (je to týž člověk);
+ * a prázdné pole se nikdy nevloží jako prázdno — symbol musí zůstat vidět. */
+const zakZ = JSON.parse(JSON.stringify(zak));
+zakZ.zastupci = {
+  smluvniJmeno: 'Ing. Petr Sedlák', smluvniPozice: 'předseda výboru',
+  smluvniTel: '+420 601 111 222', smluvniEmail: 'sedlak@svj.cz',
+  obchodniJmeno: 'Jana Malá', obchodniTel: '+420 602 333 444', obchodniEmail: '',
+  technickyJmeno: 'Karel Technik', technickyTel: '', technickyEmail: 'technik@svj.cz',
+  fakturyEmail: 'faktury@svj.cz', fakturyTel: '',
+  banka: 'Komerční banka, a.s.', ucet: '123456789/0100', zapis: 'spolkový rejstřík MS v Praze',
+};
+const ph = sodData(zakZ, v, JEKLY, 'cz').placeholders;
+test('bankovní a rejstříkové údaje zákazníka se vyplní',
+  ph.OBJEDNATEL_BANKA === 'Komerční banka, a.s.' && ph.OBJEDNATEL_UCET === '123456789/0100'
+  && ph.OBJEDNATEL_ZAPIS === 'spolkový rejstřík MS v Praze');
+test('zástupce ve věcech smluvních nese jméno i pozici',
+  ph.OBJEDNATEL_ZASTUPCE_SMLUVNI === 'Ing. Petr Sedlák, předseda výboru', ph.OBJEDNATEL_ZASTUPCE_SMLUVNI);
+test('a je to zároveň podepisující osoba (žádná zvláštní podpisová pole)',
+  ph.OBJEDNATEL_PODPIS_JMENO === 'Ing. Petr Sedlák' && ph.OBJEDNATEL_PODPIS_FUNKCE === 'předseda výboru');
+test('telefon a e-mail se slepí až do dokumentu, každý z vlastního pole',
+  ph.OBJEDNATEL_ZASTUPCE_OBCHODNI_KONTAKT === '+420 602 333 444'
+  && ph.OBJEDNATEL_ZASTUPCE_TECHNICKY_KONTAKT === 'technik@svj.cz',
+  ph.OBJEDNATEL_ZASTUPCE_OBCHODNI_KONTAKT + ' | ' + ph.OBJEDNATEL_ZASTUPCE_TECHNICKY_KONTAKT);
+test('nevyplněný symbol se NEplní prázdnem (zůstane {{…}} v dokumentu)',
+  ph.SOD_TERMIN_DOKONCENI === undefined && ph.OBJEDNATEL_ZASTUPCE_OBCHODNI === 'Jana Malá');
+
+const { sodVedouciMontaziDoplna } = require('./sod.js');
+const vedM = sodVedouciMontaziDoplna({ FIRMA_VEDOUCI_MONTAZI: 'Tomáš Montér',
+  FIRMA_VEDOUCI_MONTAZI_TEL: '+420 603 555 666', FIRMA_VEDOUCI_MONTAZI_EMAIL: 'monter@firma.cz' });
+test('vedoucí montáží se překládá z firemního údaje na smluvní symbol',
+  vedM.SOD_VEDOUCI_MONTAZI === 'Tomáš Montér'
+  && vedM.SOD_VEDOUCI_MONTAZI_KONTAKT === '+420 603 555 666 / monter@firma.cz');
+test('a bez firemního údaje se symbol nevyrobí',
+  sodVedouciMontaziDoplna({}).SOD_VEDOUCI_MONTAZI === undefined);
+
 console.log('\nPASS=' + passes + ' FAIL=' + fails);
 process.exit(fails ? 1 : 0);

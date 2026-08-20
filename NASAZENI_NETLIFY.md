@@ -54,6 +54,30 @@ sám v Netlify (nikdy se neposílají konverzací ani nepatří do repozitáře)
   ji v Site configuration → Site protection — aplikace už má vlastní
   přihlašování.
 
+## Testovací web s vlastní databází (20. 8. 2026)
+
+Netlify Blobs jsou vázané na konkrétní site, takže **druhý web má vlastní
+databázi automaticky** — zakázky, ceníky, účty i matice zobrazení jsou dvě
+oddělené sady. Pro testovací kalkulačku tedy stačí:
+
+1. Netlify → **Add new site → Import an existing project** → týž repozitář;
+   v *Build & deploy → Branches* nastav *Production branch* na `test`.
+2. Environment variables té nové site:
+   - `TAJEMSTVI_RELACE` — **jiné než na ostrém webu** (jinak by cookie z testu
+     platila i v ostré aplikaci),
+   - `ADMIN_INIT_HESLO` — první přihlášení zakládá účet; jde jen o adresu
+     `vendl.jaroslav@engineers-cz.cz` (konstanta `ADMIN_EMAIL`),
+   - `PROSTREDI=test` — aplikace pak na každé záložce ukáže **červený pruh
+     „TESTOVACÍ PROSTŘEDÍ"**; pruh se tiskne i do PDF, aby se dokument z testu
+     nedal splést s ostrým,
+   - `PROSTREDI_POPIS` — nepovinný text do pruhu.
+3. **Deploys → Trigger deploy** — proměnné se do funkcí propíšou až nasazením.
+
+Bez `TAJEMSTVI_RELACE` skončí přihlášení chybou, i když je heslo správné; bez
+`ADMIN_INIT_HESLO` se nemá jak založit první účet (databáze nového webu je
+prázdná). Odpovídá-li web 401, je zapnutá ochrana Netlify — vypni ji
+v *Site protection*, aplikace má vlastní přihlašování.
+
 ## Každá další verze
 
 Nahraješ dávky na GitHub (jako dosud) → Netlify si změny sám stáhne,

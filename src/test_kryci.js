@@ -294,9 +294,9 @@ test('do dokumentu se propíše IČO objednatele z hlavičky',
 /* KL-1: sídlo objednatele, ne adresa stavby – ty se běžně liší a do
  * smlouvy patří sídlo. */
 test('adresa objednatele v dokumentu je sídlo, ne adresa stavby',
-  najdiRadek(dBo, 'Adresa (sídlo) objednatele') === zak.adresaObjednatele
-  && najdiRadek(dBo, 'Adresa (sídlo) objednatele') !== zak.adresa,
-  najdiRadek(dBo, 'Adresa (sídlo) objednatele'));
+  najdiRadek(dBo, 'Adresa (sídlo) zákazníka') === zak.adresaObjednatele
+  && najdiRadek(dBo, 'Adresa (sídlo) zákazníka') !== zak.adresa,
+  najdiRadek(dBo, 'Adresa (sídlo) zákazníka'));
 test('ruční hodnota se propíše do obou verzí listu', (() => {
   const vr = zk.novaVarianta('Ruční', JSON.parse(JSON.stringify(v.data)));
   vr.data.kryci.hodnoty.podpisInformovan = 'Jan Zkušební';

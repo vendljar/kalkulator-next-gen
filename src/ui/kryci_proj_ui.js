@@ -143,16 +143,22 @@ function renderKryciProj() {
     se vypíše jako <b>„není součástí nabídky“</b> – nikdy nulou ani odhadem. Štítky <b>BO</b> / <b>Tech</b> / <b>BO+Tech</b>
     ukazují, do které verze výstupu pole patří.</div>
     ${typeof ukazkoveZabranaPanel === 'function' ? ukazkoveZabranaPanel() : ''}
-    <div class="btns noprint" style="margin-bottom:10px">
-      <button class="primary"${zab} onclick="kryciProjWord()">Generovat krycí list PROJ (Word) – obě verze</button>
-      <button${zab} onclick="kryciProjTiskPohled('bo')">Tisk PDF – Backoffice</button>
-      <button${zab} onclick="kryciProjTiskPohled('techdata')">Tisk PDF – Technické odd.</button>
-    </div>
-    <div class="note noprint" id="kryciProjStav">Vygenerují se <b>dva</b> soubory: <b>Backoffice</b> (obchodní část) a <b>Techdata</b> (technická část).</div>
     ${sekceHtml}
+    ${kryciProjTiskBlok(zab)}
   </div>
   ${typeof sodProjKarta === 'function'
     ? `<div class="noprint" style="margin-top:14px">${card('Smlouva o dílo a plná moc (PROJ)', sodProjKarta())}</div>` : ''}`;
+}
+
+/* Tisková tlačítka krycího listu PROJ — stejné pravidlo jako v OCK
+ * (20. 8. 2026): dolů nad smlouvu, Word schovaný, obě PDF cesty modré. */
+function kryciProjTiskBlok(zab) {
+  return `<div class="btns noprint" style="margin-top:14px">
+      <button class="primary"${zab} onclick="kryciProjTiskPohled('bo')">Tisk PDF – Backoffice</button>
+      <button class="primary"${zab} onclick="kryciProjTiskPohled('techdata')">Tisk PDF – Technické odd.</button>
+    </div>
+    <div class="note noprint" id="kryciProjStav">Každá verze je <b>samostatný soubor</b>:
+      <b>Backoffice</b> (obchodní část) a <b>Techdata</b> (technická část).</div>`;
 }
 
 /* Tiskový pohled krycího listu PROJ → PDF přes tisk prohlížeče. Vždy JEDNA

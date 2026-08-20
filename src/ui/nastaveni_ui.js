@@ -826,6 +826,10 @@ function zobrPredloha(ktera) {
  * přes `nastSetAdmin(false)` — tím se z NAST.jeAdmin stane false a rozhraní
  * začne chodit maticí; `nahledRole` řekne, ČÍ pohled to je. */
 function zobrNahled(role) {
+  /* Volba ROLE a náhled konkrétního účtu jsou dvě podoby téhož přepínače —
+   * proto se navzájem ruší (20. 8. 2026). Jinak by v liště svítilo jméno
+   * uživatele, ale rozhraní by se řídilo jinou rolí. */
+  NAST.nahledUzivatel = null;
   NAST.nahledRole = role || '';
   if (role) nastSetAdmin(false); else nastSetAdmin(true);
 }
@@ -886,16 +890,28 @@ function nastZobrazeni() {
     <div class="note">Dokud nastavení nezveřejníte, platí jen vám a po odhlášení se ztratí —
       matice bydlí na serveru, protože obchodník ani vedoucí složku <code>_DB</code> nemapují.</div>
 
-    <div class="sec-title">Náhled cizí role</div>
+    <div class="sec-title">Náhled pohledem uživatele</div>
     <div class="kl-radio">
       <label><input type="radio" name="nastNahled" ${NAST.jeAdmin ? 'checked' : ''}
         onchange="zobrNahled('')"> Administrátor (skutečný pohled)</label>
       ${ZOBRAZENI_ROLE_PRIDELITELNE.map(r => `<label><input type="radio" name="nastNahled"
-        ${!NAST.jeAdmin && NAST.nahledRole === r ? 'checked' : ''}
-        onchange="zobrNahled('${escJs(r)}')"> ${esc(r)} (náhled)</label>`).join('')}
+        ${!NAST.jeAdmin && !nahledAktivni() && NAST.nahledRole === r ? 'checked' : ''}
+        onchange="zobrNahled('${escJs(r)}')"> ${esc(r)} (obecný náhled role)</label>`).join('')}
     </div>
-    <div class="note">Náhled přepíná jen to, co je vidět na obrazovce. Co se smí skutečně
-      provést, hlídá server podle role účtu — náhledem se práva nezískávají.</div>
+    <div class="row" style="margin-top:8px">
+      <label>Prohlížet aplikaci jako konkrétní účet</label>
+      <select onchange="this.value ? nahledZapni(this.value) : nahledVypni()">
+        <option value="">— skutečný pohled —</option>
+        ${(ONLINE_STAV.uzivatele || []).filter(u => u.email && u.email !== (ONLINE_STAV.ja || {}).email)
+          .map(u => `<option value="${esc(u.email)}" ${nahledAktivni() && NAST.nahledUzivatel.email === u.email ? 'selected' : ''}>${esc(u.jmeno || u.email)} · ${esc(u.role || 'Obchodník')}</option>`).join('')}
+      </select><span class="u"></span>
+    </div>
+    <div class="note">Náhled se dá zapnout i <b>klikem na vlastní jméno vpravo nahoře</b> — zelená
+      postavička 👤 se v náhledu změní na červené oko 👁 a přes celou šířku svítí oranžový pruh.
+      Seznam účtů se bere z panelu <b>Uživatelé</b>; když je prázdný, otevřete ho jednou, ať se načte.</div>
+    <div class="note">Náhled přepíná jen to, co je vidět na obrazovce, a je <b>jen ke čtení</b> —
+      v cizím pohledu se nic nezapíše, aby v zakázce nezůstala změna bez jasného autora.
+      Co se smí skutečně provést, hlídá server podle role účtu — náhledem se práva nezískávají.</div>
 
     ${skupiny}`;
 }

@@ -57,6 +57,14 @@ const NAST = {
    * administrátora. Prázdno = Obchodník. Běžného uživatele se to netýká –
    * jeho role chodí ze serveru a předstírat cizí nejde. */
   nahledRole: '',
+  /* Náhled KONKRÉTNÍHO uživatele (20. 8. 2026). Náhled role výše říká „co
+   * uvidí nějaký obchodník"; tohle říká „co uvidí Petr Novák". Drží
+   * { email, jmeno, role }; null = dívám se svýma očima. Přepíná se v pravém
+   * horním rohu klikem na jméno a v Nastavení → Zobrazení. Náhled je vždy
+   * JEN KE ČTENÍ (zamek_ui.js) a po odhlášení i po obnovení stránky se ruší:
+   * nikdo se nesmí omylem dívat cizíma očima a myslet si, že jsou jeho. */
+  nahledUzivatel: null,
+  nahledMenu: false,           // rozbalená nabídka náhledu pod jménem v liště
   jazyk: 'cz',                 // jazyk dokumentů: cz | en | de | fr (N1 – jazykové mutace)
 
   // --- Firemní údaje pro dokumenty (SET-3; jen admin) – viz firma.js ---
@@ -135,6 +143,75 @@ function smiPohledAdmina() {
  * pořídit otisk databáze smí podle netlify/functions/* jen administrátor
  * a upravený prohlížeč s tím nic nesvede. Tohle je vrstva pohodlí — co má
  * kdo na obrazovce, ne co smí provést. */
+/* ---------- náhled pohledem konkrétního uživatele (20. 8. 2026) ---------- */
+
+function nahledAktivni() { return !!(NAST.nahledUzivatel && NAST.nahledUzivatel.email); }
+
+/* Zapnutí: role vybraného účtu se stane rolí rozhraní. Pohled administrátora
+ * se zhasne (`NAST.jeAdmin = false`), jinak by matice vůbec nezačala platit —
+ * stejná mechanika jako u náhledu role, jen s konkrétním člověkem. */
+function nahledZapni(email) {
+  if (typeof smiPohledAdmina === 'function' && !smiPohledAdmina()) return;
+  const u = ((typeof ONLINE_STAV !== 'undefined' && ONLINE_STAV.uzivatele) || [])
+    .find(x => x.email === email);
+  if (!u) return;
+  NAST.nahledUzivatel = { email: u.email, jmeno: u.jmeno || u.email, role: u.role || 'Obchodník' };
+  NAST.nahledRole = NAST.nahledUzivatel.role;
+  NAST.jeAdmin = false;
+  NAST.nahledMenu = false;
+  render();
+}
+
+function nahledVypni() {
+  NAST.nahledUzivatel = null;
+  NAST.nahledRole = '';
+  NAST.jeAdmin = true;
+  NAST.nahledMenu = false;
+  render();
+}
+
+/* Zápis se v náhledu neprovede. Vrací true = „zastaveno", takže volající
+ * funkce se vrátí bez změny. Stejný tvar jako zamekStop() v zamek.js. */
+function nahledStop(popis) {
+  if (!nahledAktivni()) return false;
+  const kdo = NAST.nahledUzivatel.jmeno || NAST.nahledUzivatel.email;
+  alert('Prohlížíte aplikaci jako ' + kdo + ' — v náhledu se nic nezapisuje.\n\n'
+    + (popis ? 'Akce: ' + popis + '\n\n' : '')
+    + 'Náhled ukončíte kliknutím na jméno vpravo nahoře; pak se změna zapíše pod vaším jménem.');
+  return true;
+}
+
+/* Červený pruh TESTOVACÍHO webu (20. 8. 2026).
+ *
+ * Testovací kalkulačka běží na vlastní Netlify site, a má tedy i vlastní
+ * databázi (Blobs jsou per-site) — data se s ostrým provozem nepotkají.
+ * Zbývá jediné riziko: dvě stejně vypadající kalkulačky vedle sebe svádějí
+ * k tomu udělat nabídku v testu a poslat ji zákazníkovi. Pruh je proto
+ * NEPŘEHLÉDNUTELNÝ a je na každé záložce. Ostrý web nemá nic navíc:
+ * bez proměnné PROSTREDI=test se nekreslí. */
+function renderProstrediLista() {
+  const el = document.getElementById('prostrediLista');
+  if (!el) return;
+  const t = (typeof ONLINE_STAV !== 'undefined' && ONLINE_STAV) ? ONLINE_STAV : {};
+  if (t.prostredi !== 'test') { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="prostredi-pruh">🧪
+    <span><b>TESTOVACÍ PROSTŘEDÍ</b> — vlastní databáze, ostrých dat se nedotkne.
+      ${esc(t.prostrediPopis || 'Nabídky odsud neposílejte zákazníkům.')}</span></div>`;
+}
+
+/* Oranžový pruh přes celou šířku — je vidět na každé záložce, takže se nedá
+ * zapomenout, že se člověk dívá cizíma očima. */
+function renderNahledLista() {
+  const el = document.getElementById('nahledLista');
+  if (!el) return;
+  if (!nahledAktivni()) { el.innerHTML = ''; return; }
+  const u = NAST.nahledUzivatel;
+  el.innerHTML = `<div class="nahled-pruh">👁
+    <span><b>Náhled: ${esc(u.jmeno || u.email)}</b> (${esc(u.role)}) — vidíte přesně to, co on.
+      Zápis je vypnutý.</span>
+    <button class="mini" style="margin-left:auto" onclick="nahledVypni()">Ukončit náhled</button></div>`;
+}
+
 function zobrazeniRole() {
   const ja = (typeof ONLINE_STAV !== 'undefined' && ONLINE_STAV) ? ONLINE_STAV.ja : null;
   /* Náhled cizí role smí zapnout jen ten, kdo má nárok na pohled
@@ -432,6 +509,32 @@ function card(title, inner, closed = false, id = '') {
   return `<div class="card ${closed ? 'closed' : ''}"${id ? ` id="${id}"` : ''}><h2 onclick="this.parentElement.classList.toggle('closed')">${title}</h2><div class="body">${inner}</div></div>`;
 }
 
+/* Karta s režimem sekce (20. 8. 2026, zadání J. V.).
+ *
+ * Volba zobrazit / skrýt / srolovat byla do 20. 8. jen u sekcí UVNITŘ tabulky
+ * kalkulace (řádek tr.sechd). Karty jako „Příplatkové položky" nebo „Detail
+ * mezivýpočtů" ji neměly — přitom jsou to z pohledu obchodníka úplně stejné
+ * bloky a admin je potřebuje řídit stejně. Tahle obálka nad card() jim ji dává:
+ * v nadpisu je pro admina týž `<select class="sekce-rezim">`, skrytá karta se
+ * obchodníkovi nekreslí a srolovaná se otevře kliknutím na nadpis (mechanika
+ * card(closed) zůstává).
+ *
+ * `event.stopPropagation()` u selectu je nutné: nadpis karty sám o sobě
+ * sbaluje a rozbaluje, takže bez něj by každá změna volby kartu i překlopila. */
+function kartaRezim(oblast, sekceKey, title, inner, id = '') {
+  const rezim = sekceRezim(oblast, sekceKey);
+  if (rezim === 'skryt') return '';
+  const vpravo = jeAdmin() ? sekceRezimSelect(oblast, sekceKey)
+    : (rezim === 'srolovat' ? sekceRozbalBtn(oblast, sekceKey) : '');
+  const nadpis = `<span style="flex:1">${title}</span>`
+    + (vpravo ? `<span onclick="event.stopPropagation()" style="font-weight:400">${vpravo}</span>` : '');
+  const zavreno = sekceSbalena(oblast, sekceKey);
+  return `<div class="card ${zavreno ? 'closed' : ''}"${id ? ` id="${id}"` : ''}>
+    <h2 onclick="this.parentElement.classList.toggle('closed')"
+      style="display:flex;align-items:center;gap:12px">${nadpis}</h2>
+    <div class="body">${inner}</div></div>`;
+}
+
 /* Krátké názvy kotev v liště PROJ (zadání z 29. 7. 2026). Mapuje se přes `key`
  * sekce, ne přes pořadí – kdyby se sekce někdy prohodily nebo přibyla nová,
  * kotvy se nerozjedou a chybějící klíč prostě spadne zpátky na název sekce.
@@ -505,9 +608,9 @@ function zakazkaHlavicka(ock) {
      * v postupu – hlavička se dá vyplnit ručně a nabídka odejde i tak. */
     const kde = kdeAres || (path.indexOf('projHlavicka') >= 0 ? 'proj' : 'ock');
     const ares = (typeof aresRadek === 'function') ? aresRadek(kde) : '';
-    return `<div class="row"><label>IČO objednatele${pill}</label>
+    return `<div class="row"><label>IČO zákazníka${pill}</label>
       <input type="text" value="${esc(h)}" placeholder="8 číslic"
-        title="IČO objednatele; přebírá ho krycí list. Prázdné pole se nikde nehlásí."
+        title="IČO zákazníka; přebírá ho krycí list. Prázdné pole se nikde nehlásí."
         onchange="set('${path}', this.value)"></div>${ares}`;
   };
 
@@ -571,7 +674,7 @@ function zakazkaHlavicka(ock) {
           ${txt('ZAK.cislo', 'Číslo nabídky (CN)', dupCislo)}${txt('ZAK.nazevAkce', 'Název akce', dupNazev)}${txt('ZAK.adresa', 'Adresa stavby')}${datumRow}
         </div>
         <div class="zak-head-col">
-          ${txt('ZAK.objednatel', 'Objednatel')}${txt('ZAK.kontakt', 'Kontaktní osoba')}${icoRow('ZAK.ico', 'proj')}${dphRowProj}
+          ${txt('ZAK.objednatel', 'Zákazník')}${txt('ZAK.kontakt', 'Kontaktní osoba')}${icoRow('ZAK.ico', 'proj')}${dphRowProj}
         </div>
         <div class="zak-head-col">${variantaRow}${ridiciBtn}${prirazkaRowProj}</div>
       </div>${puvodRadek}
@@ -591,7 +694,7 @@ function zakazkaHlavicka(ock) {
         ${txt('ZAK.cislo', 'Číslo nabídky (CN)', dupCislo)}${txt('ZAK.nazevAkce', 'Název akce', dupNazev)}${txt('ZAK.adresa', 'Adresa stavby')}${datumRow}
       </div>
       <div class="zak-head-col">
-        ${txt('ZAK.objednatel', 'Objednatel')}${txt('ZAK.kontakt', 'Kontaktní osoba')}${icoRow('ZAK.ico')}${dphRow}
+        ${txt('ZAK.objednatel', 'Zákazník')}${txt('ZAK.kontakt', 'Kontaktní osoba')}${icoRow('ZAK.ico')}${dphRow}
       </div>
       <div class="zak-head-col">
         ${variantaRow}${ridiciBtn}${rezimRow}${prirazkaRow}
@@ -619,8 +722,8 @@ function zakHlavickaKopiruj(smer) {
     return;
   }
   const nazvy = { cislo: 'Číslo nabídky', nazevAkce: 'Název akce', adresa: 'Adresa stavby',
-                  objednatel: 'Objednatel', kontakt: 'Kontaktní osoba',
-                  ico: 'IČO objednatele', datum: 'Datum vytvoření' };
+                  objednatel: 'Zákazník', kontakt: 'Kontaktní osoba',
+                  ico: 'IČO zákazníka', datum: 'Datum vytvoření' };
   const kolize = zakazkaHlavickaKolize(ZAK, smer);
   if (kolize.length && !confirm('Přenést údaje z hlavičky ' + zdroj + ' do hlavičky ' + cil + '?\n\n'
       + 'Přepíše se ' + kolize.length + ' již vyplněné pole:\n· '
@@ -1254,6 +1357,8 @@ function renderTelo() {
   if (typeof variantaUzamcena === 'function')
     document.body.classList.toggle('zamceno', variantaUzamcena(aktivniVarianta(ZAK)));
   if (typeof renderZamekLista === 'function') renderZamekLista();
+  if (typeof renderNahledLista === 'function') renderNahledLista();
+  if (typeof renderProstrediLista === 'function') renderProstrediLista();
   if (typeof renderZapisLista === 'function') renderZapisLista();
   if (typeof renderUkazkoveLista === 'function') renderUkazkoveLista();
   if (typeof renderBuildLista === 'function') renderBuildLista();

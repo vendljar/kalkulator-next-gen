@@ -537,7 +537,7 @@ function renderUlozisteTelo() {
   el.innerHTML = radky.length
     ? `<table class="vartbl archtbl">
         <tr><th style="text-align:left">Číslo</th><th style="text-align:left">Akce</th>
-            <th style="text-align:left">Objednatel</th><th>Datum</th><th>Variant</th>
+            <th style="text-align:left">Zákazník</th><th>Datum</th><th>Variant</th>
             <th>Odesláno</th><th>Uloženo</th><th></th></tr>
         ${radky.map(ulozisteRadekHtml).join('')}</table>`
     : `<div class="seznam-prazdno">${ULO_STAV.rejstrik.length
@@ -555,7 +555,7 @@ function renderUloziste() {
       <button class="mini" style="margin-left:auto" onclick="zavriUloziste()">Zavřít</button></h2>
     <div class="body">
       <div class="seznam-ovladani">
-        <input type="text" class="seznam-hledat" id="ulozisteHledat" placeholder="Hledat číslo, akci, objednatele…"
+        <input type="text" class="seznam-hledat" id="ulozisteHledat" placeholder="Hledat číslo, akci, zákazníka…"
                value="${esc(ULO_STAV.hledat)}" oninput="ulozisteHledatSet(this.value)">
         <span class="note" id="ulozistePocet"></span>
         <span class="sp"></span>

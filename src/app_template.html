@@ -124,7 +124,7 @@
   .prihlaseni-box h1 { margin:0 0 2px; font-size:22px; }
   .prihlaseni-box .ver { display:block; margin-bottom:16px; }
   .prihlaseni-box .row { max-width:none; }
-  .online-lista { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:#3b4453; }
+  .online-lista { position:relative; display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:#3b4453; }
   .online-lista b { white-space:nowrap; }
   .modal { background:#fff; border-radius:12px; max-width:760px; width:100%; box-shadow:0 20px 60px rgba(0,0,0,.35); }
   /* Nastavení je jediné okno se širokou tabulkou (seznam uživatelů: e-mail,
@@ -363,6 +363,20 @@
      na ni řádek dostával inline opacity:.5, která se násobila i na
      zaškrtávátka admin sloupců: hlásili jsme „světle modré položky".
      Stejné pravidlo jako u .vyrazeno — tlumí se BARVA, ovládací prvky ne. */
+  /* Nabídka náhledu pod jménem v pravém horním rohu (20. 8. 2026). */
+  .nahled-menu { position:absolute; right:8px; top:38px; z-index:60; min-width:260px; max-width:340px;
+                 background:#fff; color:var(--ink); border:1px solid var(--line); border-radius:8px;
+                 box-shadow:0 10px 28px rgba(11,46,107,.18); padding:8px 10px; text-align:left; }
+  /* Pruh náhledu: přes celou šířku, aby nešlo přehlédnout, čí očima se dívám. */
+  .nahled-pruh { background:#fff7e6; border:1px solid #f59e0b; border-left-width:4px; border-radius:8px;
+                 padding:7px 12px; margin:8px 0; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .nahled-pruh b { color:#92400e; }
+  /* Testovací web: červený pruh se TISKNE taky (schválně není .noprint) —
+     kdyby z testu přece jen vyjel dokument, ať je to na papíře vidět. */
+  .prostredi-pruh { background:#fee2e2; border:1px solid #dc2626; border-left-width:5px;
+                    border-radius:8px; padding:7px 12px; margin:8px 0; display:flex;
+                    align-items:center; gap:10px; flex-wrap:wrap; color:#7f1d1d; }
+  .prostredi-pruh b { color:#991b1b; letter-spacing:.5px; }
   tr.nezahrnuto td { color:rgba(26,35,50,.5); }
   tr.nezahrnuto td input, tr.nezahrnuto td button, tr.nezahrnuto td select {
     opacity:1; color:var(--ink); }
@@ -675,6 +689,8 @@
   </div>
 </header>
 
+<div id="prostrediLista"></div>
+<div id="nahledLista" class="noprint"></div>
 <div id="obnovaLista" class="noprint"></div>
 <div id="zapisLista" class="noprint"></div>
 <div id="ukazkoveLista" class="noprint"></div>

@@ -45,8 +45,27 @@ UI = ['ui/common.js', 'ui/zakulozeni_ui.js', 'ui/kalk_ock.js', 'ui/detail_ui.js'
 # se commituje. Ruční `--ver` platí všude (poslední záchrana).
 verfile = root / 'verze.txt'
 na_serveru = bool(os.environ.get('NETLIFY') or os.environ.get('KNG_NEZVYSOVAT_VERZI'))
+#
+# POJISTKA PROTI ŠPATNÉMU DNI (20. 8. 2026). Ruční `--ver 21.8.1` zadané
+# 20. srpna vyrobilo dávku, která se tvářila, že je z 21. srpna — a protože
+# se číslo verze objevuje v názvu souboru, v zámcích variant i v hlídce
+# verze, nešlo z ničeho poznat, že je posunuté. Ručně zadaná verze proto
+# musí sedět na DNEŠNÍ den a měsíc; kdo opravdu potřebuje jinou (přehrání
+# staré dávky), obejde pojistku proměnnou KNG_VERZE_MIMO_DEN=1.
+def _hlidka_dne(v):
+    d = datetime.date.today()
+    try:
+        den, mesic = int(v.split('.')[0]), int(v.split('.')[1])
+    except (ValueError, IndexError):
+        sys.exit(f'CHYBA: verze „{v}" nemá tvar DEN.MĚSÍC.pořadí.')
+    if (den, mesic) != (d.day, d.month) and not os.environ.get('KNG_VERZE_MIMO_DEN'):
+        sys.exit(f'CHYBA: verze „{v}" neodpovídá dnešku ({d.day}.{d.month}). '
+                 f'Konvence je vDEN.MĚSÍC.pořadí — dnes tedy v{d.day}.{d.month}.N. '
+                 f'Když to má být schválně, spusťte s KNG_VERZE_MIMO_DEN=1.')
+
 if '--ver' in sys.argv:
     ver = sys.argv[sys.argv.index('--ver') + 1]
+    _hlidka_dne(ver)
     verfile.write_text(ver + '\n')
 elif na_serveru and verfile.exists() and verfile.read_text().strip():
     ver = verfile.read_text().strip()          # verze z gitu, soubor se nepřepisuje
