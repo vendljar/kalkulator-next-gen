@@ -35,6 +35,8 @@ function syncVarianta() {
   ZO = v.data.zaokr; ZOP = v.data.zaokrProj;
   // trvalé (katalogové) položky ceníku → do zadání; idempotentní, páruje přes kid
   katalogAplikuj(KATALOG, Z);
+  // totéž pro PROJ (19. 8. 2026): trvalé položky ceníku PROJ → do zadání PROJ
+  if (typeof projKatalogAplikuj === 'function') projKatalogAplikuj(PC, PJ);
 }
 syncVarianta();
 
@@ -150,6 +152,64 @@ function smiZobrazit(klic) {
 /* Některá místa skrývají celý blok až tehdy, když je skrytý každý jeho kus —
  * třeba řádek tlačítek ceníku nemá smysl kreslit prázdný. */
 function smiZobrazitVse(klice) { return klice.every(k => smiZobrazit(k)); }
+
+/* ---------- režimy sekcí kalkulace: zobrazit / skrýt / srolovat ----------
+ * (zadání 19. 8. 2026 večer) Administrátor u každé sekce kalkulace OCK i
+ * PROJ malým selectem v nadpisu volí, jak sekci uvidí obchodník a vedoucí.
+ * Volba žije v matici zobrazení (NAST.zobrazeni.sekce, model zobrazeni.js),
+ * ukládá se na server (/api/zobrazeni) hned při změně — platí pro všechny
+ * a přežije obnovení stránky. Administrátor vidí vždy vše. */
+
+function sekceRezim(oblast, sekceKey) {
+  if (jeAdmin()) return 'zobrazit';                       // admin vidí vždy vše
+  if (typeof zobrazeniSekceVolba !== 'function') return 'zobrazit';
+  return zobrazeniSekceVolba(NAST.zobrazeni, oblast + '.' + sekceKey);
+}
+
+/* Rozbalení srolované sekce je stav TÉTO obrazovky, ne nastavení — proto
+ * obyčejný objekt v paměti, žádné úložiště. */
+const SEKCE_ROZBALENO = {};
+function sekceRozbal(klic) { SEKCE_ROZBALENO[klic] = !SEKCE_ROZBALENO[klic]; render(); }
+function sekceSbalena(oblast, sekceKey) {
+  return sekceRezim(oblast, sekceKey) === 'srolovat' && !SEKCE_ROZBALENO[oblast + '.' + sekceKey];
+}
+
+function sekceRezimSet(klic, volba) {
+  if (!jeAdmin() || typeof zobrazeniSekceNastav !== 'function') return;
+  if (!NAST.zobrazeni) NAST.zobrazeni = (typeof zobrazeniVychozi === 'function') ? zobrazeniVychozi() : {};
+  zobrazeniSekceNastav(NAST.zobrazeni, klic, volba);
+  /* hned na server, ať volba platí všem a přežije obnovení stránky; bez
+   * potvrzovacího okna — je to jedna volba u jedné sekce, ne celá matice */
+  if (typeof onlineApi === 'function' && typeof jeAdminOnline === 'function' && jeAdminOnline()) {
+    onlineApi('/api/zobrazeni', { matice: NAST.zobrazeni })
+      .then(() => { if (typeof onlineNactiZobrazeni === 'function') onlineNactiZobrazeni(); })
+      .catch(e => { if (typeof onlineZprava === 'function') {
+        onlineZprava('Volbu zobrazení sekce se nepodařilo uložit na server: ' + e.message, 'varovani'); render();
+      } });
+  } else if (typeof onlineZprava === 'function') {
+    onlineZprava('Volba zobrazení sekce platí jen do obnovení stránky – na server ji uloží až přihlášený administrátor.', 'varovani');
+  }
+  render();
+}
+
+/* Malý select do pravé části nadpisu sekce (kreslí se JEN administrátorovi). */
+function sekceRezimSelect(oblast, sekceKey) {
+  if (!jeAdmin() || typeof zobrazeniSekceVolba !== 'function') return '';
+  const klic = oblast + '.' + sekceKey;
+  const v = zobrazeniSekceVolba(NAST.zobrazeni, klic);
+  const opt = (val, text) => `<option value="${val}" ${v === val ? 'selected' : ''}>${esc(text)}</option>`;
+  return `<select class="mini noprint sekce-rezim" onchange="sekceRezimSet('${escJs(klic)}', this.value)"
+      title="jak tuhle sekci uvidí obchodník a vedoucí (administrátor vidí vždy vše)">
+      ${opt('zobrazit', 'zobrazit')}${opt('skryt', 'skrýt')}${opt('srolovat', 'srolovat')}</select>`;
+}
+
+/* Tlačítko rozbalení pro obchodníka/vedoucího u srolované sekce. */
+function sekceRozbalBtn(oblast, sekceKey) {
+  const klic = oblast + '.' + sekceKey;
+  const sbaleno = !SEKCE_ROZBALENO[klic];
+  return `<button class="mini noprint" onclick="sekceRozbal('${escJs(klic)}')"
+      title="${sbaleno ? 'rozbalit sekci' : 'srolovat sekci'}">${sbaleno ? '▸ rozbalit' : '▾ srolovat'}</button>`;
+}
 
 /* aktivní jazyk dokumentů a zkratka pro překlad (viz preklad.js) */
 function jazyk() { return NAST.jazyk || 'cz'; }

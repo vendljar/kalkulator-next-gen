@@ -231,7 +231,9 @@ const zobrazeni = await p.evaluate(([marze, zdroj]) => {
     sechd: sechd.length, sectot: sectot.length,
     tot: document.querySelectorAll('#proj-kalkulace tr.tot').length,
     sec: document.querySelectorAll('#page-proj tr.sec').length,
-    selectu: document.querySelectorAll('#proj-kalkulace select').length,
+    /* selecty .sekce-rezim (zobrazit/skrýt/srolovat, 19. 8. 2026) jsou záměr —
+     * kontrola míří na historické rolovací seznamy SAZEB u položek */
+    selectu: document.querySelectorAll('#proj-kalkulace select:not(.sekce-rezim)').length,
     /* Název sekce smí v pruhu stát sám. Hledat v něm číslici by nešlo —
      * „KOLAUDACE (pro 1 ks výtahu)" ji má přímo v názvu –, takže se porovnává
      * rovnou s tím, jak se sekce jmenuje v zadání. */

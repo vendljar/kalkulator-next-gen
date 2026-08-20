@@ -189,8 +189,105 @@ function katalogPocet(kat) {
   return KATALOG_SEKCE.reduce((a, s) => a + katalogSekce(kat, s).length, 0);
 }
 
+/* ============================================================
+ * TRVALÉ POLOŽKY CENÍKU PROJ (19. 8. 2026)
+ * ------------------------------------------------------------
+ * PROJ nemá KATALOG jako OCK — jeho sekce a položky definuje
+ * DEFAULT_ZADANI_PROJ ve zdrojáku a ceny nese ceník PROJ (PC).
+ * „+ přidat položku trvale" proto zapisuje položku PŘÍMO DO CENÍKU
+ * PROJ dané sekce (pc.vlastniPolozky[keySekce]), odkud se — stejně
+ * jako katalogAplikuj u OCK — idempotentně doplní do zadání každé
+ * zakázky, která z toho ceníku počítá. Ceník PROJ cestuje s variantou
+ * a zveřejňuje se do platného ceníku programu, takže trvalá položka
+ * přežije obnovení stránky a platí pro všechny budoucí zakázky.
+ * Čistý model bez DOM — testuje se v test_katalog.js.
+ * ============================================================ */
+
+function projKatalogSekce(pc, sekKey) {
+  if (!pc.vlastniPolozky || typeof pc.vlastniPolozky !== 'object') pc.vlastniPolozky = {};
+  if (!Array.isArray(pc.vlastniPolozky[sekKey])) pc.vlastniPolozky[sekKey] = [];
+  return pc.vlastniPolozky[sekKey];
+}
+
+/* kid s předponou pk, ať se nikdy nepotká s kid OCK katalogu (k…) */
+function projKatalogNoveId(pc) {
+  pc.vlastniSeq = (+pc.vlastniSeq || 0) + 1;
+  return 'pk' + pc.vlastniSeq;
+}
+
+function projKatalogPridej(pc, sekKey, polozka) {
+  const p = polozka || {};
+  const it = { kid: p.kid || projKatalogNoveId(pc),
+               nazev: p.nazev || 'Nová položka',
+               typ: p.typ === 'hod' ? 'hod' : 'fix' };
+  if (it.typ === 'hod') {
+    it.sazba = p.sazba || 'projektant';
+    it.hodiny = +p.hodiny || 0;
+    it.rezerva = +p.rezerva || 0;
+  } else it.cena = +p.cena || 0;
+  projKatalogSekce(pc, sekKey).push(it);
+  return it;
+}
+
+/* Doplní trvalé položky ceníku PROJ do zadání (pj.sekce). Idempotentní
+ * (páruje přes kid), respektuje pj.katalogOdebrane — položky, které
+ * uživatel v konkrétní zakázce ručně smazal, se nevrací. Vrací počet
+ * doplněných položek. Doplněný řádek nese vlastni:true, takže se chová
+ * jako každý jiný vlastní řádek (editace, smazání). */
+function projKatalogAplikuj(pc, pj) {
+  if (!pc || !pj || !Array.isArray(pj.sekce)) return 0;
+  if (!Array.isArray(pj.katalogOdebrane)) pj.katalogOdebrane = [];
+  const mapa = pc.vlastniPolozky || {};
+  let n = 0;
+  pj.sekce.forEach(s => {
+    if (!Array.isArray(s.polozky)) s.polozky = [];
+    (mapa[s.key] || []).forEach(k => {
+      if (pj.katalogOdebrane.indexOf(k.kid) >= 0) return;
+      if (s.polozky.some(p => p.kid === k.kid)) return;
+      const p = { kid: k.kid, nazev: k.nazev, typ: k.typ === 'hod' ? 'hod' : 'fix', vlastni: true };
+      if (p.typ === 'hod') { p.sazba = k.sazba || 'projektant'; p.hodiny = +k.hodiny || 0; p.rezerva = +k.rezerva || 0; }
+      else p.cena = +k.cena || 0;
+      s.polozky.push(p);
+      n++;
+    });
+  });
+  return n;
+}
+
+/* Úprava řádku s kid v kalkulaci se propíše zpět do ceníku PROJ, aby
+ * trvalá položka nesla, co je na obrazovce — jinak by nové zakázky
+ * dostávaly „Nová položka / 0", kterou už nikdo tak nevidí. */
+function projKatalogPropis(pc, sekKey, polozka) {
+  if (!pc || !polozka || !polozka.kid) return null;
+  const it = projKatalogSekce(pc, sekKey).find(k => k.kid === polozka.kid);
+  if (!it) return null;
+  it.nazev = polozka.nazev;
+  if (it.typ === 'hod') {
+    it.sazba = polozka.sazba || it.sazba;
+    it.hodiny = +polozka.hodiny || 0;
+    it.rezerva = +polozka.rezerva || 0;
+  } else it.cena = +polozka.cena || 0;
+  return it;
+}
+
+function projKatalogZapamatujOdebrani(pj, polozka) {
+  if (!pj || !polozka || !polozka.kid) return;
+  if (!Array.isArray(pj.katalogOdebrane)) pj.katalogOdebrane = [];
+  if (pj.katalogOdebrane.indexOf(polozka.kid) < 0) pj.katalogOdebrane.push(polozka.kid);
+}
+
+function projKatalogSmaz(pc, sekKey, kid) {
+  const arr = projKatalogSekce(pc, sekKey);
+  const i = arr.findIndex(k => k.kid === kid);
+  if (i < 0) return false;
+  arr.splice(i, 1);
+  return true;
+}
+
 if (typeof module !== 'undefined')
   module.exports = { KATALOG, KATALOG_SEKCE, KATALOG_SEKCE_NAZEV, katalogPrazdny, katalogNoveId, katalogPreseq,
     katalogSekce, katalogPridej, katalogNajdi, katalogUprav, katalogSmaz, katalogCil, katalogAplikuj,
     katalogUpravVc, katalogPridejVc, katalogSmazVc, katalogUloz, katalogZapamatujOdebrani,
-    katalogExport, katalogImport, katalogPocet };
+    katalogExport, katalogImport, katalogPocet,
+    projKatalogSekce, projKatalogNoveId, projKatalogPridej, projKatalogAplikuj,
+    projKatalogPropis, projKatalogZapamatujOdebrani, projKatalogSmaz };

@@ -407,8 +407,11 @@ test('obchodník smí přidat položku do sekce (výchozí právo, OCK i PROJ)',
   await p.evaluate(() => {
     const prvek = ZOBRAZENI_PRVKY.find(x => x.klic === 'kalk.pridatPolozku');
     return !!prvek && prvek.vychozi['Obchodník'] === true && prvek.vychozi['Vedoucí'] === true
-      && document.getElementById('page-kalk').innerHTML.includes('přidat položku do sekce')
-      && document.getElementById('page-proj').innerHTML.includes('přidat hodinovou položku do sekce');
+      /* 19. 8. 2026 večer: popisky sjednocené na „+ přidat položku" (OCK)
+       * a „+ přidat hodinovou/fixní položku" (PROJ); vedle nich má admin
+       * „… trvale". */
+      && document.getElementById('page-kalk').innerHTML.includes('+ přidat položku')
+      && document.getElementById('page-proj').innerHTML.includes('+ přidat hodinovou položku');
   }));
 
 test('ATYP předvyplní hodiny navíc (montáž 30 % z celkových, projekce 30 % ze základu)',
@@ -432,7 +435,10 @@ test('dokumentová sekce OCK je na konci Technické specifikace a v kartě CN ji
       && spec.includes('Cenová nabídka a smlouva o dílo (OCK)');
     prepniTab('kalk'); render();
     const kalk = document.getElementById('page-kalk').innerHTML;
-    const tlacitko = kalk.includes('>Technická specifikace</button>');
+    /* 19. 8. 2026 večer: tlačítko přejmenováno na „Přejít na technickou
+     * specifikaci" a obarveno světle zeleně (už není modré primary). */
+    const tlacitko = kalk.includes('>Přejít na technickou specifikaci</button>')
+      && /background:#86e8ad[^>]*>Přejít na technickou specifikaci/.test(kalk);
     const bezTisku = !kalk.includes('nabidkaOckDokument()');
     return veSpec && tlacitko && bezTisku;
   }));

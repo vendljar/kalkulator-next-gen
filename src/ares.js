@@ -77,6 +77,10 @@ const ARES_POLE = [
   { klic: 'objednatel', label: 'Objednatel', z: s => s.nazev },
   { klic: 'adresaObjednatele', label: 'Sídlo objednatele', z: s => s.adresa },
   { klic: 'ico', label: 'IČO objednatele', z: s => s.ico },
+  /* DIČ objednatele (19. 8. 2026): ARES ho vrací a smlouvy o dílo ho
+   * potřebují ({{OBJEDNATEL_DIC}}). Prázdné DIČ (neplátce) se díky
+   * aresRozdily přeskočí a nic nepřepíše. */
+  { klic: 'dic', label: 'DIČ objednatele', z: s => s.dic },
 ];
 
 /* Co by se změnilo. Prázdné údaje z rejstříku se přeskakují (viz hlavička

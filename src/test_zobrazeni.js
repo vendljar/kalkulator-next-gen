@@ -149,5 +149,49 @@ test('zobrazeniZmeny vypíše jen to, co se od dneška liší', (() => {
 test('zobrazeniPrvek najde prvek podle klíče a jinak vrátí null',
   Z.zobrazeniPrvek('tab.detail') !== null && Z.zobrazeniPrvek('nic') === null);
 
+/* ---------- 4) režimy sekcí kalkulace (zadání 19. 8. 2026 večer) ----------
+ *
+ * Administrátor u každé sekce kalkulace OCK i PROJ volí, jak ji uvidí
+ * obchodník (a vedoucí): zobrazit / skrýt / srolovat. Volba se ukládá do
+ * téže matice (klíč `sekce`), takže cestuje na server stejnou cestou
+ * (/api/zobrazeni) a přežije obnovení stránky. Administrátor vidí vždy vše. */
+
+test('výchozí volba sekce je „zobrazit"',
+  Z.zobrazeniSekceVolba(null, 'ock.hrubaOck') === 'zobrazit'
+  && Z.zobrazeniSekceVolba({}, 'proj.zamereni') === 'zobrazit');
+
+const matS = Z.zobrazeniVychozi();
+Z.zobrazeniSekceNastav(matS, 'ock.rezie', 'skryt');
+Z.zobrazeniSekceNastav(matS, 'proj.kolaudace', 'srolovat');
+test('nastavená volba se čte zpět',
+  Z.zobrazeniSekceVolba(matS, 'ock.rezie') === 'skryt'
+  && Z.zobrazeniSekceVolba(matS, 'proj.kolaudace') === 'srolovat');
+test('„zobrazit" se neukládá – klíč z matice zmizí', (() => {
+  Z.zobrazeniSekceNastav(matS, 'ock.rezie', 'zobrazit');
+  return matS.sekce['ock.rezie'] === undefined
+    && Z.zobrazeniSekceVolba(matS, 'ock.rezie') === 'zobrazit';
+})(), JSON.stringify(matS.sekce));
+test('neznámá volba se bere jako „zobrazit"', (() => {
+  Z.zobrazeniSekceNastav(matS, 'ock.oplasteni', 'cokoliv');
+  return Z.zobrazeniSekceVolba(matS, 'ock.oplasteni') === 'zobrazit';
+})());
+
+/* očista: platné volby sekcí projdou, smetí vypadne */
+const oc = Z.zobrazeniOciste({ sekce: {
+  'proj.kolaudace': 'srolovat', 'ock.hrubaOck': 'skryt',
+  'ock.volitelne': 'zobrazit',            // 'zobrazit' se neukládá
+  'ock.rezie': 'nesmysl',                 // neplatná volba vypadne
+  'cizi.sekce': 'skryt',                  // cizí oblast vypadne
+} });
+test('očista podrží platné volby sekcí',
+  oc.sekce && oc.sekce['proj.kolaudace'] === 'srolovat' && oc.sekce['ock.hrubaOck'] === 'skryt');
+test('očista zahodí „zobrazit", nesmysly i cizí klíče',
+  oc.sekce && oc.sekce['ock.volitelne'] === undefined
+  && oc.sekce['ock.rezie'] === undefined && oc.sekce['cizi.sekce'] === undefined);
+test('očista bez voleb sekcí klíč `sekce` vůbec nezakládá',
+  Z.zobrazeniOciste({}).sekce === undefined);
+test('výchozí matice žádné volby sekcí nenese (= vše zobrazit)',
+  Z.zobrazeniVychozi().sekce === undefined);
+
 console.log('\n' + ok + ' OK, ' + fail + ' FAIL');
 process.exit(fail ? 1 : 0);

@@ -94,6 +94,9 @@ function renderZakazka() {
       // IČO stojí i tady hned za kontaktní osobou, aby se obě hlavičky četly
       // ve stejném pořadí jako lišta nad kalkulací (zadání z 30. 7. 2026).
       inp('ZAK.ico', { type: 'text', l: 'IČO objednatele' }) +
+      // DIČ objednatele (19. 8. 2026): potřebují ho smlouvy o dílo
+      // ({{OBJEDNATEL_DIC}}); dotáhne se z ARES spolu s IČO a sídlem.
+      inp('ZAK.dic', { type: 'text', l: 'DIČ objednatele' }) +
       // dotaz do rejstříku ARES (#10) – ukáže firmu a teprve na potvrzení přepíše
       (typeof aresRadek === 'function' ? aresRadek('ock', true) : '') +
       inp('ZAK.datum', { type: 'date', l: 'Datum' }) +
@@ -501,7 +504,8 @@ function nabidkaKarta() {
     ${nahled}
     ${typeof kryciPodminkyBlok === 'function' ? kryciPodminkyBlok() : ''}
     <div class="btns" style="margin-top:12px">
-      <button class="primary" onclick="prepniTab('spec'); window.scrollTo(0, 0)">Technická specifikace</button>
+      <button style="background:#86e8ad;color:#0B2E6B;border-color:#5fcf92"
+        onclick="prepniTab('spec'); window.scrollTo(0, 0)">Přejít na technickou specifikaci</button>
     </div>
     <div class="note" style="margin-top:6px">Úvodní fotka, kontroly, <b>tisk nabídky</b> i <b>smlouva o dílo</b>
       se 19. 8. 2026 přestěhovaly na konec záložky <b>Technická specifikace OCK</b> — tlačítko výše vás na ni

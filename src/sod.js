@@ -22,6 +22,25 @@
  * smlouva se stejně jako odeslaná nabídka zpětně needituje.
  * ============================================================ */
 
+/* Údaje objednatele pro smlouvy (19. 8. 2026). Šablony SoD používají symboly
+ * OBJEDNATEL_SIDLO / OBJEDNATEL_ICO / OBJEDNATEL_DIC, které nabídky neplní —
+ * smlouva pak zela {{…}} i tam, kde zakázka údaje má. Plní se JEN neprázdné
+ * hodnoty: prázdný symbol musí v dokumentu zůstat viditelný k ručnímu
+ * doplnění, nikdy se nesmí beze stopy nahradit prázdnem (viz hlavička
+ * souboru). Ostatní symboly objednatele (zástupci, banka, účet, zápis
+ * v rejstříku) aplikace nezná a dál je záměrně NEplní. */
+function sodObjednatelDoplna(placeholders, zak) {
+  const z = zak || {};
+  const dvojice = [['OBJEDNATEL_SIDLO', z.adresaObjednatele],
+                   ['OBJEDNATEL_ICO', z.ico],
+                   ['OBJEDNATEL_DIC', z.dic]];
+  for (const [symbol, hodnota] of dvojice) {
+    const s = String(hodnota == null ? '' : hodnota).trim();
+    if (s) placeholders[symbol] = s;
+  }
+  return placeholders;
+}
+
 /* SoD realizace (OCK) — stejná data jako nabídka OCK, jiné jméno souboru. */
 function sodData(zak, varianta, jekly, lang) {
   const d = nabidkaData(zak, varianta, jekly, lang);
@@ -29,6 +48,7 @@ function sodData(zak, varianta, jekly, lang) {
   const nazev = ('SOD_' + (d.placeholders.CISLO_NABIDKY || 'CN')
     + (varianta && varianta.zakaznik ? '_' + varianta.zakaznik : '')
     + (L !== 'cz' ? '_' + L.toUpperCase() : ''));
+  sodObjednatelDoplna(d.placeholders, zak);
   return Object.assign({}, d,
     { nazevSouboru: nazev.replace(/[\\/:*?"<>|]+/g, '-') });
 }
@@ -41,6 +61,7 @@ function sodProjData(zak, varianta, lang) {
   const nazev = ('SOD_PROJ_' + (d.placeholders.CISLO_NABIDKY || 'OVP-CN')
     + (varianta && varianta.zakaznik ? '_' + varianta.zakaznik : '')
     + (L !== 'cz' ? '_' + L.toUpperCase() : ''));
+  sodObjednatelDoplna(d.placeholders, zak);
   return Object.assign({}, d,
     { nazevSouboru: nazev.replace(/[\\/:*?"<>|]+/g, '-') });
 }

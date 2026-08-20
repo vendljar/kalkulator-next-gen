@@ -180,6 +180,73 @@ test('server matici přijal a vrátil ji zpět',
 test('u zveřejnění se pamatuje, kdo a kdy',
   await page.evaluate(() => !!(ONLINE_STAV.zobrazeni.kdo && ONLINE_STAV.zobrazeni.kdy)));
 
+/* ---------- 3b) režimy sekcí kalkulace + přidávání položek (19. 8. 2026) ----------
+ *
+ * Administrátor u každé sekce OCK i PROJ volí selectem zobrazit / skrýt /
+ * srolovat; volba se ukládá na server HNED (bez potvrzovacího okna) a řídí,
+ * jak sekci uvidí obchodník. Admin vidí vždy vše. Vedle toho má každá sekce
+ * dvě přidávací tlačítka: „+ přidat položku" (i obchodník — právo
+ * kalk.pridatPolozku) a „+ přidat položku trvale" (jen admin). */
+
+test('admin má v nadpisu sekce OCK select režimu',
+  await page.evaluate(() => {
+    prepniTab('kalk'); render();
+    const el = document.getElementById('ock-sek-rezie');
+    return !!el && el.innerHTML.includes('sekceRezimSet') && el.innerHTML.includes('srolovat');
+  }));
+test('admin má u sekce OCK tlačítka „+ přidat položku" i „… trvale" a atypickou v témž řádku',
+  await page.evaluate(() => {
+    const html = document.getElementById('page-kalk').innerHTML;
+    return html.includes('+ přidat položku<') && html.includes('+ přidat položku trvale')
+      && html.includes('+ přidat atypickou položku (práce navíc)');
+  }));
+test('admin má select i u sekcí PROJ a tlačítka „… trvale" pro hodinovou i fixní',
+  await page.evaluate(() => {
+    prepniTab('proj'); render();
+    const html = document.getElementById('page-proj').innerHTML;
+    return html.includes('sekceRezimSet') && html.includes('+ přidat hodinovou položku trvale')
+      && html.includes('+ přidat fixní položku trvale');
+  }));
+
+/* volba se uloží na server okamžitě (žádné potvrzovací okno) */
+await page.evaluate(() => { sekceRezimSet('ock.rezie', 'skryt'); });
+await page.waitForTimeout(400);
+await page.evaluate(() => { sekceRezimSet('proj.zamereni', 'srolovat'); });
+await page.waitForTimeout(400);
+test('volby sekcí odešly na server hned',
+  volani.filter(x => x === 'POST /api/zobrazeni').length >= 3, volani.join(', '));
+test('server volby sekcí přijal a vrací je v matici',
+  await page.evaluate(() => !!(ONLINE_STAV.zobrazeni && ONLINE_STAV.zobrazeni.matice.sekce
+    && ONLINE_STAV.zobrazeni.matice.sekce['ock.rezie'] === 'skryt'
+    && ONLINE_STAV.zobrazeni.matice.sekce['proj.zamereni'] === 'srolovat')));
+test('administrátorovi se skrytá sekce dál kreslí (vidí vždy vše)',
+  await page.evaluate(() => {
+    prepniTab('kalk'); render();
+    return !!document.getElementById('ock-sek-rezie');
+  }));
+
+/* trvalá položka PROJ: založí se v ceníku PROJ dané sekce */
+test('„+ přidat položku trvale" v PROJ zapíše položku do ceníku PROJ sekce',
+  await page.evaluate(() => {
+    prepniTab('proj'); render();
+    const pred = ((PC.vlastniPolozky || {}).studie || []).length;
+    pjPolozkaAddTrvale(1, 'fix');                       // sekce 1 = ST – STUDIE
+    const arr = (PC.vlastniPolozky || {}).studie || [];
+    const g = ((DEFAULT_CENIK_PROJ.vlastniPolozky || {}).studie || []);
+    return arr.length === pred + 1 && /^pk\d+$/.test(arr[arr.length - 1].kid)
+      && g.some(k => k.kid === arr[arr.length - 1].kid)
+      && PJ.sekce[1].polozky.some(p => p.kid === arr[arr.length - 1].kid && p.vlastni);
+  }));
+/* trvalá položka OCK: rovnou do katalogu ceníku */
+test('„+ přidat položku trvale" v OCK zapíše položku do katalogu ceníku',
+  await page.evaluate(() => {
+    prepniTab('kalk'); render();
+    const pred = KATALOG.polozky.rezie.length;
+    vlastniAddTrvale('rezie');
+    return KATALOG.polozky.rezie.length === pred + 1
+      && Z.vlastniPolozky.rezie.some(p => p.kid === KATALOG.polozky.rezie[KATALOG.polozky.rezie.length - 1].kid);
+  }));
+
 /* Založíme obchodníka a odhlásíme se. */
 await page.evaluate(() => { nastPanel('uzivatele'); });
 await page.waitForFunction(() => { try { return ONLINE_STAV.uzivateleNacteno; } catch (e) { return false; } });
@@ -215,6 +282,52 @@ test('Nastavení obchodník dál nevidí',
 test('ozubené kolečko Nastavení obchodník nevidí',
   !(await page.locator('#btnNastaveni').isVisible()));
 
+/* ---------- 4b) obchodník a režimy sekcí + přidávání (19. 8. 2026) ---------- */
+
+test('skrytá sekce OCK (REŽIE) se obchodníkovi vůbec nekreslí',
+  await page.evaluate(() => {
+    prepniTab('kalk'); render();
+    return !document.getElementById('ock-sek-rezie')
+      && !!document.getElementById('ock-sek-hrubaOck');   // ostatní sekce zůstávají
+  }));
+test('obchodník nemá žádný select režimu sekce',
+  await page.evaluate(() => !document.getElementById('page-kalk').innerHTML.includes('sekceRezimSet')));
+test('obchodník má „+ přidat položku", ale NE „… trvale"',
+  await page.evaluate(() => {
+    const html = document.getElementById('page-kalk').innerHTML;
+    return html.includes('+ přidat položku<') && !html.includes('+ přidat položku trvale')
+      && !html.includes('+ přidat atypickou položku');
+  }));
+test('srolovaná sekce PROJ (ZAMĚŘENÍ) je sbalená: nadpis a CELKEM ano, položky ne',
+  await page.evaluate(() => {
+    prepniTab('proj'); render();
+    const html = document.getElementById('page-proj').innerHTML;
+    const hlava = document.getElementById('proj-sek-0');
+    return !!hlava && hlava.innerHTML.includes('rozbalit')
+      && html.includes('ZAMĚŘENÍ CELKEM');
+  }));
+test('rozbalení srolované sekce funguje (a jde zase srolovat)',
+  await page.evaluate(() => {
+    sekceRozbal('proj.zamereni');
+    const po = document.getElementById('proj-sek-0').innerHTML.includes('srolovat');
+    sekceRozbal('proj.zamereni');
+    const zpet = document.getElementById('proj-sek-0').innerHTML.includes('rozbalit');
+    return po && zpet;
+  }));
+/* Trvalá položka PROJ se k ostatním dostane zveřejněním platného ceníku
+ * (program DB) — stejná cesta jako katalog OCK. Tady se ověřuje, že se k ní
+ * obchodník nedostane rovnou: nemá tlačítko „… trvale" a kdyby položku
+ * z ceníku dostal, needituje ji (kontrola aplikace je v jednotkových
+ * testech test_katalog.js; UI pravidlo hlídá podmínka !p.kid u vlEd). */
+test('obchodník nemá v PROJ žádné tlačítko „… trvale"',
+  await page.evaluate(() => !document.getElementById('page-proj').innerHTML.includes('pjPolozkaAddTrvale(')));
+test('obchodník v PROJ má přidávání vlastní položky (hodinová/fixní), bez „trvale"',
+  await page.evaluate(() => {
+    const html = document.getElementById('page-proj').innerHTML;
+    return html.includes('+ přidat hodinovou položku') && html.includes('+ přidat fixní položku')
+      && !html.includes('trvale');
+  }));
+
 /* Matice je vrstva pohodlí — hranici drží server. Ověříme obojí: */
 poslednihlaska = '';
 await page.evaluate(() => zobrSet('tab.cenik', 'Obchodník', true));
@@ -232,8 +345,10 @@ test('a zveřejnit matici nesmí', pokusOZverejneni.v === false
   && /administrátor/i.test(pokusOZverejneni.hlaska), JSON.stringify(pokusOZverejneni));
 test('obchodníkovi se odmítnutí vysvětlí v liště',
   pokusOZverejneni.typ === 'varovani', pokusOZverejneni.typ);
+/* 1× zveřejnění matice + 2× okamžité uložení volby sekce = 3 POSTy od
+ * administrátora; obchodníkův pokus nesmí přidat čtvrtý. */
 test('a na server se přitom nic neposlalo',
-  volani.filter(x => x === 'POST /api/zobrazeni').length === 1, volani.join(', '));
+  volani.filter(x => x === 'POST /api/zobrazeni').length === 3, volani.join(', '));
 
 test('žádná chyba JavaScriptu', chyby.length === 0, chyby.slice(0, 2).join(' | '));
 

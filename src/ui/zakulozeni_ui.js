@@ -103,6 +103,16 @@ function zakUlozeniRadek() {
   /* uložená zakázka dostává jemně zelené podbarvení řádku (17. 8. večer) */
   const zelene = (s.stav === 'ulozeno' || s.stav === 'ceka') ? ' ulozeno-ok' : '';
   const radky = [`<div class="${zapisTridaHlasky(tridaStavu)} zak-ulozeni${zelene} noprint">${esc(s.text)}</div>`];
+  /* Duplicitní číslo nabídky (zadání 19. 8. 2026): štítek u pole v hlavičce
+   * je snadné přehlédnout, a server pak uložení stejně odmítne. Proto se
+   * kolize hlásí červeně i tady, přímo u tlačítek uložení. */
+  const dup = (typeof zakazkaDuplicita === 'function' && typeof ONLINE_STAV !== 'undefined')
+    ? zakazkaDuplicita(ZAK, ONLINE_STAV.rejstrik, ONLINE_STAV.soubor)
+    : { cislo: '' };
+  if (dup.cislo)
+    radky.push(`<div class="${zapisTridaHlasky('chyba')} zak-ulozeni noprint">${esc(
+      'Zakázku nelze uložit: stejné číslo nabídky už používá uložená zakázka '
+      + dup.cislo + '. Zvolte vlastní číslo.')}</div>`);
   if (ZAKULO_STAV.hlaska)
     radky.push(`<div class="${zapisTridaHlasky(ZAKULO_STAV.hlaskaTyp)} zak-ulozeni noprint">${esc(ZAKULO_STAV.hlaska)}</div>`);
   return radky.join('');

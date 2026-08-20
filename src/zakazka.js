@@ -68,6 +68,9 @@ function novaZakazka() {
     // název firmy se píše pokaždé jinak („Stavby s.r.o." / „STAVBY s. r. o.").
     // Odsud ho bere krycí list a odsud si ho vezme i dotažení z ARES (#10).
     ico: '',
+    // DIČ objednatele (19. 8. 2026): potřebují ho smlouvy o dílo
+    // ({{OBJEDNATEL_DIC}}); dotáhne se z ARES spolu s IČO a sídlem.
+    dic: '',
     // KL-2: adresa stavby (`adresa`) a sídlo objednatele jsou dvě různé věci –
     // developer sídlí v Praze a staví v Ostravě. Krycí list potřebuje obě.
     // Prázdné = sídlo se neuvádí; nikdy se sem nedosazuje adresa stavby.
@@ -397,6 +400,9 @@ function importZakazka(obj) {
     // dosavadním poli není nic, z čeho by se dalo odvodit, a odhadnuté IČO je
     // horší než žádné (skončilo by ve smlouvě).
     if (obj.ico == null) obj.ico = '';
+    // migrace: DIČ objednatele přibylo 19. 8. 2026 (smlouvy o dílo). Zůstává
+    // PRÁZDNÉ ze stejného důvodu jako IČO – odhadnuté DIČ je horší než žádné.
+    if (obj.dic == null) obj.dic = '';
     // migrace: úvodní fotka nabídky OCK přibyla později
     if (obj.uvodniFoto == null) obj.uvodniFoto = '';
     if (obj.uvodniFotoNazev == null) obj.uvodniFotoNazev = '';

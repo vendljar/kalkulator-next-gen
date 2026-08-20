@@ -102,6 +102,12 @@ test('přepínač 🔥 se kreslí jen administrátorovi',
   }));
 
 /* mapa z podvržených dat — server tu není, kreslení se zkouší přímo */
+/* Otisk PŘED zapnutím: pár prvků nese inline styl už z návrhu (např. zelené
+ * tlačítko „Přejít na technickou specifikaci", 19. 8. 2026) — kontrola úklidu
+ * po vypnutí se proto měří proti stavu před zapnutím, ne proti nule. */
+const stylyPred = await p.evaluate(() =>
+  [...document.querySelectorAll('button,select,input')]
+    .filter(e => e.style.background || e.style.outline || e.style.boxShadow).length);
 const nakresleno = await p.evaluate(() => {
   ANL.heat = true;
   ANL.heatData = analytikaNovyDen();
@@ -132,7 +138,8 @@ const poVypnuti = await p.evaluate(() => {
   };
 });
 test('po vypnutí nezůstal žádný odznak', poVypnuti.odznaky === 0);
-test('po vypnutí nezůstalo žádné podbarvení ani rámeček', poVypnuti.styly === 0, poVypnuti);
+test('po vypnutí nezůstalo žádné podbarvení ani rámeček (nad stav před zapnutím)',
+  poVypnuti.styly === stylyPred, JSON.stringify({ pred: stylyPred, po: poVypnuti.styly }));
 test('po vypnutí zmizel i plovoucí panel', !poVypnuti.panel);
 
 /* překreslení aplikace mapu neshodí (jede s uživatelem) */

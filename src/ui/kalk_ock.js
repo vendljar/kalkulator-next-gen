@@ -302,6 +302,37 @@ function radekPridat(sekceKey, popis) {
   const { NC } = kalkSloupce();
   return `<tr class="pridat noprint"><td colspan="${NC}"><button class="mini" onclick="vlastniAdd('${sekceKey}')">+ ${popis}</button></td></tr>`;
 }
+/* Sjednocený řádek přidávání (zadání 19. 8. 2026 večer): v KAŽDÉ sekci
+ * kalkulace stojí vedle sebe
+ *   „+ přidat položku"        — obchodník, vedoucí i admin (právo
+ *                               kalk.pridatPolozku); řádek jen této zakázky,
+ *   „+ přidat položku trvale" — JEN administrátor; zapíše položku do
+ *                               ceníku (katalogu), takže platí pro všechny
+ *                               budoucí zakázky,
+ * a v Hrubé OCK navíc historické „+ přidat atypickou položku (práce navíc)"
+ * — funkčně beze změny, jen vizuálně ve stejném řádku vedle obou tlačítek. */
+function radekPridatSekce(sekceKey) {
+  const { NC } = kalkSloupce();
+  const admin = jeAdmin();
+  const btns = [];
+  if (admin || smiZobrazit('kalk.pridatPolozku'))
+    btns.push(`<button class="mini" title="vlastní řádek jen této zakázky" onclick="vlastniAdd('${sekceKey}')">+ přidat položku</button>`);
+  if (admin)
+    btns.push(`<button class="mini" title="zapíše položku natrvalo do ceníku – bude ve všech nových nabídkách" onclick="vlastniAddTrvale('${sekceKey}')">+ přidat položku trvale</button>`);
+  if (admin && sekceKey === 'hrubaOck')
+    btns.push(`<button class="mini" title="práce navíc u atypické zakázky – v nabídce spadá do Hrubé OCK (#7)" onclick="vlastniAdd('atyp')">+ přidat atypickou položku (práce navíc)</button>`);
+  if (!btns.length) return '';
+  return `<tr class="pridat noprint"><td colspan="${NC}">${btns.join(' ')}</td></tr>`;
+}
+/* „+ přidat položku trvale" (jen admin): rovnou do katalogu ceníku, odkud se
+ * propíše do této i každé nové zakázky (existující mechanismus vlastniDoCeniku
+ * / katalogPridejVc — stejná cesta jako tlačítko + v záložce Ceník). */
+function vlastniAddTrvale(sekce) {
+  if (!jeAdmin()) return;
+  katalogPridejVc(KATALOG, Z, sekce, { nazev: 'Nová položka', mnozstvi: 1, cena: 0 });
+  aktivniVarianta(ZAK).upraveno = new Date().toISOString();
+  render();
+}
 function sumRadek(cls, label, sum) {
   const { admin, showCost } = kalkSloupce();
   let c = `<td>${label}</td><td></td>`;
@@ -313,24 +344,40 @@ function sumRadek(cls, label, sum) {
 }
 function tbl(rows, sum, nazevSekce, sekceKey) {
   const { admin, NC } = kalkSloupce();
+  /* Režim sekce (19. 8. 2026 večer): skrytou sekci obchodník/vedoucí vůbec
+   * nedostane (počítá se dál!), srolovaná ukáže jen nadpis + CELKEM a jde
+   * rozbalit. Administrátor vidí vždy vše a v nadpisu má select s volbou. */
+  const rezim = sekceRezim('ock', sekceKey);
+  if (rezim === 'skryt') return '';
+  const sbaleno = sekceSbalena('ock', sekceKey);
+  const vpravo = admin ? sekceRezimSelect('ock', sekceKey)
+    : (rezim === 'srolovat' ? sekceRozbalBtn('ock', sekceKey) : '');
   rows = serazSekci(rows, sekceKey);
   if (!admin) rows = rows.filter(r => !jeSkryta(radekKey(r)));   // skryté položky uživatel nevidí
   // id řádku s názvem sekce = cíl kotvy v klouzající liště (kalkLista)
-  return `<tr class="sechd" id="ock-sek-${sekceKey}"><td colspan="${NC}">${nazevSekce}</td></tr>` +
-    rows.map(r => radekKalk(r, sekceKey)).join('') +
-    ((admin || smiZobrazit('kalk.pridatPolozku')) ? radekPridat(sekceKey, 'přidat položku do sekce') : '') +
+  return `<tr class="sechd" id="ock-sek-${sekceKey}"><td colspan="${NC}"><div style="display:flex;align-items:center;gap:12px"><span style="flex:1">${nazevSekce}</span>${vpravo}</div></td></tr>` +
+    (sbaleno ? '' : rows.map(r => radekKalk(r, sekceKey)).join('')) +
     /* ATYP má vlastní sekci v zadání i v ceníku, ale v kalkulaci a v nabídce
      * spadá do HRUBÉ OCK – zákazník má vidět jednu ocelovou konstrukci, ne
-     * účet za „něco navíc". Tlačítko je proto tady, ne ve vlastní tabulce (#7). */
-    (admin && sekceKey === 'hrubaOck' ? radekPridat('atyp', 'přidat atypickou položku (práce navíc)') : '') +
+     * účet za „něco navíc". Tlačítko je proto tady, ne ve vlastní tabulce (#7).
+     * Od 19. 8. 2026 večer jsou všechna přidávací tlačítka sekce v JEDNOM
+     * řádku (radekPridatSekce): položku / položku trvale / atypickou. */
+    (sbaleno ? '' : radekPridatSekce(sekceKey)) +
     sumRadek('sectot', nazevSekce + ' CELKEM', sum);
 }
 /* Volitelné položky – zaškrtávátkem přímo v hlavním sloupci (jako příplatky) */
 function tblVolitelne(katalog, sum) {
   const { admin, showCost, NC } = kalkSloupce();
+  /* režim sekce (19. 8. 2026 večer) — viz tbl() */
+  const rezimV = sekceRezim('ock', 'volitelne');
+  if (rezimV === 'skryt') return '';
+  const sbalenoV = sekceSbalena('ock', 'volitelne');
+  const vpravoV = admin ? sekceRezimSelect('ock', 'volitelne')
+    : (rezimV === 'srolovat' ? sekceRozbalBtn('ock', 'volitelne') : '');
   let rows = serazSekci(katalog, 'volitelne');
   if (!admin) rows = rows.filter(r => r.zahrnuto && !jeSkryta(radekKey(r)));   // uživatel: jen zahrnuté a viditelné
-  return `<tr class="sechd" id="ock-sek-volitelne"><td colspan="${NC}">VOLITELNÉ POLOŽKY DO ZÁKLADNÍ CENY ${admin ? '<span class="note" style="font-weight:400">(zaškrtnuté se počítají do základní ceny)</span>' : ''}</td></tr>` +
+  if (sbalenoV) rows = [];
+  return `<tr class="sechd" id="ock-sek-volitelne"><td colspan="${NC}"><div style="display:flex;align-items:center;gap:12px"><span style="flex:1">VOLITELNÉ POLOŽKY DO ZÁKLADNÍ CENY ${admin ? '<span class="note" style="font-weight:400">(zaškrtnuté se počítají do základní ceny)</span>' : ''}</span>${vpravoV}</div></td></tr>` +
     rows.map(r => {
       const key = radekKey(r);
       const dz = admin ? ` ondragover="dragOver(event)" ondrop="dragDrop(event,'volitelne','${keyAttr(key)}')"` : '';
@@ -341,14 +388,24 @@ function tblVolitelne(katalog, sum) {
         c = `<td style="white-space:normal"><div class="vol-name">${gripHtml(r, 'volitelne')} ${chk}${bunkaNazev(r, 'volitelne')}</div></td>`;
         c += `<td style="white-space:nowrap">${bunkaMnozstvi(r)}</td><td style="white-space:nowrap">${bunkaCena(r)}</td>`;
       } else {
-        c = `<td style="white-space:normal">${esc(r.nazev) + poznHtml(r)}</td><td style="white-space:nowrap">${num(r.mnozstvi, 3)}</td>`;
+        /* Vlastní volitelnou položku smí upravit i ten, kdo ji směl přidat
+         * (19. 8. 2026, právo kalk.pridatPolozku) — stejné pravidlo jako
+         * v ostatních sekcích (radekKalk). Trvalé (kid) upravuje jen admin. */
+        const vlEdV = r.vlastni && !r.kid && smiZobrazit('kalk.pridatPolozku');
+        c = vlEdV
+          ? `<td style="white-space:normal"><input type="text" class="nazev-ed" style="width:55%" value="${esc(r.nazev)}" onchange="vlastniSet('volitelne', ${r.idx}, 'nazev', this.value)">
+               à <input type="number" step="any" style="width:96px" value="${+(+r.cena).toFixed(2)}" title="jednotková cena této položky (jen pro tuto zakázku)"
+                 onchange="vlastniSet('volitelne', ${r.idx}, 'cena', this.value)"> Kč
+               <button class="mini noprint" title="odebrat vlastní položku" onclick="vlastniDel('volitelne', ${r.idx})">✕</button></td>
+             <td style="white-space:nowrap"><input type="number" step="any" style="width:86px" value="${+(+r.mnozstvi).toFixed(3)}" onchange="vlastniSet('volitelne', ${r.idx}, 'mnozstvi', this.value)"></td>`
+          : `<td style="white-space:normal">${esc(r.nazev) + poznHtml(r)}</td><td style="white-space:nowrap">${num(r.mnozstvi, 3)}</td>`;
       }
       if (showCost) c += `<td>${fmt(r.naklad)}</td><td>${fmt(r.marze)}</td>`;
       c += `<td>${fmt(r.sMarzi)}</td>`;
       if (admin) c += adminKoncBunky(r, 'volitelne');
       return `<tr${dz}${r.zahrnuto ? '' : ' style="opacity:.5"'}>${c}</tr>`;
     }).join('') +
-    (admin ? radekPridat('volitelne', 'přidat vlastní volitelnou položku') : '') +
+    (sbalenoV ? '' : radekPridatSekce('volitelne')) +
     sumRadek('sectot', 'VOLITELNÉ CELKEM (jen zaškrtnuté)', sum);
 }
 
@@ -368,6 +425,14 @@ function priplatekVlastniDel(i) {
     katalogZapamatujOdebrani(Z, p);
   }
   Z.priplatkyVlastni.splice(i, 1);
+  aktivniVarianta(ZAK).upraveno = new Date().toISOString();
+  render();
+}
+/* „+ přidat položku trvale" u příplatků (19. 8. 2026): rovnou do katalogu
+ * ceníku (sekce priplatky) – stejná cesta jako 📌 u existujícího řádku. */
+function priplatekVlastniAddTrvale() {
+  if (!jeAdmin()) return;
+  katalogPridejVc(KATALOG, Z, 'priplatky', { nazev: 'Nový příplatek', mnozstvi: 1, cena: 0 });
   aktivniVarianta(ZAK).upraveno = new Date().toISOString();
   render();
 }
@@ -534,7 +599,9 @@ function renderOutputs() {
   const prip = `<table>
     <tr>${pripHlava}</tr>
     ${pripRows.map(pripRadek).join('')}
-    ${col.admin ? `<tr class="pridat noprint"><td colspan="${pripCols}"><button class="mini" onclick="priplatekVlastniAdd()">+ přidat vlastní příplatek</button></td></tr>` : ''}
+    ${col.admin ? `<tr class="pridat noprint"><td colspan="${pripCols}">
+      <button class="mini" title="vlastní příplatek jen této zakázky" onclick="priplatekVlastniAdd()">+ přidat položku</button>
+      <button class="mini" title="zapíše příplatek natrvalo do ceníku – bude ve všech nových nabídkách" onclick="priplatekVlastniAddTrvale()">+ přidat položku trvale</button></td></tr>` : ''}
     <tr class="tot"><td colspan="${pripCols - 1 - (col.admin ? 1 : 0)}">PŘÍPLATKY CELKEM (pokud vše)</td><td>${fmt0(r.souhrn.priplatkyCena)}</td>${col.admin ? '<td class="admincol"></td>' : ''}</tr>
   </table>
   <div class="note">Příplatkové položky jsou ceník variant pro zákazníka – do základní ceny se nezapočítávají.${col.admin ? `

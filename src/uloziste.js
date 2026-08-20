@@ -248,6 +248,23 @@ function uloZalohaRozhodni(zaznam, ctx) {
   return { nabidnout: true, smazat: false, duvod: 'rozpracovaná práce k obnovení' };
 }
 
+/* Zadání 19. 8. 2026: po obnovení stránky se online přihlášení a načtení
+ * ceníku tiše dotknou čerstvě založené PRÁZDNÉ zakázky – autosave by tou
+ * prázdnou zakázkou přepsal zálohu s rozpracovanou prací dřív, než uživatel
+ * stihne v liště kliknout „Obnovit rozpracovanou kalkulaci". Pravidlo:
+ * zakázka bez čísla nabídky i bez názvu akce nesmí přepsat zálohu, která
+ * obsah má. Jakmile uživatel cokoli z toho vyplní, píše se normálně –
+ * to už je vědomá nová práce, ne cizí start aplikace. */
+function uloZalohaSmiPrepsat(stavajici, ctx) {
+  const c = ctx || {};
+  const novaPrazdna = !uloCisloVyplneno(c.cislo) && !uloCisloVyplneno(c.nazevAkce);
+  if (!novaPrazdna) return true;
+  const s = stavajici || null;
+  const stavajiciMaObsah = !!(s && s.zakazka
+    && (uloCisloVyplneno(s.cislo) || uloCisloVyplneno(s.nazevAkce)));
+  return !stavajiciMaObsah;
+}
+
 /* ---------- razítko posledního zápisu -------------------------------- */
 
 /* Každý zápis do složky si do zakázky poznamená čas. Podle něj se pozná,
@@ -414,6 +431,7 @@ if (typeof module !== 'undefined')
                      ULO_HLAVICKA_POLE, uloHlavickaChybi, uloHlavickaVyplnena, uloUlozeniStav,
                      uloCasHhMm,
                      ULO_ZALOHA_STARI_DNI, uloZalohaStariDni, uloZalohaRozhodni,
+                     uloZalohaSmiPrepsat,
                      uloRazitkoNove, uloRazitko, uloKolize,
                      uloRejstrikZaznam, uloRejstrikNormalizuj, uloRejstrikSloucit,
                      uloRejstrikOdeber, uloRejstrikSerad, uloHledej,

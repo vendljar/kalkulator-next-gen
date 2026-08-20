@@ -38,7 +38,8 @@ const { uloJmenoSouboru, uloJeZakazkovySoubor, uloKlicSouboru,
         uloRejstrikOdeber, uloRejstrikSerad, uloHledej,
         uloKontrolaZamku, uloProblemPopis, uloKolize, uloRazitko,
         uloRazitkoNove, ULO_REJSTRIK_SOUBOR,
-        uloZalohaRozhodni, uloZalohaStariDni, ULO_ZALOHA_STARI_DNI } = U;
+        uloZalohaRozhodni, uloZalohaStariDni, ULO_ZALOHA_STARI_DNI,
+        uloZalohaSmiPrepsat } = U;
 
 let ok = 0, fail = 0;
 const test = (n, cond, info) => { if (cond) { ok++; console.log('OK  ' + n); } else { fail++; console.log('FAIL ' + n, info || ''); } };
@@ -261,6 +262,40 @@ test('záloha bez času se posuzuje jako čerstvá (radši se zeptat)',
   uloZalohaRozhodni(zaloha({ kdy: '' }), { ted: TED }).nabidnout === true);
 test('nesmyslný čas zálohu nezahodí',
   uloZalohaRozhodni(zaloha({ kdy: 'včera odpoledne' }), { ted: TED }).smazat === false);
+
+/* ---------- 9) kdy smí autosave přepsat zálohu (zadání 19. 8. 2026) ----
+ *
+ * Po obnovení stránky se online přihlášení a načtení ceníku tiše dotknou
+ * čerstvě založené PRÁZDNÉ zakázky – autosave by pak přepsal zálohu
+ * s rozpracovanou prací dřív, než uživatel stihne kliknout „Obnovit
+ * rozpracovanou kalkulaci". Pravidlo: prázdná zakázka (bez čísla i názvu
+ * akce) nesmí přepsat zálohu, která obsah má. */
+
+test('funkce uloZalohaSmiPrepsat existuje', typeof uloZalohaSmiPrepsat === 'function');
+
+test('prázdná nová zakázka NEsmí přepsat zálohu s rozpracovanou prací',
+  uloZalohaSmiPrepsat(zaloha(), { cislo: '', nazevAkce: '' }) === false);
+test('prázdná nová zakázka nesmí přepsat ani zálohu jen s názvem akce',
+  uloZalohaSmiPrepsat(zaloha({ cislo: '' }), { cislo: '', nazevAkce: '' }) === false);
+test('prázdná nová zakázka nesmí přepsat ani zálohu jen s číslem',
+  uloZalohaSmiPrepsat(zaloha({ nazevAkce: '' }), { cislo: '', nazevAkce: '' }) === false);
+test('předloha čísla („zadejte číslo…") se počítá jako nevyplněné číslo',
+  uloZalohaSmiPrepsat(zaloha(), { cislo: ZAK_CISLO_PREDLOHA, nazevAkce: '' }) === false);
+
+test('zakázka s číslem smí zálohu přepsat vždy',
+  uloZalohaSmiPrepsat(zaloha(), { cislo: '2026 - OPR - CN - 6', nazevAkce: '' }) === true);
+test('zakázka s názvem akce smí zálohu přepsat vždy',
+  uloZalohaSmiPrepsat(zaloha(), { cislo: '', nazevAkce: 'Šachta Brno' }) === true);
+
+test('prázdnou zálohu smí přepsat i prázdná zakázka (o nic se nepřijde)',
+  uloZalohaSmiPrepsat(zaloha({ cislo: '', nazevAkce: '' }), { cislo: '', nazevAkce: '' }) === true);
+test('žádná stávající záloha = zapsat se smí',
+  uloZalohaSmiPrepsat(null, { cislo: '', nazevAkce: '' }) === true);
+test('záznam bez těla zakázky nechrání nic',
+  uloZalohaSmiPrepsat({ cislo: '2026 - OPR - CN - 5', nazevAkce: 'X', zakazka: '' },
+                      { cislo: '', nazevAkce: '' }) === true);
+test('chybějící ctx se bere jako prázdná zakázka (radši nepřepisovat)',
+  uloZalohaSmiPrepsat(zaloha(), null) === false);
 
 console.log('\n' + ok + ' prošlo, ' + fail + ' selhalo');
 process.exit(fail ? 1 : 0);

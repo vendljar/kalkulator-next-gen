@@ -87,6 +87,7 @@ zkus('čerstvá záloha obnovu nabídne', cerstva.vidno);
 zkus('lišta pojmenuje, co se našlo', /0777|Nádraží/.test(cerstva.text));
 zkus('čerstvá záloha zůstává v úložišti', !!cerstva.zbylo);
 zkus('lišta nabízí obnovu i zahození', /Obnovit/.test(cerstva.text) && /Zahodit/.test(cerstva.text));
+zkus('tlačítko „Teď ne" v liště NENÍ (odstraněno 19. 8. 2026)', !/Teď ne/.test(cerstva.text));
 zkus('při startu se nic nesype do konzole', cerstva.chyby.length === 0);
 
 /* 2) Záloha starší než týden – právě tahle uživatele otravovala. Nejen že se
@@ -108,9 +109,16 @@ const jenNazev = await spust({ zaloha: zaloha({ cislo: '' }) });
 zkus('záloha jen s názvem akce se nabídne', jenNazev.vidno);
 await jenNazev.stranka.close();
 
-/* 5) „Teď ne" – uživatel jednou odložil, podruhé se už neptáme. Značka nese
+/* 5) Odložení – tlačítko „Teď ne" z lišty zmizelo (19. 8. 2026), samotný
+ *    mechanismus odložení ale zůstává (volá se funkce přímo): značka nese
  *    razítko odložené zálohy, samotná záloha zůstává na místě. */
-await cerstva.stranka.evaluate(() => historieOdlozZalohu());
+/* Stránky výše sdílejí totéž úložiště (jeden kontext) a mezitím ho měnily —
+ * pod zátěží se pořadí zápisů rozjíždělo a test byl vrtkavý. Proto se sem
+ * záloha před odložením vloží znovu, deterministicky. */
+await cerstva.stranka.evaluate(([klic, zal]) => {
+  localStorage.setItem(klic, zal);
+  historieOdlozZalohu();
+}, [KLIC, JSON.stringify(zaloha())]);
 await cerstva.stranka.waitForTimeout(80);
 const poOdlozeni = await cerstva.stranka.evaluate(([k, ko]) => ({
   skryto: !document.getElementById('obnovaLista').classList.contains('zobraz'),
@@ -160,6 +168,30 @@ zkus('úklidová funkce je v sestavení', napojeno[0]);
 zkus('uložení do souboru zálohu uklízí', napojeno[1]);
 zkus('uložení do databáze zálohu uklízí', napojeno[2]);
 await volani.stranka.close();
+
+/* 9) Autosave čerstvě založené PRÁZDNÉ zakázky nesmí přepsat zálohu
+ *    s rozpracovanou prací (zadání 19. 8. 2026). Přesně to se dělo po
+ *    obnovení stránky: přihlášení a načtení ceníku se dotkly prázdné
+ *    zakázky, autosave zálohu přepsal a „Obnovit" pak obnovilo prázdno. */
+const ochrana = await spust({ zaloha: zaloha() });
+const poZapisu = await ochrana.stranka.evaluate(([k]) => {
+  historieZalohaZapis();                       // ZAK je čerstvá prázdná zakázka
+  let z = null; try { z = JSON.parse(localStorage.getItem(k)); } catch (e) {}
+  const st = document.getElementById('autoStav');
+  return { cislo: z && z.cislo, stav: st ? st.textContent : '' };
+}, [KLIC]);
+zkus('autosave prázdné zakázky zálohu s prací nepřepsal', poZapisu.cislo === '2026 - OPR - CN - 0777');
+zkus('stav pod tlačítky vysvětlí, že záloha čeká na rozhodnutí', /čeká na rozhodnutí/.test(poZapisu.stav));
+const poVyplneni = await ochrana.stranka.evaluate(([k]) => {
+  ZAK.nazevAkce = 'Nová práce po startu';
+  if (typeof historieTik === 'function') try { historieTik(); } catch (e) {}
+  historieZalohaZapis();
+  let z = null; try { z = JSON.parse(localStorage.getItem(k)); } catch (e) {}
+  return { nazev: z && z.nazevAkce };
+}, [KLIC]);
+zkus('jakmile má zakázka název akce, autosave zase normálně píše',
+  poVyplneni.nazev === 'Nová práce po startu');
+await ochrana.stranka.close();
 
 await prohlizec.close();
 console.log('\n' + ok + ' OK, ' + fail + ' FAIL');

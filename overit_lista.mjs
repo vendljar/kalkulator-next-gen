@@ -254,7 +254,8 @@ ok('přehled obsahuje kartu Cenová nabídka PROJ (OVP-CN)', /cenová nabídka p
  * „Technická specifikace" na místo, kde se nabídka OCK nově tvoří. */
 ok('v přehledu tiskne PROJ a karta OCK vede na Technickou specifikaci',
    await p.locator('#page-zakazka button:has-text("Kompletní náhled a tisk nabídky")').count() >= 1
-   && await p.locator('#page-zakazka button:has-text("Technická specifikace")').count() >= 1);
+   /* 19. 8. 2026 večer: tlačítko přejmenováno na „Přejít na technickou specifikaci" */
+   && await p.locator('#page-zakazka button:has-text("Přejít na technickou specifikaci")').count() >= 1);
 ok('stavový řádek nabídky OCK je nově jen u dokumentové sekce v Technické specifikaci',
    await p.locator('.nabidkaStav').count() === 1 && await p.locator('#nabidkaStav').count() === 0);
 ok('poznámka vysvětluje, že se nabídky neukládají', prehledText.includes('generují se vždy živě'));
@@ -1253,7 +1254,8 @@ ok('u neplatného IČO panel mluví o kontrolní číslici',
    /kontrolní číslici/.test(ares.neplatneText), ares.neplatneText);
 ok('nalezená firma je vidět jménem', /Zkušební strojírny/.test(ares.nalezenoText), ares.nalezenoText);
 ok('panel ukáže i sídlo z rejstříku', /Vlárská/.test(ares.nalezenoText), ares.nalezenoText);
-ok(`tabulka staví „teď" proti „z rejstříku" (řádků i s hlavičkou: ${ares.radku})`, ares.radku === 3);
+/* 19. 8. 2026: k názvu a sídlu přibylo DIČ objednatele → 4 řádky s hlavičkou */
+ok(`tabulka staví „teď" proti „z rejstříku" (řádků i s hlavičkou: ${ares.radku})`, ares.radku === 4);
 ok('panel nabídne přepis i odmítnutí', ares.maPotvrzeni && ares.maOdmitnuti);
 ok('do potvrzení se hlavička nezmění',
    ares.pred.objednatel === '' && ares.pred.adresa === '', JSON.stringify(ares.pred));

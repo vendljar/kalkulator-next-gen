@@ -163,6 +163,17 @@ function historieZalohaZapis() {
     nazevAkce: ZAK.nazevAkce || '',
     zakazka: HIST.posledni || JSON.stringify(ZAK),
   };
+  /* Prázdná zakázka (bez čísla i názvu akce) nesmí tiše přepsat zálohu
+   * s rozpracovanou prací – přesně to se dělo po obnovení stránky, kdy se
+   * online přihlášení a načtení ceníku dotkly čerstvě založené zakázky
+   * dřív, než uživatel v liště stihl kliknout „Obnovit rozpracovanou
+   * kalkulaci". Pravidlo drží model (uloZalohaSmiPrepsat v uloziste.js). */
+  if (typeof uloZalohaSmiPrepsat === 'function'
+      && !uloZalohaSmiPrepsat(historieZalohaCti(), zaznam)) {
+    HIST.autoStav = '⛁ záloha z dřívějška čeká na rozhodnutí v liště obnovy';
+    historieTlacitka();
+    return;
+  }
   const ok = Uloziste.zapis(HIST_KLIC, JSON.stringify(zaznam));
   HIST.autoStav = ok
     ? '⛁ zálohováno ' + new Date().toLocaleTimeString('cs-CZ')
@@ -211,14 +222,16 @@ function historieNabidniObnovu() {
   el.innerHTML = `<span>⛁ V prohlížeči je <b>rozpracovaná kalkulace</b> (${esc(co)}), naposledy uložená ${esc(kdy)}.
       Chcete ji obnovit?</span>
     <button class="primary" onclick="historieObnovZalohu()">Obnovit rozpracovanou kalkulaci</button>
-    <button class="mini" onclick="historieZahodZalohu()">Zahodit zálohu</button>
-    <button class="mini" onclick="historieOdlozZalohu()">Teď ne</button>`;
+    <button class="mini" onclick="historieZahodZalohu()">Zahodit zálohu</button>`;
   el.classList.add('zobraz');
 }
 
 /* „Teď ne" = zálohu si nechám, ale už se na ni neptej. Zapamatuje se razítko
  * odložené zálohy; jakmile vznikne novější (uživatel na něčem znovu dělá),
- * lišta se ozve zas – to už je nová informace, ne opakovaná otázka. */
+ * lišta se ozve zas – to už je nová informace, ne opakovaná otázka.
+ * POZOR (zadání 19. 8. 2026): tlačítko „Teď ne" z lišty ZMIZELO – uživatel
+ * má rozhodnout obnovit/zahodit, odkládání vedlo ke ztrátám práce. Funkce
+ * zůstává pro model odložení (uloZalohaRozhodni s ctx.odlozeno) a testy. */
 function historieOdlozZalohu() {
   const z = historieZalohaCti();
   if (z) Uloziste.zapis(HIST_ODLOZENO_KLIC, String(z.kdy || ''));

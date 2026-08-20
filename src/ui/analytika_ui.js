@@ -275,8 +275,12 @@ function heatNacti() {
 function heatSmaz() {
   document.querySelectorAll('.heat-tint, .heat-badge').forEach(e => e.remove());
   document.querySelectorAll('[data-heat-styl]').forEach(e => {
-    e.style.background = ''; e.style.boxShadow = ''; e.style.outline = '';
+    /* Vrátit PŮVODNÍ inline styl, ne prázdno: některá tlačítka nesou vlastní
+     * inline barvy z návrhu (např. zelené „Přejít na technickou specifikaci",
+     * 19. 8. 2026) a mazání na prázdno by je po vypnutí mapy odbarvilo. */
+    e.style.cssText = e.dataset.heatPuvodni || '';
     delete e.dataset.heatStyl;
+    delete e.dataset.heatPuvodni;
   });
 }
 function heatPanelSmaz() { const p = document.getElementById('heatPanel'); if (p) p.remove(); }
@@ -310,6 +314,7 @@ function heatKresli() {
     const v = heatHodnota(el);
     const max = maxima.get(skupina(el)) || 1;
     el.dataset.heatStyl = '1';
+    el.dataset.heatPuvodni = el.style.cssText || '';   // k obnově po vypnutí mapy
     if (v === 0) {
       el.style.outline = '2px dashed #b3bcc9'; el.style.outlineOffset = '1px';
     } else {

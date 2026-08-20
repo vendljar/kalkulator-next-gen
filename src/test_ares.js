@@ -75,7 +75,8 @@ test('představení prázdného subjektu je prázdné', aresPopis(null) === '');
 /* ---------- 4) seznam změn k potvrzení ---------- */
 const prazdna = { cislo: 'CN-1', objednatel: '', adresaObjednatele: '', ico: '25596641', kontakt: 'Ing. Nový' };
 const r1 = aresRozdily(prazdna, s);
-test('do prázdné hlavičky se nabídne název i sídlo', r1.length === 2, r1.map(x => x.klic).join(','));
+test('do prázdné hlavičky se nabídne název, sídlo i DIČ (DIČ přibylo 19. 8. 2026)',
+  r1.length === 3 && r1.some(x => x.klic === 'dic'), r1.map(x => x.klic).join(','));
 test('IČO, které už sedí, se v seznamu neopakuje', r1.every(x => x.klic !== 'ico'));
 test('u každé změny je vidět, co tam je teď', r1.every(x => 'ted' in x && 'nove' in x));
 test('kontaktní osoba mezi změnami není – rejstřík ji nevede',
@@ -83,7 +84,7 @@ test('kontaktní osoba mezi změnami není – rejstřík ji nevede',
 
 const jina = { objednatel: 'Stará firma a.s.', adresaObjednatele: 'Někde 1', ico: '' };
 const r2 = aresRozdily(jina, s);
-test('rozdílné údaje se nabídnou všechny tři', r2.length === 3, r2.map(x => x.klic).join(','));
+test('rozdílné údaje se nabídnou všechny čtyři (vč. DIČ)', r2.length === 4, r2.map(x => x.klic).join(','));
 test('u přepisu je vidět původní hodnota',
   r2.find(x => x.klic === 'objednatel').ted === 'Stará firma a.s.');
 
@@ -92,12 +93,13 @@ test('údaj, který rejstřík nezná, se nenabídne k přepsání',
   aresRozdily(jina, bezNazvu).every(x => x.klic !== 'objednatel'));
 test('prázdný subjekt nenabídne nic', aresRozdily(jina, null).length === 0);
 test('shodná hlavička nenabídne nic',
-  aresRozdily({ objednatel: s.nazev, adresaObjednatele: s.adresa, ico: s.ico }, s).length === 0);
+  aresRozdily({ objednatel: s.nazev, adresaObjednatele: s.adresa, ico: s.ico, dic: s.dic }, s).length === 0);
 
 /* ---------- 5) samotný přepis ---------- */
 const hl = { objednatel: 'Stará firma a.s.', adresaObjednatele: '', ico: '', kontakt: 'Ing. Nový', cislo: 'CN-7' };
 const pocet = aresPrepis(hl, s);
-test('přepis změní právě tolik polí, kolik jich bylo v seznamu', pocet === 3, String(pocet));
+test('přepis změní právě tolik polí, kolik jich bylo v seznamu (vč. DIČ)', pocet === 4, String(pocet));
+test('DIČ se doplnilo', hl.dic === 'CZ25596641');
 test('objednatel se přepsal', hl.objednatel === 'Zkušební strojírny s.r.o.');
 test('sídlo se doplnilo', hl.adresaObjednatele === 'Vlárská 22/3, Černovice, 618 00 Brno');
 test('IČO se doplnilo', hl.ico === '25596641');

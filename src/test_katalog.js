@@ -80,6 +80,55 @@ const rR = vypocet(zR, cenik, jekly, false);
 const ruc = rR.sekce.hrubaOck.find(x => x.nazev === 'Ruční');
 boolChk('ruční položka bez kid', !!ruc && ruc.kid == null && ruc.pozn === 'ruční položka');
 
+// ---- 5. trvalé položky ceníku PROJ (19. 8. 2026) ----------------------------
+/* „+ přidat položku trvale" v Kalkulaci PROJ zapisuje do ceníku PROJ dané
+ * sekce (pc.vlastniPolozky), aby položka platila pro všechny budoucí zakázky.
+ * Aplikace do zadání je idempotentní (kid) a respektuje ruční odebrání. */
+const pc = ZC.zkusebniCenikProj();
+const itF = KAT.projKatalogPridej(pc, 'dpz', { nazev: 'Radonový průzkum', typ: 'fix', cena: 8000 });
+const itH = KAT.projKatalogPridej(pc, 'studie', { nazev: 'Vizualizace', typ: 'hod', sazba: 'projektant', hodiny: 6 });
+boolChk('fixní položka dostala kid', /^pk\d+$/.test(itF.kid));
+boolChk('hodinová položka dostala kid', /^pk\d+$/.test(itH.kid) && itH.kid !== itF.kid);
+boolChk('ceník PROJ nese obě položky',
+  pc.vlastniPolozky.dpz.length === 1 && pc.vlastniPolozky.studie.length === 1);
+
+const { DEFAULT_ZADANI_PROJ, vypocetProj } = require('./engine_proj.js');
+const pj = JSON.parse(JSON.stringify(DEFAULT_ZADANI_PROJ));
+chk('aplikace do zadání PROJ přidá 2 položky', KAT.projKatalogAplikuj(pc, pj), 2, 0);
+chk('idempotence – druhý běh nic nepřidá', KAT.projKatalogAplikuj(pc, pj), 0, 0);
+const sDpz = pj.sekce.find(s => s.key === 'dpz');
+const pRadon = sDpz.polozky.find(p => p.kid === itF.kid);
+boolChk('fixní položka dorazila do sekce DPZ jako vlastní',
+  !!pRadon && pRadon.vlastni === true && pRadon.typ === 'fix' && pRadon.cena === 8000);
+const sStudie = pj.sekce.find(s => s.key === 'studie');
+const pViz = sStudie.polozky.find(p => p.kid === itH.kid);
+boolChk('hodinová položka dorazila do sekce STUDIE se sazbou a hodinami',
+  !!pViz && pViz.typ === 'hod' && pViz.sazba === 'projektant' && pViz.hodiny === 6);
+const rProj = vypocetProj(pj, pc);
+boolChk('výpočet PROJ trvalou fixní položku počítá',
+  rProj.sekce.find(s => s.key === 'dpz').polozky.some(p => p.nazev === 'Radonový průzkum' && p.naklad === 8000));
+
+/* ruční odebrání v jedné zakázce se respektuje */
+KAT.projKatalogZapamatujOdebrani(pj, pRadon);
+sDpz.polozky.splice(sDpz.polozky.indexOf(pRadon), 1);
+chk('po odebrání se položka do zakázky nevrací', KAT.projKatalogAplikuj(pc, pj), 0, 0);
+
+/* úprava trvalé položky se propíše do ceníku PROJ */
+pViz.hodiny = 9; pViz.nazev = 'Vizualizace exteriéru';
+KAT.projKatalogPropis(pc, 'studie', pViz);
+boolChk('úprava řádku se propsala do ceníku PROJ',
+  pc.vlastniPolozky.studie[0].hodiny === 9 && pc.vlastniPolozky.studie[0].nazev === 'Vizualizace exteriéru');
+
+/* nová zakázka (čerstvé zadání) dostane trvalé položky z ceníku */
+const pj2 = JSON.parse(JSON.stringify(DEFAULT_ZADANI_PROJ));
+chk('čerstvé zadání dostane z ceníku 2 položky', KAT.projKatalogAplikuj(pc, pj2), 2, 0);
+boolChk('a hodinová už nese upravených 9 hodin',
+  pj2.sekce.find(s => s.key === 'studie').polozky.some(p => p.kid === itH.kid && p.hodiny === 9));
+
+/* smazání z ceníku PROJ */
+boolChk('smazání trvalé položky z ceníku PROJ', KAT.projKatalogSmaz(pc, 'studie', itH.kid) === true);
+boolChk('po smazání v ceníku není', pc.vlastniPolozky.studie.length === 0);
+
 let fail = 0;
 for (const [st, name, got, want] of T) {
   if (st === 'FAIL') fail++;

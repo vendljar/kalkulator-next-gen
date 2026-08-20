@@ -71,6 +71,48 @@ test('SoD projekce má vlastní jméno souboru', sodP.nazevSouboru.indexOf('SOD_
 test('symboly SODP_* se neplní (platby po fázích doplní obchodník)',
   !('SODP_PLATBA1_KC' in sodP.placeholders));
 
+// ---- OBJEDNATEL_SIDLO / OBJEDNATEL_ICO / OBJEDNATEL_DIC (19. 8. 2026) -------
+/* Šablony SoD tyhle symboly používají, ale aplikace je do 19. 8. neposílala,
+ * takže smlouva zela {{…}} i tam, kde zakázka údaje MÁ. Plní se JEN
+ * neprázdné hodnoty: prázdný symbol má v dokumentu zůstat viditelně
+ * k ručnímu doplnění — nikdy se nesmí nahradit prázdnem. */
+const zakU = novaZakazka();
+zakU.cislo = '2026 - OPR - CN - 0156';
+zakU.objednatel = 'SVJ Zkušební 9'; zakU.nazevAkce = 'SoD s údaji objednatele';
+zakU.adresaObjednatele = 'Sídlištní 12, Praha 4';
+zakU.ico = '12345678'; zakU.dic = 'CZ12345678';
+const sodU = sodData(zakU, zakU.varianty[0], JEKLY, 'cz');
+test('SoD nese sídlo objednatele (OBJEDNATEL_SIDLO)',
+  sodU.placeholders.OBJEDNATEL_SIDLO === 'Sídlištní 12, Praha 4');
+test('SoD nese IČO objednatele (OBJEDNATEL_ICO)',
+  sodU.placeholders.OBJEDNATEL_ICO === '12345678');
+test('SoD nese DIČ objednatele (OBJEDNATEL_DIC)',
+  sodU.placeholders.OBJEDNATEL_DIC === 'CZ12345678');
+const sodPU = sodProjData(zakU, zakU.varianty[0], 'cz');
+test('SoD projekce nese OBJEDNATEL_SIDLO/ICO/DIC stejně',
+  sodPU.placeholders.OBJEDNATEL_SIDLO === 'Sídlištní 12, Praha 4'
+  && sodPU.placeholders.OBJEDNATEL_ICO === '12345678'
+  && sodPU.placeholders.OBJEDNATEL_DIC === 'CZ12345678');
+/* prázdné údaje → symbol se NEplní a v dokumentu zůstává vidět */
+test('prázdné sídlo/IČO/DIČ se do placeholders nedávají (symbol zůstane vidět)',
+  !('OBJEDNATEL_SIDLO' in sod.placeholders) && !('OBJEDNATEL_ICO' in sod.placeholders)
+  && !('OBJEDNATEL_DIC' in sod.placeholders));
+const xmlU = '<w:t>{{OBJEDNATEL_SIDLO}} {{OBJEDNATEL_DIC}}</w:t>';
+test('nevyplněný symbol objednatele zůstává v dokumentu viditelný',
+  require('./docxgen.js').nahradPlaceholdery(xmlU, sod.placeholders)
+    .includes('{{OBJEDNATEL_SIDLO}}'));
+/* nové pole dic v zakázce + dotažení z ARES */
+test('novaZakazka má pole dic (prázdné)', novaZakazka().dic === '');
+test('ARES_POLE nabízí DIČ objednatele',
+  (() => { const A = require('./ares.js');
+    const p = A.ARES_POLE.find(x => x.klic === 'dic');
+    return !!p && p.label === 'DIČ objednatele' && p.z({ dic: 'CZ999' }) === 'CZ999'; })());
+/* zamčené symboly se dál NEplní (rozhodnutí trvá) */
+test('OBJEDNATEL_ZASTUPCE_* a OBJEDNATEL_BANKA se dál neplní',
+  !('OBJEDNATEL_ZASTUPCE_JMENO' in sodU.placeholders)
+  && !('OBJEDNATEL_BANKA' in sodU.placeholders)
+  && !('OBJEDNATEL_UCET' in sodU.placeholders));
+
 // ---- plná moc ---------------------------------------------------------------
 const pm = plnaMocData(zak, v);
 test('plná moc nese firemní údaje ({{FIRMA_*}})',

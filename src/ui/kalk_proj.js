@@ -18,6 +18,18 @@ function pjSekce(i) { return PJ.sekce[i]; }
 function pjSet(i, cesta, val) {
   const ks = cesta.split('.'); const last = ks.pop();
   ks.reduce((o, k) => o[k], PJ.sekce[i])[last] = val;
+  /* Úprava TRVALÉHO řádku (kid z ceníku PROJ) se propíše zpět do ceníku,
+   * aby nové zakázky nedostávaly „Nová položka / 0", kterou už nikdo tak
+   * nevidí (19. 8. 2026). Ceník téhle varianty i globální ceník aplikace. */
+  const mCesta = cesta.match(/^polozky\.(\d+)\./);
+  if (mCesta) {
+    const p = PJ.sekce[i].polozky[+mCesta[1]];
+    if (p && p.kid && typeof projKatalogPropis === 'function') {
+      projKatalogPropis(PC, PJ.sekce[i].key, p);
+      if (typeof DEFAULT_CENIK_PROJ !== 'undefined')
+        projKatalogPropis(DEFAULT_CENIK_PROJ, PJ.sekce[i].key, p);
+    }
+  }
   aktivniVarianta(ZAK).upraveno = new Date().toISOString();
   render();
 }
@@ -27,10 +39,39 @@ function pjPolozkaAdd(i, typ) {
     : { nazev: 'Nová položka', typ: 'fix', cena: 0, vlastni: true });
   render();
 }
+/* „+ přidat položku trvale" (19. 8. 2026, jen administrátor): položka se
+ * založí v CENÍKU PROJ dané sekce (PC.vlastniPolozky) — platí pro všechny
+ * budoucí zakázky, přežije obnovení stránky (ceník cestuje s variantou a
+ * zveřejňuje se do platného ceníku programu). Zapíše se i do globálního
+ * DEFAULT_CENIK_PROJ, aby ji hned dostala každá nová zakázka v této relaci. */
+function pjPolozkaAddTrvale(i, typ) {
+  if (!jeAdmin()) return;
+  const key = PJ.sekce[i].key;
+  const it = projKatalogPridej(PC, key, { typ: typ === 'hod' ? 'hod' : 'fix' });
+  if (typeof DEFAULT_CENIK_PROJ !== 'undefined' && DEFAULT_CENIK_PROJ !== PC) {
+    /* stejné kid v obou cenících; čítač srovnat, ať se id nikdy nepotkají */
+    DEFAULT_CENIK_PROJ.vlastniSeq = Math.max(+DEFAULT_CENIK_PROJ.vlastniSeq || 0, +PC.vlastniSeq || 0);
+    if (!projKatalogSekce(DEFAULT_CENIK_PROJ, key).some(k => k.kid === it.kid))
+      projKatalogSekce(DEFAULT_CENIK_PROJ, key).push(JSON.parse(JSON.stringify(it)));
+  }
+  projKatalogAplikuj(PC, PJ);
+  aktivniVarianta(ZAK).upraveno = new Date().toISOString();
+  render();
+}
 /* Smazat jde jen vlastní řádek. Předlohová položka se z kalkulace nevyhazuje —
  * od toho je vyřazení (pjVyrazeno): zůstane vidět, co u téhle stavby neděláme
- * a za kolik, a příště se vrátí jedním kliknutím. */
-function pjPolozkaDel(i, j) { PJ.sekce[i].polozky.splice(j, 1); render(); }
+ * a za kolik, a příště se vrátí jedním kliknutím.
+ * Trvalý řádek (kid) se maže jen v TÉTO zakázce a zapamatuje se, ať se
+ * nevrací; v ceníku PROJ a v nových nabídkách zůstává (stejně jako OCK). */
+function pjPolozkaDel(i, j) {
+  const p = PJ.sekce[i].polozky[j];
+  if (p && p.kid) {
+    if (!confirm('Položka „' + p.nazev + '" je trvalá (z ceníku PROJ).\n\nSmazat ji jen v této zakázce?\nV ceníku a v nových nabídkách zůstane.')) return;
+    if (typeof projKatalogZapamatujOdebrani === 'function') projKatalogZapamatujOdebrani(PJ, p);
+  }
+  PJ.sekce[i].polozky.splice(j, 1);
+  render();
+}
 
 /* ---- ruční přepisy položky PROJ (#8) ----
  * Prázdné pole = přepis není a platí ceník; nula je platný přepis
@@ -201,6 +242,16 @@ function renderProj() {
   const sekceHtml = r.sekce.map((s, i) => {
     const zdroj = pjSekce(i);
 
+    /* Režim sekce (19. 8. 2026 večer, stejné pravidlo jako OCK): skrytou
+     * sekci obchodník/vedoucí vůbec nedostane (počítá se dál!), srolovaná
+     * ukáže jen nadpis + CELKEM a jde rozbalit. Administrátor vidí vždy vše
+     * a v nadpisu má select s volbou zobrazit / skrýt / srolovat. */
+    const rezimSek = sekceRezim('proj', s.key);
+    if (rezimSek === 'skryt') return '';
+    const sbalenoSek = sekceSbalena('proj', s.key);
+    const vpravoSek = col.admin ? sekceRezimSelect('proj', s.key)
+      : (rezimSek === 'srolovat' ? sekceRozbalBtn('proj', s.key) : '');
+
     /* Vyřazená položka je informace pro nás, ne pro zákazníka: běžný uživatel
      * ji nevidí vůbec (zadání „přeškrtnuté položky odstraň"), admin ji vidí
      * ztlumenou a přeškrtnutou, aby věděl, co u téhle stavby vyřadil.
@@ -219,7 +270,9 @@ function renderProj() {
        * ať už je vyplněná, nebo v ní svítí jen nápověda. */
       /* Vlastní řádek smí upravit i ten, kdo ho směl přidat (19. 8. 2026,
        * právo kalk.pridatPolozku) — viz stejné pravidlo v Kalkulaci OCK. */
-      const vlEd = !col.admin && p.vlastni && smiZobrazit('kalk.pridatPolozku');
+      /* Trvalý řádek z ceníku PROJ (p.kid) upravuje jen admin — obchodník by
+       * jinak nevědomky měnil položku, která platí pro všechny nové nabídky. */
+      const vlEd = !col.admin && p.vlastni && !p.kid && smiZobrazit('kalk.pridatPolozku');
       const nazev = col.admin
         ? `<div class="vol-name">${grip}<input type="text" class="nazev-ed" value="${esc(p.nazev)}" onchange="pjSet(${i}, 'polozky.${j}.nazev', this.value)">${del}</div>`
           + `<input type="text" class="pozn-ed noprint" value="${esc(p.pozn || '')}" placeholder="poznámka (interní)"
@@ -299,10 +352,20 @@ function renderProj() {
           ? `<tr><td>Doprava${zdroj.doprava.mimoPrahu ? ' (mimo Prahu)' : ''}</td><td>${num(zdroj.doprava.km)}</td><td class="note">km</td><td></td>
              <td class="note">${zdroj.doprava.mimoPrahu ? fmt(mimoKc) : '—'}${rucniPill}</td>${penize(s.dopravaKc, null, s.dopravaKc)}</tr>` : '');
 
-    const pridat = (col.admin || smiZobrazit('kalk.pridatPolozku'))
-      ? `<tr class="pridat noprint"><td colspan="${NC}">
-           <button class="mini" onclick="pjPolozkaAdd(${i}, 'hod')">+ přidat hodinovou položku do sekce</button>
-           <button class="mini" onclick="pjPolozkaAdd(${i}, 'fix')">+ přidat fixní položku do sekce</button></td></tr>`
+    /* Sjednocený řádek přidávání (19. 8. 2026 večer, stejné pravidlo jako
+     * OCK): „+ přidat …" = vlastní řádek jen této zakázky (obchodník,
+     * vedoucí i admin — právo kalk.pridatPolozku); „… trvale" = JEN admin,
+     * položka se založí v ceníku PROJ dané sekce a platí pro všechny
+     * budoucí zakázky. */
+    const pridatBtns = [];
+    if (col.admin || smiZobrazit('kalk.pridatPolozku'))
+      pridatBtns.push(`<button class="mini" title="vlastní řádek jen této zakázky" onclick="pjPolozkaAdd(${i}, 'hod')">+ přidat hodinovou položku</button>`,
+        `<button class="mini" title="vlastní řádek jen této zakázky" onclick="pjPolozkaAdd(${i}, 'fix')">+ přidat fixní položku</button>`);
+    if (col.admin)
+      pridatBtns.push(`<button class="mini" title="zapíše položku natrvalo do ceníku PROJ – bude ve všech nových nabídkách" onclick="pjPolozkaAddTrvale(${i}, 'hod')">+ přidat hodinovou položku trvale</button>`,
+        `<button class="mini" title="zapíše položku natrvalo do ceníku PROJ – bude ve všech nových nabídkách" onclick="pjPolozkaAddTrvale(${i}, 'fix')">+ přidat fixní položku trvale</button>`);
+    const pridat = pridatBtns.length
+      ? `<tr class="pridat noprint"><td colspan="${NC}">${pridatBtns.join(' ')}</td></tr>`
       : '';
 
     /* Vlastní % sekce nemá vlastní pruh přes celou šířku – ten uživatel
@@ -334,8 +397,8 @@ function renderProj() {
     // id řádku s názvem sekce = cíl kotvy v klouzající liště (kalkLista)
     return `<tr class="sechd" id="proj-sek-${i}"><td colspan="${NC}">
         <div style="display:flex;align-items:center;gap:12px">
-          <span style="flex:1">${esc(s.nazev)}</span>${vlastniPct}${sekceChk}</div></td></tr>`
-      + radky + doprava + pridat
+          <span style="flex:1">${esc(s.nazev)}</span>${vlastniPct}${vpravoSek}${sekceChk}</div></td></tr>`
+      + (sbalenoSek ? '' : radky + doprava + pridat)
       /* Součtový řádek: závorka z názvu se stěhuje AŽ ZA slovo CELKEM
        * (zadání 18. 8.) — „KOLAUDACE CELKEM (pro 1 ks výtahu)". */
       + `<tr class="sectot"><td colspan="${POPIS_SL}">${esc(nazevBezZavorek(s.nazev))} CELKEM${
