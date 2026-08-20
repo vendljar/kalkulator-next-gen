@@ -358,6 +358,14 @@
   tr.vyrazeno td { color:rgba(26,35,50,.5); text-decoration:line-through; }
   tr.vyrazeno td input, tr.vyrazeno td button, tr.vyrazeno td select {
     text-decoration:none; opacity:1; color:var(--ink); }
+  /* Nezahrnutá VOLITELNÁ položka (20. 8. 2026): není vyřazená, jen zatím
+     nespadá do základní ceny — proto ztlumit ano, přeškrtnout ne. Do 20. 8.
+     na ni řádek dostával inline opacity:.5, která se násobila i na
+     zaškrtávátka admin sloupců: hlásili jsme „světle modré položky".
+     Stejné pravidlo jako u .vyrazeno — tlumí se BARVA, ovládací prvky ne. */
+  tr.nezahrnuto td { color:rgba(26,35,50,.5); }
+  tr.nezahrnuto td input, tr.nezahrnuto td button, tr.nezahrnuto td select {
+    opacity:1; color:var(--ink); }
   /* Interní poznámka k položce — do nabídky ani krycího listu nejde (pravidlo #37),
      tak ať ani v tabulce nekřičí: menší, tlumená, rozbalí se až při psaní. */
   input.pozn-ed { display:block; width:100%; min-width:260px; margin-top:2px; padding:2px 5px;

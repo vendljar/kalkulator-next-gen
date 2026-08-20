@@ -193,5 +193,77 @@ test('očista bez voleb sekcí klíč `sekce` vůbec nezakládá',
 test('výchozí matice žádné volby sekcí nenese (= vše zobrazit)',
   Z.zobrazeniVychozi().sekce === undefined);
 
+
+/* ---------------------------------------------------------------------------
+ * VÝCHOZÍ ZAŠKRTNUTÍ POLOŽEK (zadání 20. 8. 2026)
+ *
+ * Sloupec „Výchozí" do 20. 8. zapisoval do zadání otevřené zakázky, kde ho
+ * nikdo nečetl — zaškrtnutí se dalo kliknout a nestalo se nic. Teď má domov
+ * v matici (klíč `vychozi`) a platí pro NOVÉ zakázky. Sada hlídá tři věci:
+ *   1) ukládá se jen ODCHYLKA od tvrdého výchozího stavu z kódu,
+ *   2) očista nepustí dál nic jiného než boolean u platného klíče,
+ *   3) aplikace na čerstvé zadání mění právě to, co matice říká — a nic víc.
+ * ------------------------------------------------------------------------ */
+console.log('\nvýchozí zaškrtnutí položek');
+
+let m = {};
+test('bez záznamu platí tvrdý výchozí stav z kódu',
+  Z.zobrazeniPolozkaVychozi(m, 'ock.leseniVnejsi', false) === false
+  && Z.zobrazeniPolozkaVychozi(m, 'ock.leseniVnitrni', true) === true);
+
+Z.zobrazeniPolozkaVychoziNastav(m, 'ock.leseniVnejsi', true, false);
+test('odchylka od výchozího stavu se uloží', m.vychozi && m.vychozi['ock.leseniVnejsi'] === true);
+test('a hned platí', Z.zobrazeniPolozkaVychozi(m, 'ock.leseniVnejsi', false) === true);
+
+Z.zobrazeniPolozkaVychoziNastav(m, 'ock.leseniVnejsi', false, false);
+test('návrat na výchozí stav klíč zase smaže (matice nese jen změny)', m.vychozi === undefined);
+
+Z.zobrazeniPolozkaVychoziNastav(m, 'cizi.polozka', true, false);
+test('cizí oblast se neuloží', m.vychozi === undefined);
+
+const ocv = Z.zobrazeniOciste({ vychozi: {
+  'ock.haky': true,            // platné
+  'proj.dpz.Statika': false,   // platné (sekce + název položky)
+  'ock.sokl': 'ano',           // není boolean → pryč
+  'cizi.x': true,              // cizí oblast → pryč
+} });
+test('očista podrží jen booleany u platných klíčů',
+  ocv.vychozi && ocv.vychozi['ock.haky'] === true && ocv.vychozi['proj.dpz.Statika'] === false
+  && ocv.vychozi['ock.sokl'] === undefined && ocv.vychozi['cizi.x'] === undefined);
+test('očista bez výchozích klíč `vychozi` nezakládá', Z.zobrazeniOciste({}).vychozi === undefined);
+test('výchozí matice žádná výchozí zaškrtnutí nenese', Z.zobrazeniVychozi().vychozi === undefined);
+
+/* aplikace na čerstvé zadání */
+const maticeA = { vychozi: {
+  'ock.haky': true,                 // zapnout, ačkoli kód má vypnuto
+  'ock.prechodove': false,          // vypnout, ačkoli kód má zapnuto
+  'proj.zamereni.Zaměření': true,   // zapnout vyřazenou položku
+  'proj.studie.Studie': false,      // vyřadit počítanou položku
+} };
+const zadaniOck = { prechodovePlechy: true, volitelne: { haky: false, sokl: false, leseniVnitrni: true } };
+const zadaniProj = { sekce: [
+  { key: 'zamereni', polozky: [{ nazev: 'Zaměření', vyrazeno: true }, { nazev: 'Výstup', vyrazeno: true }] },
+  { key: 'studie', polozky: [{ nazev: 'Studie' }, { nazev: 'Konzultace' }] },
+] };
+const zmen = Z.zobrazeniVychoziAplikuj(maticeA, zadaniOck, zadaniProj);
+test('aplikace zapne i vypne přesně to, co matice říká',
+  zadaniOck.volitelne.haky === true && zadaniOck.prechodovePlechy === false
+  && zadaniProj.sekce[0].polozky[0].vyrazeno === undefined
+  && zadaniProj.sekce[1].polozky[0].vyrazeno === true, { zadaniOck, zadaniProj });
+test('položek bez záznamu se aplikace nedotkne',
+  zadaniOck.volitelne.sokl === false && zadaniOck.volitelne.leseniVnitrni === true
+  && zadaniProj.sekce[0].polozky[1].vyrazeno === true
+  && zadaniProj.sekce[1].polozky[1].vyrazeno === undefined);
+test('vrací počet změněných položek', zmen === 4, zmen);
+test('prázdná matice nezmění nic',
+  Z.zobrazeniVychoziAplikuj({}, { prechodovePlechy: true, volitelne: { haky: false } },
+    { sekce: [{ key: 'studie', polozky: [{ nazev: 'Studie' }] }] }) === 0);
+test('aplikace snese chybějící zadání (jen OCK, jen PROJ, nic)',
+  Z.zobrazeniVychoziAplikuj(maticeA, null, null) === 0);
+
+test('klíč položky PROJ dá přednost kid před názvem',
+  Z.zobrazeniProjKlic('dpz', { kid: 'pk3', nazev: 'Nová položka' }) === 'proj.dpz.pk3'
+  && Z.zobrazeniProjKlic('dpz', { nazev: 'Statika' }) === 'proj.dpz.Statika');
+
 console.log('\n' + ok + ' OK, ' + fail + ' FAIL');
 process.exit(fail ? 1 : 0);

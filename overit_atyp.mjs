@@ -69,8 +69,15 @@ zkus('nula je platná dohoda („uděláme zdarma"), ne návrat k ceníku', sazb
 await p.click('#tab-kalk');
 await p.waitForTimeout(250);
 const kalkText = await p.locator('#page-kalk').innerText();
-zkus('v HRUBÉ OCK je tlačítko na atypickou položku',
-  /přidat atypickou položku/i.test(kalkText));
+/* Tlačítko „+ přidat atypickou položku (práce navíc)" bylo 20. 8. 2026 na
+ * pokyn J. V. z Hrubé OCK ODEBRÁNO — od sjednocení přidávání (19. 8.) dělalo
+ * totéž co „+ přidat položku". Sekce `atyp` ve výpočtu žije dál (starší
+ * zakázky ji nesou a předvyplnění ATYP na ní stojí), což ověřují kontroly
+ * níže: řádek přidaný přes vlastniAdd('atyp') se pořád počítá do Hrubé OCK. */
+zkus('tlačítko na atypickou položku v HRUBÉ OCK už není',
+  !/přidat atypickou položku/i.test(kalkText));
+zkus('běžná přidávací tlačítka v sekci zůstala',
+  /\+ přidat položku/i.test(kalkText));
 
 const pridano = await p.evaluate(() => {
   vlastniAdd('atyp');

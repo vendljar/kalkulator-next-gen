@@ -213,11 +213,18 @@ function viditelnostSet(key, viditelne) {
   aktivniVarianta(ZAK).upraveno = new Date().toISOString();
   render();
 }
-function volitelneVychoziSet(key, v) {
-  if (!Z.volitelneVychozi) Z.volitelneVychozi = {};
-  Z.volitelneVychozi[key] = !!v;
-  aktivniVarianta(ZAK).upraveno = new Date().toISOString();
-  render();
+/* Výchozí zaškrtnutí volitelné položky (sloupec Výchozí).
+ *
+ * Do 20. 8. 2026 se zapisovalo do `Z.volitelneVychozi` — do zadání OTEVŘENÉ
+ * zakázky, kde ho ale nikdo nečetl: sloupec se dal zaškrtat a nestalo se nic
+ * (hlášeno J. V. 20. 8.). Hodnota teď žije v matici zobrazení (klíč `vychozi`)
+ * a platí pro každou NOVOU zakázku — viz zobrazeniVychoziAplikuj v zobrazeni.js.
+ * Pole `volitelneVychozi` v zadání zůstává kvůli starším uloženým zakázkám,
+ * nic se z něj ale nečte. */
+function volitelneVychoziZaklad(key) {
+  const D = (typeof DEFAULT_ZADANI !== 'undefined') ? DEFAULT_ZADANI : {};
+  if (key === 'prechodove') return !!D.prechodovePlechy;
+  return !!(D.volitelne || {})[key];
 }
 /* seřazení řádků sekce dle uloženého pořadí (Z.poradi[sekce]); neuvedené na konec */
 function serazSekci(rows, sekceKey) {
@@ -270,8 +277,13 @@ function gripHtml(r, sekceKey) {
 function adminKoncBunky(r, sekceKey) {
   const key = radekKey(r), ka = keyAttr(key);
   const vis = `<td class="admincol"><input type="checkbox" ${jeSkryta(key) ? '' : 'checked'} onchange="viditelnostSet('${ka}', this.checked)" title="viditelné pro běžného uživatele"></td>`;
-  const vych = `<td class="admincol">${sekceKey === 'volitelne'
-    ? `<input type="checkbox" ${(Z.volitelneVychozi || {})[key] ? 'checked' : ''} onchange="volitelneVychoziSet('${ka}', this.checked)" title="výchozí zaškrtnutí volitelné položky">` : ''}</td>`;
+  /* Sloupec Výchozí (funkční od 20. 8. 2026): jen u katalogových volitelných
+   * položek — vlastní řádek zakázky žádný „výchozí stav pro nové zakázky“
+   * nemá, ten v nové zakázce vůbec nevznikne. */
+  const vych = `<td class="admincol">${(sekceKey === 'volitelne' && !r.vlastni)
+    ? vychoziPolozkaChk('ock.' + key, volitelneVychoziZaklad(key),
+      'zaškrtnuto = položka je v NOVÉ zakázce rovnou v základní ceně (platí pro všechny)')
+    : ''}</td>`;
   return vis + vych;
 }
 function radekKalk(r, sekceKey) {
@@ -319,8 +331,12 @@ function radekPridatSekce(sekceKey) {
     btns.push(`<button class="mini" title="vlastní řádek jen této zakázky" onclick="vlastniAdd('${sekceKey}')">+ přidat položku</button>`);
   if (admin)
     btns.push(`<button class="mini" title="zapíše položku natrvalo do ceníku – bude ve všech nových nabídkách" onclick="vlastniAddTrvale('${sekceKey}')">+ přidat položku trvale</button>`);
-  if (admin && sekceKey === 'hrubaOck')
-    btns.push(`<button class="mini" title="práce navíc u atypické zakázky – v nabídce spadá do Hrubé OCK (#7)" onclick="vlastniAdd('atyp')">+ přidat atypickou položku (práce navíc)</button>`);
+  /* Tlačítko „+ přidat atypickou položku (práce navíc)" bylo z Hrubé OCK
+   * ODEBRÁNO 20. 8. 2026 na pokyn J. V. — od sjednocení přidávání (19. 8.)
+   * dělalo totéž co „+ přidat položku", jen řádek posílalo do sekce atyp.
+   * Sekce `atyp` v zadání i ve výpočtu zůstává beze změny (nese předvyplnění
+   * ATYP a starší zakázky s atypickými řádky se počítají dál) — zmizelo jen
+   * tlačítko, kterým se nové řádky zakládaly. */
   if (!btns.length) return '';
   return `<tr class="pridat noprint"><td colspan="${NC}">${btns.join(' ')}</td></tr>`;
 }
@@ -403,7 +419,10 @@ function tblVolitelne(katalog, sum) {
       if (showCost) c += `<td>${fmt(r.naklad)}</td><td>${fmt(r.marze)}</td>`;
       c += `<td>${fmt(r.sMarzi)}</td>`;
       if (admin) c += adminKoncBunky(r, 'volitelne');
-      return `<tr${dz}${r.zahrnuto ? '' : ' style="opacity:.5"'}>${c}</tr>`;
+      /* Ztlumení nezahrnuté položky řídí třída, ne inline opacity (20. 8.
+       * 2026): opacity rodiče se násobila i na zaškrtávátka admin sloupců
+       * a ta pak vypadala „světle modře“ — stejný nález jako u .vyrazeno. */
+      return `<tr${dz}${r.zahrnuto ? '' : ' class="nezahrnuto"'}>${c}</tr>`;
     }).join('') +
     (sbalenoV ? '' : radekPridatSekce('volitelne')) +
     sumRadek('sectot', 'VOLITELNÉ CELKEM (jen zaškrtnuté)', sum);

@@ -194,11 +194,11 @@ test('admin má v nadpisu sekce OCK select režimu',
     const el = document.getElementById('ock-sek-rezie');
     return !!el && el.innerHTML.includes('sekceRezimSet') && el.innerHTML.includes('srolovat');
   }));
-test('admin má u sekce OCK tlačítka „+ přidat položku" i „… trvale" a atypickou v témž řádku',
+test('admin má u sekce OCK tlačítka „+ přidat položku" i „… trvale" (atypická 20. 8. odebrána)',
   await page.evaluate(() => {
     const html = document.getElementById('page-kalk').innerHTML;
     return html.includes('+ přidat položku<') && html.includes('+ přidat položku trvale')
-      && html.includes('+ přidat atypickou položku (práce navíc)');
+      && !html.includes('+ přidat atypickou položku');
   }));
 test('admin má select i u sekcí PROJ a tlačítka „… trvale" pro hodinovou i fixní',
   await page.evaluate(() => {
@@ -219,10 +219,75 @@ test('server volby sekcí přijal a vrací je v matici',
   await page.evaluate(() => !!(ONLINE_STAV.zobrazeni && ONLINE_STAV.zobrazeni.matice.sekce
     && ONLINE_STAV.zobrazeni.matice.sekce['ock.rezie'] === 'skryt'
     && ONLINE_STAV.zobrazeni.matice.sekce['proj.zamereni'] === 'srolovat')));
-test('administrátorovi se skrytá sekce dál kreslí (vidí vždy vše)',
+/* 20. 8. 2026 (zadání J. V. „když nastavím srolování sekce, sroluj ji i u mě"):
+ * SROLOVÁNÍ platí i pro administrátora, SKRYTÍ ne — skrytou sekci vidí dál jen
+ * on, protože v jejím nadpisu je jediný ovládací prvek, kterým jde skrytí
+ * vrátit. Že je skrytá ostatním, mu říká štítek. */
+test('administrátorovi se skrytá sekce dál kreslí (jinak by ji nešlo vrátit)',
   await page.evaluate(() => {
     prepniTab('kalk'); render();
     return !!document.getElementById('ock-sek-rezie');
+  }));
+test('a nese štítek „skrytá ostatním", ať si admin nemyslí, že ji vidí i obchodník',
+  await page.evaluate(() => {
+    const el = document.getElementById('ock-sek-rezie');
+    return !!el && el.innerHTML.includes('skrytá ostatním');
+  }));
+test('srolovaná sekce se sroluje i administrátorovi (řádky sekce zmizí, zůstane nadpis)',
+  await page.evaluate(() => {
+    sekceRezimSet('ock.rezie', 'srolovat');
+    prepniTab('kalk'); render();
+    const html = document.getElementById('page-kalk').innerHTML;
+    const hlava = !!document.getElementById('ock-sek-rezie');
+    /* v srolované sekci nesmí být řádek s přidávacím tlačítkem té sekce */
+    const bezRadku = !/onclick="vlastniAdd\('rezie'\)"/.test(html);
+    const rozbalit = document.getElementById('ock-sek-rezie').innerHTML.includes('sekceRozbal');
+    return hlava && bezRadku && rozbalit;
+  }));
+test('a jde rozbalit — po kliknutí jsou řádky zase vidět',
+  await page.evaluate(() => {
+    sekceRozbal('ock.rezie');
+    const html = document.getElementById('page-kalk').innerHTML;
+    return /onclick="vlastniAdd\('rezie'\)"/.test(html);
+  }));
+await page.evaluate(() => { sekceRezimSet('ock.rezie', 'skryt'); });
+await page.waitForTimeout(400);
+
+/* ---------- sloupec Výchozí (20. 8. 2026) ----------
+ * Zaškrtnutí neplatí pro otevřenou zakázku, ale pro každou NOVOU: ukládá se
+ * do matice (klíč `vychozi`) a novou zakázku upraví zobrazeniVychoziAplikuj.
+ * Do 20. 8. sloupec zapisoval do zadání zakázky, kde ho nikdo nečetl. */
+test('kalkulace OCK má u volitelných položek sloupec Výchozí napojený na matici',
+  await page.evaluate(() => {
+    prepniTab('kalk'); render();
+    const html = document.getElementById('page-kalk').innerHTML;
+    return html.includes("vychoziPolozkaSet('ock.haky'") && !html.includes('volitelneVychoziSet');
+  }));
+test('kalkulace PROJ má sloupec Výchozí u každé položky (dřív chyběl úplně)',
+  await page.evaluate(() => {
+    prepniTab('proj'); render();
+    const html = document.getElementById('page-proj').innerHTML;
+    /* sekce ZAMĚŘENÍ je v téhle sadě srolovaná (viz krok výše) a od 20. 8.
+     * se roluje i adminovi — proto se sloupec hledá u rozbalené STUDIE. */
+    return html.includes('>Výchozí</th>') && html.includes("vychoziPolozkaSet('proj.studie.Studie'");
+  }));
+await page.evaluate(() => {
+  vychoziPolozkaSet('ock.haky', true, false);
+  vychoziPolozkaSet('proj.studie.Studie', false, true);
+});
+await page.waitForTimeout(500);
+test('výchozí zaškrtnutí odešlo na server a vrátilo se v matici',
+  await page.evaluate(() => {
+    const v = ONLINE_STAV.zobrazeni && ONLINE_STAV.zobrazeni.matice.vychozi;
+    return !!v && v['ock.haky'] === true && v['proj.studie.Studie'] === false;
+  }));
+test('NOVÁ zakázka si výchozí zaškrtnutí vezme (OCK i PROJ)',
+  await page.evaluate(() => {
+    ZAK = novaZakazka(); syncVarianta();
+    const d = aktivniVarianta(ZAK).data;
+    zobrazeniVychoziAplikuj(NAST.zobrazeni, d.ock.zadani, d.proj.zadani);
+    const st = d.proj.zadani.sekce.find(s => s.key === 'studie');
+    return d.ock.zadani.volitelne.haky === true && st.polozky[0].vyrazeno === true;
   }));
 
 /* trvalá položka PROJ: založí se v ceníku PROJ dané sekce */
@@ -266,6 +331,8 @@ test('po odhlášení platí zase výchozí (nejpřísnější) matice',
 await prihlas('obchodnik@engineers-cz.cz', 'ObchodniHeslo1');
 await cekejPrihlasen();
 await page.waitForTimeout(700);
+
+const postuPredObchodnikem = volani.filter(x => x === 'POST /api/zobrazeni').length;
 
 test('obchodníkovi dorazila zveřejněná matice',
   await page.evaluate(() => NAST.zobrazeni['tab.detail']['Obchodník'] === true));
@@ -345,10 +412,12 @@ test('a zveřejnit matici nesmí', pokusOZverejneni.v === false
   && /administrátor/i.test(pokusOZverejneni.hlaska), JSON.stringify(pokusOZverejneni));
 test('obchodníkovi se odmítnutí vysvětlí v liště',
   pokusOZverejneni.typ === 'varovani', pokusOZverejneni.typ);
-/* 1× zveřejnění matice + 2× okamžité uložení volby sekce = 3 POSTy od
- * administrátora; obchodníkův pokus nesmí přidat čtvrtý. */
+/* Obchodníkův pokus nesmí přidat ani jeden POST. Počítá se PŘÍRŮSTEK oproti
+ * stavu před jeho pokusem (od 20. 8. 2026): pevné číslo tu drželo počet POSTů
+ * administrátora a rozbilo se pokaždé, když sada přibrala další nastavení. */
 test('a na server se přitom nic neposlalo',
-  volani.filter(x => x === 'POST /api/zobrazeni').length === 3, volani.join(', '));
+  volani.filter(x => x === 'POST /api/zobrazeni').length === postuPredObchodnikem,
+  'před: ' + postuPredObchodnikem + ', po: ' + volani.filter(x => x === 'POST /api/zobrazeni').length);
 
 test('žádná chyba JavaScriptu', chyby.length === 0, chyby.slice(0, 2).join(' | '));
 

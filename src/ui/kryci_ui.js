@@ -228,7 +228,9 @@ function renderKryci() {
     </div>
     <div class="note noprint" id="kryciStav">Vygenerují se <b>dva</b> soubory: <b>Backoffice</b> (obchodní část) a <b>Techdata</b> (technická část).</div>
     ${sekceHtml}
-  </div>`;
+  </div>
+  ${typeof sodKarta === 'function'
+    ? `<div class="noprint" style="margin-top:14px">${card('Smlouva o dílo (OCK)', sodKarta())}</div>` : ''}`;
 }
 
 /* Tiskový pohled krycího listu → PDF přes tisk prohlížeče. Vždy JEDNA verze

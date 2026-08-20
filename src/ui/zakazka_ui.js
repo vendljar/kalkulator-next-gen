@@ -56,6 +56,14 @@ function varSet(id, k, val) {
 function novaZakazkaUI() {
   if (!confirm('Založit novou prázdnou zakázku? Neuložené změny aktuální zakázky se ztratí.')) return;
   ZAK = novaZakazka(); syncVarianta();
+  /* Výchozí zaškrtnutí položek (20. 8. 2026): sloupec Výchozí v kalkulaci
+   * OCK i PROJ platí právě a jen tady — na ČERSTVÉM zadání, kde jsou ještě
+   * tvrdé hodnoty z kódu. Na rozpracovanou ani načtenou zakázku se nikdy
+   * nepouští, přepsalo by to práci obchodníka. */
+  if (typeof zobrazeniVychoziAplikuj === 'function') {
+    const d = aktivniVarianta(ZAK).data || {};
+    zobrazeniVychoziAplikuj(NAST.zobrazeni, (d.ock || {}).zadani, (d.proj || {}).zadani);
+  }
   /* Nová zakázka nesmí zdědit jméno té předchozí – jinak by ji brána
    * automatického ukládání považovala za „už uloženou" a hned by ji sama
    * zapsala do databáze jako záznam bez čísla (4. 8. 2026). */
@@ -507,9 +515,10 @@ function nabidkaKarta() {
       <button style="background:#86e8ad;color:#0B2E6B;border-color:#5fcf92"
         onclick="prepniTab('spec'); window.scrollTo(0, 0)">Přejít na technickou specifikaci</button>
     </div>
-    <div class="note" style="margin-top:6px">Úvodní fotka, kontroly, <b>tisk nabídky</b> i <b>smlouva o dílo</b>
-      se 19. 8. 2026 přestěhovaly na konec záložky <b>Technická specifikace OCK</b> — tlačítko výše vás na ni
-      přenese; specifikaci projdete odshora a dole nabídku rovnou vytisknete.</div>`;
+    <div class="note" style="margin-top:6px">Úvodní fotka, kontroly a <b>tisk nabídky</b> se 19. 8. 2026 přestěhovaly
+      na konec záložky <b>Technická specifikace OCK</b> — tlačítko výše vás na ni přenese; specifikaci projdete
+      odshora a dole nabídku rovnou vytisknete. <b>Smlouva o dílo</b> šla 20. 8. 2026 ještě o krok dál,
+      na konec záložky <b>Krycí list zakázky OCK</b> — tam, kde se vyplňují její vstupy.</div>`;
 }
 
 /* Blok generování dokumentů OCK (úvodní fotka, kontroly, tisk nabídky, Word,
@@ -533,7 +542,17 @@ function nabidkaDokumentyBlok() {
       Ruční úpravy platí <b>jen pro daný výtisk</b> – do zakázky ani do kalkulace se nepropisují. Cesta přes Word
       i náhled podkladů zůstávají beze změny.</div>
     <div class="note nabidkaStav">${SABLONA_DOCX ? 'Šablona načtena (' + esc(SABLONA_DOCX.nazev) + ').' : 'Při prvním použití budete vyzváni k výběru souboru šablony ze složky _CN.'}</div>
-    ${typeof sodKarta === 'function' ? sodKarta() : ''}`;
+    <!-- Smlouva o dílo se 20. 8. 2026 přestěhovala na KONEC záložky Krycí list
+         zakázky OCK (pokyn J. V.): platební podmínky, termíny a zástupci, které
+         smlouva potřebuje, se vyplňují právě tam — ať se dokument tvoří na místě,
+         kde jsou jeho vstupy, ne o dvě záložky dál. Tady zůstává jen cesta k nim. -->
+    <div class="btns" style="margin-top:12px">
+      <button style="background:#86e8ad;color:#0B2E6B;border-color:#5fcf92"
+        onclick="prepniTab('kryci'); window.scrollTo(0, 0)">Přejít na krycí list</button>
+    </div>
+    <div class="note" style="margin-top:6px"><b>Smlouva o dílo</b> se 20. 8. 2026 přestěhovala na konec záložky
+      <b>Krycí list zakázky OCK</b> — tlačítko výše vás na ni přenese; krycí list vyplníte odshora
+      a dole rovnou vytvoříte smlouvu.</div>`;
 }
 
 /* Stavový řádek nabídky OCK je v aplikaci dvakrát (Kalkulace OCK i Přehled

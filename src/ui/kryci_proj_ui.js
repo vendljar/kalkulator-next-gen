@@ -150,7 +150,9 @@ function renderKryciProj() {
     </div>
     <div class="note noprint" id="kryciProjStav">Vygenerují se <b>dva</b> soubory: <b>Backoffice</b> (obchodní část) a <b>Techdata</b> (technická část).</div>
     ${sekceHtml}
-  </div>`;
+  </div>
+  ${typeof sodProjKarta === 'function'
+    ? `<div class="noprint" style="margin-top:14px">${card('Smlouva o dílo a plná moc (PROJ)', sodProjKarta())}</div>` : ''}`;
 }
 
 /* Tiskový pohled krycího listu PROJ → PDF přes tisk prohlížeče. Vždy JEDNA

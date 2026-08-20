@@ -216,6 +216,6 @@ function renderTechspec() {
       Vlastní hodnoty lze psát do všech polí, rozbalovací návrhy odpovídají číselníkům ze šablony.</div>
     </div>
     ${typeof nabidkaDokumentyBlok === 'function'
-      ? `<div class="noprint" style="margin-top:14px">${card('Cenová nabídka a smlouva o dílo (OCK)', nabidkaDokumentyBlok())}</div>`
+      ? `<div class="noprint" style="margin-top:14px">${card('Cenová nabídka (OCK)', nabidkaDokumentyBlok())}</div>`
       : ''}`;
 }

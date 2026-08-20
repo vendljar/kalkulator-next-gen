@@ -14,6 +14,18 @@
  * (tr.sec) a řádek „Náklad sekce" jsou pryč, částky patří do sloupců.
  * Hlídá to src/test_proj_vzhled.js. */
 
+/* Tvrdý výchozí stav položky PROJ z kódu (DEFAULT_ZADANI_PROJ) — proti němu
+ * se v matici zobrazení měří odchylka sloupce Výchozí (20. 8. 2026).
+ * Trvalá položka z ceníku (kid) v DEFAULT_ZADANI_PROJ není; ta se do zakázky
+ * doplňuje z ceníku a počítá se, takže její tvrdé výchozí je „počítat". */
+function projVychoziZaklad(sekceKey, polozka) {
+  if (typeof DEFAULT_ZADANI_PROJ === 'undefined') return true;
+  const s = (DEFAULT_ZADANI_PROJ.sekce || []).find(x => x.key === sekceKey);
+  const ident = (polozka || {}).kid || (polozka || {}).nazev;
+  const p = s && (s.polozky || []).find(q => (q.kid || q.nazev) === ident);
+  return p ? !p.vyrazeno : true;
+}
+
 function pjSekce(i) { return PJ.sekce[i]; }
 function pjSet(i, cesta, val) {
   const ks = cesta.split('.'); const last = ks.pop();
@@ -83,39 +95,26 @@ function pjPrepis(i, j, pole, hodnota) {
   aktivniVarianta(ZAK).upraveno = new Date().toISOString();
   render();
 }
+/* ZAMĚŘENÍ × STUDIE se od 20. 8. 2026 NEVYLUČUJÍ (pokyn J. V.).
+ *
+ * Od 17. 8. platilo, že zapnutí položky v jedné z těch dvou sekcí vyřadí
+ * všechny položky té druhé — studie proveditelnosti totiž zaměření obsahuje
+ * jako svou část 1 a hrozilo, že se v nabídce naúčtuje dvakrát. V praxi to
+ * ale bralo rozhodnutí z ruky obchodníkovi: zakázka, kde se zaměření dělá
+ * navíc a zvlášť (jiný termín, jiný objekt), se nedala nacenit vůbec.
+ * Automatika je proto pryč; obě sekce se zapínají a vypínají nezávisle
+ * a co se do nabídky dostane, rozhoduje výhradně zaškrtnutí. */
 function pjVyrazeno(i, j, vyrazeno) {
   const p = PJ.sekce[i].polozky[j];
   if (vyrazeno) p.vyrazeno = true; else delete p.vyrazeno;
-  /* ZAMĚŘENÍ × STUDIE se VYLUČUJÍ (rozhodnutí 17. 8. 2026). Studie
-   * proveditelnosti zaměření už obsahuje (její část 1 je totéž zaměření
-   * a zpracování výstupů) — kdyby se počítaly obě sekce, nabídka by
-   * zaměření účtovala dvakrát. Zapnutí položky v jedné sekci proto
-   * automaticky vyřadí všechny položky té druhé; kdo chce zpět, jedním
-   * kliknutím druhou sekci zase zapne (a vyřadí se tahle). */
-  if (!vyrazeno) {
-    const kde = PJ.sekce[i].key;
-    const druha = kde === 'zamereni' ? 'studie' : (kde === 'studie' ? 'zamereni' : null);
-    if (druha) {
-      const ds = PJ.sekce.find(x => x.key === druha);
-      if (ds) ds.polozky.forEach(q => { q.vyrazeno = true; });
-    }
-  }
   aktivniVarianta(ZAK).upraveno = new Date().toISOString();
   render();
 }
 /* Zaškrtávátko ZA CELOU SEKCI (17. 8. 2026 večer): jedno kliknutí zapne nebo
- * vyřadí všechny položky sekce najednou. Při zapnutí platí totéž vyloučení
- * ZAMĚŘENÍ × STUDIE jako u jednotlivých položek. */
+ * vyřadí všechny položky sekce najednou. Vyloučení ZAMĚŘENÍ × STUDIE tu do
+ * 20. 8. 2026 platilo taky — zrušeno spolu s ním (viz pjVyrazeno výše). */
 function pjSekceVse(i, pocitat) {
   PJ.sekce[i].polozky.forEach(q => { if (pocitat) delete q.vyrazeno; else q.vyrazeno = true; });
-  if (pocitat) {
-    const kde = PJ.sekce[i].key;
-    const druha = kde === 'zamereni' ? 'studie' : (kde === 'studie' ? 'zamereni' : null);
-    if (druha) {
-      const ds = PJ.sekce.find(x => x.key === druha);
-      if (ds) ds.polozky.forEach(q => { q.vyrazeno = true; });
-    }
-  }
   aktivniVarianta(ZAK).upraveno = new Date().toISOString();
   render();
 }
@@ -168,7 +167,7 @@ function renderProj() {
    * nikdy náklad a přirážku. */
   const col = kalkSloupce();
   const POPIS_SL = 5;                       // Položka · Hodiny · Rezerva · Celkem h · Sazba
-  const NC = POPIS_SL + (col.showCost ? 2 : 0) + 1 + (col.admin ? 1 : 0);
+  const NC = POPIS_SL + (col.showCost ? 2 : 0) + 1 + (col.admin ? 2 : 0);
 
   /* Koncovou cenu skládá zaokrouhleni.js (#38) – hlavička i souhrn musí ukazovat
    * totéž číslo, které pak odejde v nabídce. Od 12. 8. 2026 (#135) se zaokrouhluje
@@ -237,7 +236,8 @@ function renderProj() {
   /* ---------------- tabulka kalkulace ---------------- */
   const hlavicka = `<tr><th>Položka</th><th>Hodiny</th><th>Rezerva h</th><th>Celkem h</th><th>Sazba Kč/h · fix</th>`
     + `${col.showCost ? `<th>Náklad</th><th>Přirážka ${num(PC.marze * 100)} %</th>` : ''}<th>Cena</th>`
-    + `${col.admin ? '<th class="admincol" title="odškrtnutím se položka přestane počítat">Počítat</th>' : ''}</tr>`;
+    + `${col.admin ? '<th class="admincol" title="odškrtnutím se položka přestane počítat v TÉTO zakázce">Počítat</th>'
+        + '<th class="admincol" title="zaškrtnutí platí pro každou NOVOU zakázku (nastavení aplikace, ne této zakázky)">Výchozí</th>' : ''}</tr>`;
 
   const sekceHtml = r.sekce.map((s, i) => {
     const zdroj = pjSekce(i);
@@ -280,10 +280,15 @@ function renderProj() {
         : vlEd
           ? `<input type="text" class="nazev-ed" style="width:70%" value="${esc(p.nazev)}" onchange="pjSet(${i}, 'polozky.${j}.nazev', this.value)">${del}`
           : esc(p.nazev);
+      /* Sloupec Počítat platí pro TUHLE zakázku, sloupec Výchozí pro každou
+       * NOVOU (zadání 20. 8. 2026 — v OCK to tak bylo, v PROJ chybělo).
+       * Výchozí stav se ukládá do matice zobrazení, ne do zakázky. */
       const pocitat = col.admin
         ? `<td class="admincol"><input type="checkbox" class="noprint" ${p.vyrazeno ? '' : 'checked'}
             onchange="pjVyrazeno(${i},${j},!this.checked)"
             title="${p.vyrazeno ? 'položka se nepočítá – zaškrtnutím ji vrátíte do výpočtu' : 'odškrtnutím položku vyřadíte z výpočtu (zůstane v seznamu)'}"></td>`
+          + `<td class="admincol">${vychoziPolozkaChk(zobrazeniProjKlic(s.key, p), projVychoziZaklad(s.key, p),
+              'zaškrtnuto = položka se v NOVÉ zakázce rovnou počítá (platí pro všechny)')}</td>`
         : '';
       const tr = `<tr${p.vyrazeno ? ' class="vyrazeno"' : ''}${dz}>`;
       const cena = p.naklad + marzeSekce(s, p.naklad);
@@ -347,7 +352,7 @@ function renderProj() {
            <td style="white-space:nowrap"><label title="příplatek mimo Prahu = km / 60 × 1000 Kč (hodina cesty à 1 000 Kč); po Praze nechte odškrtnuté">
              <input type="checkbox" ${zdroj.doprava.mimoPrahu ? 'checked' : ''} onchange="pjSet(${i}, 'doprava.mimoPrahu', this.checked)"> mimo Prahu</label></td>
            <td class="note" style="white-space:nowrap" title="příplatek mimo Prahu: ${num(zdroj.doprava.km)} km / 60 × 1 000 Kč">${zdroj.doprava.mimoPrahu ? fmt(mimoKc) : '—'}${rucniPill}</td>
-           ${penize(s.dopravaKc, null, s.dopravaKc)}<td class="admincol"></td></tr>`
+           ${penize(s.dopravaKc, null, s.dopravaKc)}<td class="admincol"></td><td class="admincol"></td></tr>`
         : (s.dopravaKc
           ? `<tr><td>Doprava${zdroj.doprava.mimoPrahu ? ' (mimo Prahu)' : ''}</td><td>${num(zdroj.doprava.km)}</td><td class="note">km</td><td></td>
              <td class="note">${zdroj.doprava.mimoPrahu ? fmt(mimoKc) : '—'}${rucniPill}</td>${penize(s.dopravaKc, null, s.dopravaKc)}</tr>` : '');
@@ -405,14 +410,14 @@ function renderProj() {
           (String(s.nazev).match(/\s*(\([^)]*\))\s*$/) || [, ''])[1]
             ? ' ' + esc((String(s.nazev).match(/\s*(\([^)]*\))\s*$/) || [, ''])[1]) : ''}</td>`
       + penize(s.naklad + s.dopravaKc, s.marze, s.celkem)
-      + `${col.admin ? '<td class="admincol"></td>' : ''}</tr>`;
+      + `${col.admin ? '<td class="admincol"></td><td class="admincol"></td>' : ''}</tr>`;
   }).join('');
 
   const kalkulace = `<table>
     ${hlavicka}
     ${sekceHtml}
     <tr class="tot"><td colspan="${POPIS_SL}">CELKEM PROJEKČNÍ PRÁCE</td>
-      ${penize(naklad, r.souhrn.marze, r.souhrn.celkem)}${col.admin ? '<td class="admincol"></td>' : ''}</tr>
+      ${penize(naklad, r.souhrn.marze, r.souhrn.celkem)}${col.admin ? '<td class="admincol"></td><td class="admincol"></td>' : ''}</tr>
   </table>
   ${col.admin ? `<div class="note">Řádky přetáhnete úchopem <b>⠿</b> vlevo (v rámci sekce) – stejně jako v Kalkulaci OCK.
     Zaškrtávátko <b>Počítat</b> položku vyřadí z výpočtu, ale nechá ji v seznamu; běžný uživatel vyřazenou položku nevidí.
@@ -459,7 +464,7 @@ function renderProj() {
     (typeof zaokrKarta === 'function' ? zaokrKarta('proj') : '') +
     card('Souhrn projekčních prací', souhrnTbl, false, 'proj-souhrn') +
     (typeof slevaKarta === 'function' ? slevaKarta('proj') : '') +
-    (typeof nabidkaProjKarta === 'function' ? card('Cenová nabídka PROJ', nabidkaProjKarta(), false, 'proj-nabidka') : '') +
+    (typeof nabidkaProjKarta === 'function' ? card('Cenová nabídka (PROJ)', nabidkaProjKarta(), false, 'proj-nabidka') : '') +
     `<div class="note">Globální přirážku PROJ zadáte přímo v hlavičce nahoře (stejně jako v Kalkulaci OCK); platí pro všechny sekce a je proto započtená i u sekcí, které se u téhle stavby nepoužijí. Slevu a obchodní zaokrouhlení najdete v sekcích pod výpočtem. Sazby (projektant/statik/zaměření), fixní ceny subdodávek a sazbu dopravy nastavíte v záložce <b>Ceník nákladů PROJ</b> — ty platí pro všechny zakázky.
      Doprava se počítá bez přirážky; sleva/přirážka sekce se počítá z ceny včetně dopravy (dle předlohy).</div>`;
 }

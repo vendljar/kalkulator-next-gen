@@ -84,37 +84,42 @@ test('názvy sekcí nesou věcné závorky (pro 1 ks výtahu, celý projekt)',
       && hlavy.some(h => /celý projekt/.test(h));
   }));
 
-/* ---------- 5) vyloučení ZAMĚŘENÍ × STUDIE ---------- */
-console.log('\nZAMĚŘENÍ × STUDIE se vylučují');
+/* ---------- 5) ZAMĚŘENÍ a STUDIE jsou na sobě NEZÁVISLÉ (20. 8. 2026) ----------
+ * Do 20. 8. se ty dvě sekce vylučovaly: zapnutí jedné vyřadilo druhou, aby se
+ * zaměření (část 1 studie) neúčtovalo dvakrát. Na pokyn J. V. je automatika
+ * pryč — obchodník si obě sekce řídí sám. Sada proto hlídá OPAK: zapnutí
+ * jedné té druhé nesahá. */
+console.log('\nZAMĚŘENÍ × STUDIE se navzájem neovlivňují');
 const vylouceni = await p.evaluate(() => {
   const iZa = PJ.sekce.findIndex(s => s.key === 'zamereni');
   const iSt = PJ.sekce.findIndex(s => s.key === 'studie');
-  // výchozí stav: zaměření se počítá; zapnu první položku studie
-  pjVyrazeno(iSt, 0, false);
-  const poZapnutiStudie = {
-    studie: PJ.sekce[iSt].polozky[0].vyrazeno || false,
-    zamereniVyrazeno: PJ.sekce[iZa].polozky.every(q => q.vyrazeno),
-  };
-  // a zpět: zapnu položku zaměření → studie se vyřadí
-  pjVyrazeno(iZa, 0, false);
+  // výchozí stav: studie se počítá, zaměření je vyřazené (18. 8.)
+  pjVyrazeno(iZa, 0, false);                       // zapnu první položku ZAMĚŘENÍ
   const poZapnutiZamereni = {
     zamereni: PJ.sekce[iZa].polozky[0].vyrazeno || false,
-    studieVyrazena: PJ.sekce[iSt].polozky.every(q => q.vyrazeno),
+    studiePocita: PJ.sekce[iSt].polozky.some(q => !q.vyrazeno),
   };
-  return { poZapnutiStudie, poZapnutiZamereni };
+  pjSekceVse(iSt, true);                           // a celou sekci STUDIE
+  const poZapnutiStudie = {
+    studie: PJ.sekce[iSt].polozky.every(q => !q.vyrazeno),
+    zamereniPocita: PJ.sekce[iZa].polozky[0].vyrazeno !== true,
+  };
+  return { poZapnutiZamereni, poZapnutiStudie };
 });
-test('zapnutí položky STUDIE vyřadí všechny položky ZAMĚŘENÍ',
-  vylouceni.poZapnutiStudie.zamereniVyrazeno && !vylouceni.poZapnutiStudie.studie, vylouceni);
-test('zapnutí položky ZAMĚŘENÍ vyřadí všechny položky STUDIE',
-  vylouceni.poZapnutiZamereni.studieVyrazena && !vylouceni.poZapnutiZamereni.zamereni, vylouceni);
+test('zapnutí položky ZAMĚŘENÍ nechá STUDII počítat dál',
+  !vylouceni.poZapnutiZamereni.zamereni && vylouceni.poZapnutiZamereni.studiePocita, vylouceni);
+test('zapnutí celé sekce STUDIE nevyřadí ZAMĚŘENÍ',
+  vylouceni.poZapnutiStudie.studie && vylouceni.poZapnutiStudie.zamereniPocita, vylouceni);
 
 /* ---------- 6) sekce mimo rozsah se v nabídce neuvádějí ---------- */
 console.log('\nnabídka bez sekcí mimo rozsah');
 const nabidka = await p.evaluate(() => {
-  /* Výchozí zaměření je VYŘAZENÉ (18. 8.) — pro zkoušku rozsahu se zapne
-   * (studie zůstala vyřazená z kroku výše). */
+  /* Rozsah si tu sada nastaví sama: ZAMĚŘENÍ se počítá, STUDIE ne. Od 20. 8.
+   * ji nevyřadí automatika (ta zanikla), takže se vyřadí výslovně. */
   const za = PJ.sekce.find(s => s.key === 'zamereni');
   za.polozky.forEach(q => { delete q.vyrazeno; });
+  const st = PJ.sekce.find(s => s.key === 'studie');
+  st.polozky.forEach(q => { q.vyrazeno = true; });
   const d = nabidkaProjData(ZAK, aktivniVarianta(ZAK), 'cz');
   const nadpisy = d.bloky.map(b => b.nadpis || b.text || '').join(' | ');
   return {
@@ -323,13 +328,29 @@ test('tlačítka nabídky PROJ jsou poskládaná jako v OCK (modrý tisk, Word b
 
 test('smlouvy a plná moc mají modrá (primary) tlačítka',
   await p.evaluate(() => {
-    const proj = document.getElementById('page-proj').innerHTML;
-    /* Smlouva OCK se 19. 8. 2026 přestěhovala s dokumentovou sekcí na konec
-     * Technické specifikace — modrá zůstává, jen se hledá tam. */
+    /* Obě smlouvy i plná moc se 20. 8. 2026 přestěhovaly na KONEC krycích
+     * listů (OCK → záložka Krycí list zakázky OCK, PROJ → Krycí list PROJ).
+     * Modrá barva zůstává, jen se hledá tam. */
+    prepniTab('kryci'); if (typeof renderKryci === 'function') renderKryci();
+    const kryci = document.getElementById('page-kryci').innerHTML;
+    prepniTab('kryciproj'); if (typeof renderKryciProj === 'function') renderKryciProj();
+    const kryciProj = document.getElementById('page-kryciproj').innerHTML;
+    const prim = (html, volani) => new RegExp('class="primary"[^>]*onclick="' + volani.replace(/[()']/g, x => '\\' + x) + '"').test(html);
+    return prim(kryciProj, "sodWord('sodProj')") && prim(kryciProj, "sodWord('plnaMoc')") && prim(kryci, "sodWord('sod')");
+  }));
+
+/* Stěhování 20. 8. 2026 (zadání J. V.): na místě, kde smlouvy stály, musí být
+ * zelené tlačítko na krycí list — jinak by cesta k dokumentu zmizela. */
+test('místo smluv zůstalo zelené tlačítko „Přejít na krycí list" (OCK i PROJ)',
+  await p.evaluate(() => {
     prepniTab('spec'); if (typeof renderTechspec === 'function') renderTechspec();
     const spec = document.getElementById('page-spec').innerHTML;
-    const prim = (html, volani) => new RegExp('class="primary"[^>]*onclick="' + volani.replace(/[()']/g, x => '\\' + x) + '"').test(html);
-    return prim(proj, "sodWord('sodProj')") && prim(proj, "sodWord('plnaMoc')") && prim(spec, "sodWord('sod')");
+    prepniTab('proj'); if (typeof renderProj === 'function') renderProj();
+    const proj = document.getElementById('page-proj').innerHTML;
+    const zelene = (html, tab) => new RegExp("background:#86e8ad[^\"]*\"[^>]*onclick=\"prepniTab\\('" + tab + "'\\)").test(html)
+      && /Přejít na krycí list/.test(html);
+    return zelene(spec, 'kryci') && zelene(proj, 'kryciproj')
+      && !/sodWord\('sod'\)/.test(spec) && !/sodWord\('sodProj'\)/.test(proj);
   }));
 
 test('hlídka verze: štítek je bez rozdílu skrytý a s rozdílem svítí červeně',
@@ -431,8 +452,10 @@ test('dokumentová sekce OCK je na konci Technické specifikace a v kartě CN ji
   await p.evaluate(() => {
     prepniTab('spec'); if (typeof renderTechspec === 'function') renderTechspec();
     const spec = document.getElementById('page-spec').innerHTML;
-    const veSpec = spec.includes('nabidkaOckDokument()') && spec.includes("sodWord('sod')")
-      && spec.includes('Cenová nabídka a smlouva o dílo (OCK)');
+    /* 20. 8. 2026: smlouva o dílo je pryč (přesunula se na krycí list) a karta
+     * se podle toho přejmenovala — tisk nabídky ve specifikaci zůstává. */
+    const veSpec = spec.includes('nabidkaOckDokument()') && !spec.includes("sodWord('sod')")
+      && spec.includes('Cenová nabídka (OCK)');
     prepniTab('kalk'); render();
     const kalk = document.getElementById('page-kalk').innerHTML;
     /* 19. 8. 2026 večer: tlačítko přejmenováno na „Přejít na technickou

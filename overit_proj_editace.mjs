@@ -87,8 +87,13 @@ const klik = (i, sel, text) => p.evaluate(([i, sel, text, zdroj]) => {
 
 // --- ovládací prvky se vůbec vykreslí --------------------------------------
 const pocetPolozek = await p.evaluate(i => PJ.sekce[i].polozky.length, iDpz);
-ok('každý řádek DPZ má zaškrtávátko vyřazení',
-   await pocet(iDpz, 'td.admincol input[type=checkbox]') === pocetPolozek);
+/* Od 20. 8. 2026 má admin u položky DVĚ zaškrtávátka: Počítat (platí pro tuhle
+ * zakázku) a Výchozí (platí pro každou novou). Proto 2× počet položek. */
+ok('každý řádek DPZ má zaškrtávátko Počítat i Výchozí',
+   await pocet(iDpz, 'td.admincol input[type=checkbox]') === 2 * pocetPolozek);
+ok('zaškrtávátko Počítat sahá na tuhle zakázku, Výchozí na nastavení aplikace',
+   await pocet(iDpz, 'td.admincol input[onchange^="pjVyrazeno"]') === pocetPolozek
+   && await pocet(iDpz, 'td.admincol input[onchange^="vychoziPolozkaSet"]') === pocetPolozek);
 ok('každý řádek DPZ má pole interní poznámky',
    await pocet(iDpz, 'input.pozn-ed') === pocetPolozek);
 ok('poznámka má všude stejnou nápovědu „poznámka (interní)"',

@@ -160,10 +160,20 @@ function smiZobrazitVse(klice) { return klice.every(k => smiZobrazit(k)); }
  * ukládá se na server (/api/zobrazeni) hned při změně — platí pro všechny
  * a přežije obnovení stránky. Administrátor vidí vždy vše. */
 
+/* Režim sekce tak, jak se má PRÁVĚ TEĎ vykreslit přihlášenému uživateli.
+ *
+ * Změna 20. 8. 2026 (zadání J. V. „když nastavím srolování sekce, sroluj ji
+ * i u mě"): srolování platí pro VŠECHNY včetně administrátora — jinak admin
+ * nevidí, co vlastně nastavil, a musel by se přihlašovat za obchodníka.
+ * Skrytí zůstává výjimkou: administrátorovi se skrytá sekce dál kreslí,
+ * protože v jejím nadpisu je jediný ovládací prvek, kterým jde skrytí
+ * vrátit — kdyby zmizela, nešlo by ji už nikdy zobrazit. Že je skrytá
+ * ostatním, mu říká štítek vedle selectu (sekceRezimSelect). */
 function sekceRezim(oblast, sekceKey) {
-  if (jeAdmin()) return 'zobrazit';                       // admin vidí vždy vše
   if (typeof zobrazeniSekceVolba !== 'function') return 'zobrazit';
-  return zobrazeniSekceVolba(NAST.zobrazeni, oblast + '.' + sekceKey);
+  const v = zobrazeniSekceVolba(NAST.zobrazeni, oblast + '.' + sekceKey);
+  if (v === 'skryt' && jeAdmin()) return 'zobrazit';      // admin o ovládání nepřijde
+  return v;
 }
 
 /* Rozbalení srolované sekce je stav TÉTO obrazovky, ne nastavení — proto
@@ -174,22 +184,55 @@ function sekceSbalena(oblast, sekceKey) {
   return sekceRezim(oblast, sekceKey) === 'srolovat' && !SEKCE_ROZBALENO[oblast + '.' + sekceKey];
 }
 
-function sekceRezimSet(klic, volba) {
-  if (!jeAdmin() || typeof zobrazeniSekceNastav !== 'function') return;
-  if (!NAST.zobrazeni) NAST.zobrazeni = (typeof zobrazeniVychozi === 'function') ? zobrazeniVychozi() : {};
-  zobrazeniSekceNastav(NAST.zobrazeni, klic, volba);
-  /* hned na server, ať volba platí všem a přežije obnovení stránky; bez
-   * potvrzovacího okna — je to jedna volba u jedné sekce, ne celá matice */
+/* Odeslání matice zobrazení na server. Sdílí ji volba režimu sekce
+ * i sloupec Výchozí (20. 8. 2026) — obojí je jedno zaškrtnutí, ne celá
+ * matice, takže se ukládá hned a bez potvrzovacího okna. */
+function zobrazeniMaticiUloz(coSeNepovedlo) {
   if (typeof onlineApi === 'function' && typeof jeAdminOnline === 'function' && jeAdminOnline()) {
     onlineApi('/api/zobrazeni', { matice: NAST.zobrazeni })
       .then(() => { if (typeof onlineNactiZobrazeni === 'function') onlineNactiZobrazeni(); })
       .catch(e => { if (typeof onlineZprava === 'function') {
-        onlineZprava('Volbu zobrazení sekce se nepodařilo uložit na server: ' + e.message, 'varovani'); render();
+        onlineZprava(coSeNepovedlo + ' se nepodařilo uložit na server: ' + e.message, 'varovani'); render();
       } });
   } else if (typeof onlineZprava === 'function') {
-    onlineZprava('Volba zobrazení sekce platí jen do obnovení stránky – na server ji uloží až přihlášený administrátor.', 'varovani');
+    onlineZprava(coSeNepovedlo + ' platí jen do obnovení stránky – na server ji uloží až přihlášený administrátor.', 'varovani');
   }
+}
+
+function sekceRezimSet(klic, volba) {
+  if (!jeAdmin() || typeof zobrazeniSekceNastav !== 'function') return;
+  if (!NAST.zobrazeni) NAST.zobrazeni = (typeof zobrazeniVychozi === 'function') ? zobrazeniVychozi() : {};
+  zobrazeniSekceNastav(NAST.zobrazeni, klic, volba);
+  /* Rozbalení je stav obrazovky: po přepnutí na „srolovat" se sekce má
+   * opravdu srolovat i tomu, kdo ji měl před chvílí ručně rozbalenou. */
+  delete SEKCE_ROZBALENO[klic];
+  zobrazeniMaticiUloz('Volbu zobrazení sekce');
   render();
+}
+
+/* ---------- sloupec „Výchozí“ u položek kalkulace (20. 8. 2026) ----------
+ * Zaškrtnutí neplatí pro otevřenou zakázku, ale pro VŠECHNY NOVÉ: ukládá se
+ * do matice zobrazení (klíč `vychozi`, model v zobrazeni.js) a nová zakázka
+ * si ho vyzvedne v zobrazeniVychoziAplikuj(). Do 20. 8. 2026 sloupec zapisoval
+ * do zadání otevřené zakázky, kde ho nikdo nečetl — proto „nefungoval". */
+function vychoziPolozkaSet(klic, hodnota, zaklad) {
+  if (!jeAdmin() || typeof zobrazeniPolozkaVychoziNastav !== 'function') return;
+  if (!NAST.zobrazeni) NAST.zobrazeni = (typeof zobrazeniVychozi === 'function') ? zobrazeniVychozi() : {};
+  zobrazeniPolozkaVychoziNastav(NAST.zobrazeni, klic, hodnota, zaklad);
+  zobrazeniMaticiUloz('Výchozí zaškrtnutí položky');
+  render();
+}
+
+/* Zaškrtávátko do sloupce Výchozí. `zaklad` = tvrdá výchozí hodnota z kódu
+ * (DEFAULT_ZADANI / DEFAULT_ZADANI_PROJ) — proti ní se měří odchylka. */
+function vychoziPolozkaChk(klic, zaklad, popis) {
+  if (typeof zobrazeniPolozkaVychozi !== 'function') return '';
+  const v = zobrazeniPolozkaVychozi(NAST.zobrazeni, klic, zaklad);
+  const zmeneno = !!v !== !!zaklad;
+  return `<input type="checkbox" class="noprint" ${v ? 'checked' : ''}
+    onchange="vychoziPolozkaSet('${escJs(klic)}', this.checked, ${zaklad ? 'true' : 'false'})"
+    style="${zmeneno ? 'accent-color:#1e3a8a' : ''}"
+    title="${esc(popis || 'výchozí stav v NOVÉ zakázce (platí pro všechny)')}${zmeneno ? ' — přenastaveno oproti výchozímu stavu aplikace' : ''}">`;
 }
 
 /* Malý select do pravé části nadpisu sekce (kreslí se JEN administrátorovi). */
@@ -198,9 +241,14 @@ function sekceRezimSelect(oblast, sekceKey) {
   const klic = oblast + '.' + sekceKey;
   const v = zobrazeniSekceVolba(NAST.zobrazeni, klic);
   const opt = (val, text) => `<option value="${val}" ${v === val ? 'selected' : ''}>${esc(text)}</option>`;
+  /* 20. 8. 2026: srolovaná sekce se roluje i administrátorovi, takže vedle
+   * selectu potřebuje i tlačítko rozbalení; u skryté sekce (kterou admin
+   * jediný pořád vidí) svítí štítek, aby si nemyslel, že ji vidí i ostatní. */
+  const doplnek = v === 'srolovat' ? ' ' + sekceRozbalBtn(oblast, sekceKey)
+    : (v === 'skryt' ? ` <span class="pill mut" title="obchodník ani vedoucí tuhle sekci nevidí; počítá se dál">skrytá ostatním</span>` : '');
   return `<select class="mini noprint sekce-rezim" onchange="sekceRezimSet('${escJs(klic)}', this.value)"
-      title="jak tuhle sekci uvidí obchodník a vedoucí (administrátor vidí vždy vše)">
-      ${opt('zobrazit', 'zobrazit')}${opt('skryt', 'skrýt')}${opt('srolovat', 'srolovat')}</select>`;
+      title="jak tuhle sekci uvidí obchodník a vedoucí (skrytou sekci vidí dál jen administrátor)">
+      ${opt('zobrazit', 'zobrazit')}${opt('skryt', 'skrýt')}${opt('srolovat', 'srolovat')}</select>${doplnek}`;
 }
 
 /* Tlačítko rozbalení pro obchodníka/vedoucího u srolované sekce. */

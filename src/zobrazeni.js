@@ -416,6 +416,16 @@ function zobrazeniOciste(mat) {
     });
     if (Object.keys(s).length) out.sekce = s;
   }
+  /* výchozí zaškrtnutí položek (20. 8. 2026): jen booleany u platných klíčů;
+   * klíč `vychozi` vzniká jen tehdy, když je co nést (viz blok níže) */
+  if (mat.vychozi && typeof mat.vychozi === 'object') {
+    const v = {};
+    Object.keys(mat.vychozi).forEach(k => {
+      const h = mat.vychozi[k];
+      if (typeof h === 'boolean' && ZOBRAZENI_VYCHOZI_KLIC.test(k)) v[k] = h;
+    });
+    if (Object.keys(v).length) out.vychozi = v;
+  }
   return out;
 }
 
@@ -448,6 +458,78 @@ function zobrazeniSekceNastav(mat, klic, volba) {
   return mat;
 }
 
+/* ---------- výchozí zaškrtnutí položek (zadání 20. 8. 2026) ----------
+ *
+ * Sloupec „Výchozí“ u položek kalkulace (OCK volitelné, PROJ všechny řádky)
+ * do 20. 8. 2026 jen ležel v zadání otevřené zakázky (`Z.volitelneVychozi`)
+ * a NIC nedělal: nikdo ho nečetl, takže zaškrtnutí zmizelo s další zakázkou.
+ * Teď má stejný domov jako režimy sekcí — matici zobrazení, klíč `vychozi`.
+ * Znamená to: „takhle má vypadat NOVÁ zakázka pro všechny".
+ *
+ * Klíče:  ock.<klíč volitelné položky>            např. ock.leseniVnejsi
+ *         proj.<klíč sekce>.<kid nebo název>      např. proj.zamereni.Zaměření
+ * Hodnota je boolean „počítat / zaškrtnuto ve výchozím stavu".
+ *
+ * Ukládá se JEN odchylka od tvrdého výchozího stavu z DEFAULT_ZADANI(_PROJ):
+ * když se admin vrátí na původní hodnotu, klíč z matice zmizí. Matice tak
+ * nese jen to, co někdo opravdu přenastavil, a změna tvrdého výchozího stavu
+ * v kódu se propíše i do zakázek, kde nikdo nic neměnil. */
+
+const ZOBRAZENI_VYCHOZI_KLIC = /^(ock|proj)\.[^.]+(\.[^.]+)?$/;
+
+function zobrazeniPolozkaVychozi(mat, klic, zaklad) {
+  const v = mat && mat.vychozi && mat.vychozi[klic];
+  return typeof v === 'boolean' ? v : !!zaklad;
+}
+
+function zobrazeniPolozkaVychoziNastav(mat, klic, hodnota, zaklad) {
+  if (!mat || typeof mat !== 'object') return mat;
+  if (!ZOBRAZENI_VYCHOZI_KLIC.test(klic)) return mat;
+  if (!mat.vychozi || typeof mat.vychozi !== 'object') mat.vychozi = {};
+  if (!!hodnota === !!zaklad) delete mat.vychozi[klic];   // shoda s kódem = neukládá se
+  else mat.vychozi[klic] = !!hodnota;
+  if (!Object.keys(mat.vychozi).length) delete mat.vychozi;
+  return mat;
+}
+
+/* Klíč položky PROJ: trvalá položka z ceníku má kid (přežije přejmenování),
+ * ostatní se poznají podle názvu — ten je v DEFAULT_ZADANI_PROJ stabilní. */
+function zobrazeniProjKlic(sekceKey, polozka) {
+  const p = polozka || {};
+  return 'proj.' + sekceKey + '.' + (p.kid || p.nazev || '');
+}
+
+/* Vtiskne výchozí zaškrtnutí do ČERSTVÉHO zadání nové zakázky.
+ * Volá se hned po novaZakazka(), kdy zadání ještě nese tvrdé výchozí hodnoty
+ * z kódu — ty slouží jako `zaklad`, proti kterému se matice porovnává.
+ * Nikdy se nepouští na rozpracovanou zakázku: přepsalo by to práci
+ * obchodníka. Vrací počet změněných položek (pro testy). */
+function zobrazeniVychoziAplikuj(mat, zadaniOck, zadaniProj) {
+  let zmen = 0;
+  if (zadaniOck && typeof zadaniOck === 'object') {
+    /* přechodové plechy mají v zadání vlastní pole, ne položku ve `volitelne` */
+    const pl = zobrazeniPolozkaVychozi(mat, 'ock.prechodove', zadaniOck.prechodovePlechy);
+    if (!!pl !== !!zadaniOck.prechodovePlechy) { zadaniOck.prechodovePlechy = pl; zmen++; }
+    const vol = zadaniOck.volitelne || {};
+    Object.keys(vol).forEach(k => {
+      const v = zobrazeniPolozkaVychozi(mat, 'ock.' + k, vol[k]);
+      if (!!v !== !!vol[k]) { vol[k] = v; zmen++; }
+    });
+  }
+  if (zadaniProj && Array.isArray(zadaniProj.sekce)) {
+    zadaniProj.sekce.forEach(s => {
+      (s.polozky || []).forEach(p => {
+        const pocitat = zobrazeniPolozkaVychozi(mat, zobrazeniProjKlic(s.key, p), !p.vyrazeno);
+        if (pocitat === !!p.vyrazeno) {          // liší se od dnešního stavu
+          if (pocitat) delete p.vyrazeno; else p.vyrazeno = true;
+          zmen++;
+        }
+      });
+    });
+  }
+  return zmen;
+}
+
 /* Liší se matice od dnešního stavu? Používá se v souhrnu Nastavení, aby bylo
  * na první pohled vidět, že někdo něco přenastavil. */
 function zobrazeniZmeny(mat) {
@@ -463,4 +545,6 @@ if (typeof module !== 'undefined')
     ZOBRAZENI_PRVKY, ZOBRAZENI_SKUPINY, ZOBRAZENI_ROLE_VZDY, ZOBRAZENI_ROLE_PRIDELITELNE,
     zobrazeniVychozi, zobrazeniPrvek, zobrazeniSmi, zobrazeniOciste, zobrazeniZmeny,
     ZOBRAZENI_SEKCE_VOLBY, zobrazeniSekceVolba, zobrazeniSekceNastav,
+    zobrazeniPolozkaVychozi, zobrazeniPolozkaVychoziNastav,
+    zobrazeniProjKlic, zobrazeniVychoziAplikuj,
   };

@@ -23,7 +23,11 @@ const ZAMEK_CHRANENE = [
   // Kalkulace OCK – množství, ceny, vlastní položky, příplatky, pořadí
   'mnozstviSet', 'nazevSet', 'nazevReset', 'cenaSet',
   'vlastniAdd', 'vlastniDel', 'vlastniSet', 'vlastniDoCeniku',
-  'volitelneToggle', 'viditelnostSet', 'volitelneVychoziSet', 'presunRadek',
+  /* `volitelneVychoziSet` tu stála do 20. 8. 2026. Zanikla: sloupec Výchozí
+   * už nezapisuje do zadání zakázky, ale do matice zobrazení (nastavení
+   * aplikace pro nové zakázky) — a nastavení aplikace zámek varianty
+   * neblokuje, stejně jako neblokuje volbu režimu sekce. */
+  'volitelneToggle', 'viditelnostSet', 'presunRadek',
   'priplatekNabidka', 'priplatekVlastniAdd', 'priplatekVlastniDel',
   'priplatekVlastniSet', 'priplatekDoCeniku',
   'sirotciUklidVse', 'sirotekUklid',
