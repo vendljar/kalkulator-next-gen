@@ -316,6 +316,65 @@ test('telefon a e-mail mají všude vlastní pole (žádný slepenec „tel / ma
       && h.includes('ZAK.zastupci.smluvniPozice');
   }));
 
+/* ---------- úpravy krycích listů z 20. 8. 2026 odpoledne ---------- */
+test('„Kontakt stavba" v krycích listech není (je to týž člověk jako technický zástupce)',
+  await page.evaluate(() => {
+    prepniTab('kryci'); if (typeof renderKryci === 'function') renderKryci();
+    const o = document.getElementById('page-kryci').innerHTML;
+    prepniTab('kryciproj'); if (typeof renderKryciProj === 'function') renderKryciProj();
+    const p = document.getElementById('page-kryciproj').innerHTML;
+    return !/Kontakt stavba/.test(o) && !/Kontakt stavba/.test(p);
+  }));
+test('sekce Podpis se jmenuje Ostatní a má obě „Informováno"',
+  await page.evaluate(() => {
+    const p = document.getElementById('page-kryciproj').innerHTML;
+    prepniTab('kryci'); if (typeof renderKryci === 'function') renderKryci();
+    const o = document.getElementById('page-kryci').innerHTML;
+    const sedi = h => />Ostatní</.test(h) && !/>Podpis</.test(h)
+      && h.includes('Informováno Backoffice') && h.includes('Informováno Technické odd.')
+      && h.includes('>Obchodník') && !h.includes('Podpis obchodníka');
+    return sedi(o) && sedi(p);
+  }));
+test('pole Dne se předvyplňuje dnešním datem (datum tisku)',
+  await page.evaluate(() => {
+    const d = new Date();
+    const dva = n => String(n).padStart(2, '0');
+    const dnes = d.getFullYear() + '-' + dva(d.getMonth() + 1) + '-' + dva(d.getDate());
+    return kryciDnesIso() === dnes
+      && kryciData(ZAK, aktivniVarianta(ZAK), JEKLY, 'bo').sekce
+           .some(s => s.radky.some(r => r[0] === 'Dne' && r[1] === dnes));
+  }));
+test('krycí list PROJ má odpovědnou osobu za projekci (vyplňuje obchodník)',
+  await page.evaluate(() => {
+    prepniTab('kryciproj'); if (typeof renderKryciProj === 'function') renderKryciProj();
+    const p = document.getElementById('page-kryciproj').innerHTML;
+    return p.includes('Odpovědná osoba za projekci')
+      && p.includes('odpovednyTel') && p.includes('odpovednyEmail');
+  }));
+
+/* ---------- Nastavení: Smlouvy / Šablony a filtr analytiky ---------- */
+test('záložka Nastavení se jmenuje „Smlouvy / Šablony" a začíná standardy a logem',
+  await page.evaluate(() => {
+    otevriNastaveni(); nastPanel('sablony');
+    const panel = document.getElementById('nastaveni-panel').innerHTML;
+    const zalozky = [...document.querySelectorAll('#nastaveni-panel, #nastaveni')]
+      .map(e => e.textContent).join(' ');
+    const iStd = panel.indexOf('Smluvní standardy');
+    const iLogo = panel.indexOf('Logo firmy');
+    const iSab = panel.indexOf('Šablony dokumentů');
+    return zalozky.includes('Smlouvy / Šablony')
+      && iStd >= 0 && iLogo > iStd && iSab > iLogo;
+  }));
+test('v Nastavení → Firma už standardy ani logo nejsou',
+  await page.evaluate(() => {
+    nastPanel('firma');
+    const panel = document.getElementById('nastaveni-panel').innerHTML;
+    return !panel.includes('>Logo firmy<') && panel.includes('Smlouvy / Šablony');
+  }));
+/* Nastavení se schválně NEZAVÍRÁ — pozdější krok sady zakládá účet
+ * v panelu Uživatelé a potřebuje ho otevřený. */
+await page.evaluate(() => { nastPanel('obecne'); });
+
 /* ---------- sloupec Výchozí (20. 8. 2026) ----------
  * Zaškrtnutí neplatí pro otevřenou zakázku, ale pro každou NOVOU: ukládá se
  * do matice (klíč `vychozi`) a novou zakázku upraví zobrazeniVychoziAplikuj.

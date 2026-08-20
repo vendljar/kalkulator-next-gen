@@ -133,7 +133,7 @@ const KRYCI_PROJ_SEKCE = [
     { id: 'zastBanka', label: 'Bankovní spojení zákazníka', verze: ['bo'], bind: 'ZAK.zastupci.banka', src: 'hlavička zakázky' },
     { id: 'zastUcet', label: 'Číslo účtu / směrový kód', verze: ['bo'], bind: 'ZAK.zastupci.ucet', src: 'hlavička zakázky' },
     { id: 'zastZapis', label: 'Zápis v rejstříku (zákazník)', verze: ['bo'], bind: 'ZAK.zastupci.zapis', src: 'hlavička zakázky' },
-    { id: 'kontaktStavba', label: 'Kontakt stavba (tel / email)', verze: ['bo', 'techdata'] },
+    /* „Kontakt stavba" odstraněn 20. 8. 2026 — viz krycí list OCK. */
     /* KL-6: ve formuláři je odkaz, ne popis */
     { id: 'scoring', label: 'Scoring Cribis / Pipedrive', verze: ['bo'], typ: 'link', ph: 'https://…' },
   ] },
@@ -166,6 +166,17 @@ const KRYCI_PROJ_SEKCE = [
     { id: 'zastFakturyTel', label: 'Fakturace — telefon', verze: ['bo'], bind: 'ZAK.zastupci.fakturyTel', src: 'hlavička zakázky' },
   ] },
 
+  /* Odpovědná osoba za projekci (20. 8. 2026, zadání J. V.): vyplňuje ji
+   * OBCHODNÍK u konkrétní zakázky — není to firemní údaj, u každého projektu
+   * to bývá někdo jiný. (Firemní „zástupce ve věcech technických" v
+   * Nastavení → Firma je něco jiného: ten jedná za firmu ve smlouvě PROJ
+   * obecně, tenhle vede tuhle konkrétní zakázku.)
+   * Telefon a e-mail mají vlastní pole — jako všude jinde. */
+  { sekce: 'Odpovědná osoba za projekci (za nás)', pole: [
+    { id: 'odpovednyJmeno', label: 'Jméno', verze: ['bo', 'techdata'] },
+    { id: 'odpovednyTel', label: 'Telefon', verze: ['bo', 'techdata'] },
+    { id: 'odpovednyEmail', label: 'E-mail', verze: ['bo', 'techdata'] },
+  ] },
   { sekce: 'Typ smlouvy', pole: [
     { id: 'typSmlouvy', label: 'Typ smlouvy', verze: ['bo'], typ: 'radio', o: ['Naše bez úprav', 'Naše s úpravami', 'Cizí'], prefill: () => 'Naše bez úprav', src: 'výchozí' },
     { id: 'typProjektu', label: 'Typ projektu', verze: ['bo', 'techdata'], typ: 'radio', o: ['Nový projekt (novostavba)', 'Rekonstrukce objektu'], prefill: () => 'Rekonstrukce objektu', src: 'výchozí' },
@@ -243,11 +254,13 @@ const KRYCI_PROJ_SEKCE = [
     { id: 'atypOsvit', label: 'Studie osvitu / denní osvětlení', verze: ['techdata'], typ: 'textarea' },
     { id: 'atypJiny', label: 'Jiný atyp nebo riziko', verze: ['techdata'], typ: 'textarea' },
   ] },
-  /* KL-7: patička z předlohy („Dne" / „Podpis obchodníka" / „Informován") */
-  { sekce: 'Podpis', pole: [
-    { id: 'podpisDne', label: 'Dne', verze: ['bo', 'techdata'], typ: 'date' },
-    { id: 'podpisObchodnik', label: 'Podpis obchodníka', verze: ['bo', 'techdata'], prefill: c => kryciProjObchodnik(c.firma), src: 'přihlášený uživatel / Nastavení → Firma' },
-    { id: 'podpisInformovan', label: 'Informován', verze: ['bo', 'techdata'], ph: 'kdo byl o zakázce informován…' },
+  /* KL-7: patička z předlohy — 20. 8. 2026 stejná úprava jako v OCK. */
+  { sekce: 'Ostatní', pole: [
+    { id: 'podpisDne', label: 'Dne', verze: ['bo', 'techdata'], typ: 'date',
+      prefill: () => kryciDnesIso(), src: 'datum tisku' },
+    { id: 'podpisObchodnik', label: 'Obchodník', verze: ['bo', 'techdata'], prefill: c => kryciProjObchodnik(c.firma), src: 'přihlášený uživatel / Nastavení → Firma' },
+    { id: 'podpisInformovanBo', label: 'Informováno Backoffice', verze: ['bo', 'techdata'], ph: 'kdo z BO byl o zakázce informován…' },
+    { id: 'podpisInformovanTech', label: 'Informováno Technické odd.', verze: ['bo', 'techdata'], ph: 'kdo z technického oddělení byl informován…' },
   ] },
 ];
 

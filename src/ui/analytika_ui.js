@@ -18,6 +18,7 @@ const ANL = {
   cas: null,             // krokovací automat měření času (casNovy)
   timer: null,
   heat: false,           // heat režim zapnut?
+  prehledUzivatel: '',   // filtr přehledu užívání: e-mail, nebo '' = všichni
   heatData: null,        // data ze serveru {kliky, zdrz, zalozky}
   heatMetrika: 'kliky',
   heatObdobi: 30,        // dní zpět
@@ -144,6 +145,12 @@ function analytikaNactiPrehled() {
 
 function analytikaPrehledObdobi(v) { ANL.prehledObdobi = v; ANL.prehled = null; analytikaNactiPrehled(); }
 
+/* Filtr přehledu podle uživatele (20. 8. 2026, zadání J. V.). Filtruje se
+ * v prohlížeči nad už staženými daty — server posílá denní agregáty
+ * i s rozpadem po uživatelích, takže není potřeba další dotaz.
+ * Prázdná hodnota = všichni dohromady (dosavadní chování). */
+function analytikaPrehledUzivatel(email) { ANL.prehledUzivatel = email || ''; renderNastaveni(); }
+
 function analytikaVypinac(zap) {
   onlineApi('/api/analytika', { akce: 'rezim', sber: !!zap }).then(() => {
     ANL.sber = !!zap;
@@ -184,7 +191,14 @@ function nastAnalytika() {
     return `<div class="neg">Data se nenačetla: ${esc(ANL.prehled.chyba)}</div>
       <div class="btns"><button class="mini" onclick="ANL.prehled=null;renderNastaveni()">Zkusit znovu</button></div>`;
 
-  const p = ANL.prehled, c = p.celkem.pocty;
+  const p = ANL.prehled;
+  /* Filtr po uživateli: počítadla se berou z rozpadu `poUzivateli`.
+   * Klíče prvků, záložky a zdržení zůstávají ANONYMNÍ (viz analytika.js),
+   * takže se filtrem nemění — a je to u nich napsané. */
+  const kdo = ANL.prehledUzivatel || '';
+  const c = (typeof analytikaPoctyUzivatele === 'function')
+    ? analytikaPoctyUzivatele(p.celkem, kdo) : p.celkem.pocty;
+  const uzivatele = (typeof analytikaUzivatele === 'function') ? analytikaUzivatele(p.celkem) : [];
   const sber = p.rezim && p.rezim.sber !== false;
   const zalozky = Object.entries(p.celkem.zalozky || {}).sort((a, b) => b[1] - a[1]);
   const top = Object.entries(p.celkem.kliky || {}).filter(([k]) => k !== '…ostatni')
@@ -194,7 +208,9 @@ function nastAnalytika() {
   return `<div class="sec-title">Sběr dat</div>
     <div class="note">Sběr je ${sber ? '<b>zapnutý</b>' : '<b style="color:#b91c1c">vypnutý</b>'}${p.rezim && p.rezim.kdy
       ? ' (naposledy změnil ' + esc(p.rezim.kdo || '?') + ' ' + esc(String(p.rezim.kdy).slice(0, 10)) + ')' : ''}.
-      Ukládají se výhradně <b>součty za všechny uživatele za den</b> — chování jednotlivce dohledat nejde.
+      Ukládají se <b>součty za den</b>. Od 20. 8. 2026 se u <b>šesti počítadel</b> (zakázky, kalkulace,
+      tisky, přihlášení, chyby) ukládá i rozpad <b>po uživatelích</b> — dá se tedy filtrovat, kdo kolik.
+      Klíče prvků, otevřené záložky, heat mapa ani čas nad kalkulacemi se ke jménům <b>nepřiřazují</b>.
       Denní souhrny se drží 24 měsíců, starší se mažou. Analytika se nezálohuje.</div>
     <div class="btns"><button class="mini" onclick="analytikaVypinac(${sber ? 'false' : 'true'})">
       ${sber ? 'Vypnout sběr' : 'Zapnout sběr'}</button></div>
@@ -205,6 +221,18 @@ function nastAnalytika() {
          anonymní souhrny, což tahle verze dodržuje).</div>`}
 
     <div class="sec-title">Přehled užívání (#27)</div>
+    <div class="row" style="margin-bottom:6px">
+      <label>Uživatel</label>
+      <select onchange="analytikaPrehledUzivatel(this.value)">
+        <option value="" ${kdo ? '' : 'selected'}>— všichni dohromady —</option>
+        ${uzivatele.map(e => `<option value="${esc(e)}" ${kdo === e ? 'selected' : ''}>${esc(e)}</option>`).join('')}
+      </select><span class="u"></span>
+    </div>
+    ${kdo ? `<div class="note" style="margin-bottom:6px">Filtr <b>${esc(kdo)}</b> platí jen pro šest
+      počítadel v tabulce níže. <b>Záložky, prvky, heat mapa i čas nad kalkulacemi zůstávají
+      anonymní</b> — u nich se neukládá, kdo je způsobil.</div>` : ''}
+    ${uzivatele.length ? '' : `<div class="note" style="margin-bottom:6px">Rozpad po uživatelích se
+      začal ukládat 20. 8. 2026 — starší dny ho nemají a ve filtru se neobjeví.</div>`}
     <div class="kl-radio">
       ${[['mesic', 'tento měsíc'], ['rok', 'letošní rok'], ['vse', 'vše (24 měsíců)']].map(([v, t]) =>
         `<label><input type="radio" name="anlObdobi" ${ANL.prehledObdobi === v ? 'checked' : ''}

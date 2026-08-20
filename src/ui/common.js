@@ -173,7 +173,7 @@ function nahledVypni() {
 /* Zápis se v náhledu neprovede. Vrací true = „zastaveno", takže volající
  * funkce se vrátí bez změny. Stejný tvar jako zamekStop() v zamek.js. */
 function nahledStop(popis) {
-  if (!nahledAktivni()) return false;
+  if (!nahledAktivni()) return false;   // rolový náhled zápis neblokuje (chová se jako dosud)
   const kdo = NAST.nahledUzivatel.jmeno || NAST.nahledUzivatel.email;
   alert('Prohlížíte aplikaci jako ' + kdo + ' — v náhledu se nic nezapisuje.\n\n'
     + (popis ? 'Akce: ' + popis + '\n\n' : '')
@@ -204,11 +204,20 @@ function renderProstrediLista() {
 function renderNahledLista() {
   const el = document.getElementById('nahledLista');
   if (!el) return;
-  if (!nahledAktivni()) { el.innerHTML = ''; return; }
-  const u = NAST.nahledUzivatel;
-  el.innerHTML = `<div class="nahled-pruh">👁
-    <span><b>Náhled: ${esc(u.jmeno || u.email)}</b> (${esc(u.role)}) — vidíte přesně to, co on.
-      Zápis je vypnutý.</span>
+  const rolovy = !nahledAktivni() && !NAST.jeAdmin
+    && typeof smiPohledAdmina === 'function' && smiPohledAdmina();
+  if (!nahledAktivni() && !rolovy) { el.innerHTML = ''; return; }
+  /* Od 20. 8. 2026 pokrývá pruh OBA náhledy — konkrétního uživatele
+   * i obecnou roli. Do té doby měl náhled role vlastní tlačítko v horní
+   * liště („← Ukončit náhled uživatele"), takže při náhledu uživatele
+   * svítily dvě cesty ven vedle sebe. Tlačítko je pryč, pruh zůstal. */
+  const kdoHtml = nahledAktivni()
+    ? `<b>Náhled: ${esc(NAST.nahledUzivatel.jmeno || NAST.nahledUzivatel.email)}</b>`
+      + ` (${esc(NAST.nahledUzivatel.role)}) — vidíte přesně to, co on.`
+    : `<b>Náhled role: ${esc(NAST.nahledRole || 'Obchodník')}</b> — vidíte to, co uvidí tahle role.`;
+  el.innerHTML = `<div class="nahled-pruh">
+    <span style="display:inline-flex;color:#92400e">${typeof IKONA_OKO === 'string' ? IKONA_OKO : '·'}</span>
+    <span>${kdoHtml} Zápis je vypnutý.</span>
     <button class="mini" style="margin-left:auto" onclick="nahledVypni()">Ukončit náhled</button></div>`;
 }
 

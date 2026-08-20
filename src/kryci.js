@@ -41,6 +41,14 @@ const KRYCI_ZALOHY = ['Bez zálohy', '30 % – po podpisu smlouvy',
  * a vypustit ho má být vědomé rozhodnutí. */
 const KRYCI_LIMIT_POKUT = ['Uplatněn limit 10 %', 'NEUPLATNĚN limit 10 %'];
 
+/* Datum tisku pro předvyplnění pole „Dne" (20. 8. 2026). Formát YYYY-MM-DD,
+ * protože pole je typu date; ruční přepis má přednost jako u všech prefillů. */
+function kryciDnesIso() {
+  const d = new Date();
+  const dva = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + dva(d.getMonth() + 1) + '-' + dva(d.getDate());
+}
+
 const KRYCI_SEKCE = [
   { sekce: 'Základní údaje', pole: [
     /* KL-4: obchodníka aplikace zná – od 5. 8. 2026 je to přihlášený uživatel
@@ -89,7 +97,10 @@ const KRYCI_SEKCE = [
     { id: 'zastBanka', label: 'Bankovní spojení zákazníka', verze: ['bo'], bind: 'ZAK.zastupci.banka', src: 'hlavička zakázky' },
     { id: 'zastUcet', label: 'Číslo účtu / směrový kód', verze: ['bo'], bind: 'ZAK.zastupci.ucet', src: 'hlavička zakázky' },
     { id: 'zastZapis', label: 'Zápis v rejstříku (zákazník)', verze: ['bo'], bind: 'ZAK.zastupci.zapis', src: 'hlavička zakázky' },
-    { id: 'kontaktStavba', label: 'Kontakt stavba (tel / email)', verze: ['bo', 'techdata'] },
+    /* „Kontakt stavba (tel / email)" odstraněn 20. 8. 2026 (zadání J. V.):
+     * je to týž člověk jako zástupce zákazníka ve věcech technických, který
+     * má o sekci níž vlastní jméno, telefon i e-mail. Dvě místa pro totéž
+     * znamenala dvě různé hodnoty. */
     /* KL-6: ve formuláři je odkaz, ne popis – proto typ 'link' (otevře se ↗) */
     { id: 'scoring', label: 'Scoring Cribis / Pipedrive', verze: ['bo'], typ: 'link', ph: 'https://…' },
   ] },
@@ -227,12 +238,16 @@ const KRYCI_SEKCE = [
     { id: 'atypTvar', label: 'Netradiční tvar OCK (např. 5 stěn)', verze: ['techdata'], typ: 'textarea' },
     { id: 'atypJiny', label: 'Jiný atyp (domluva na schůzce na stavbě)', verze: ['techdata'], typ: 'textarea' },
   ] },
-  /* KL-7: patička z předlohy („Dne" / „Podpis obchodníka" / „Informován").
-   * V obou verzích – technické oddělení podepisuje převzetí stejně jako BO. */
-  { sekce: 'Podpis', pole: [
-    { id: 'podpisDne', label: 'Dne', verze: ['bo', 'techdata'], typ: 'date' },
-    { id: 'podpisObchodnik', label: 'Podpis obchodníka', verze: ['bo', 'techdata'], prefill: c => kryciObchodnikJmeno(c.firma), src: 'přihlášený uživatel / Nastavení → Firma' },
-    { id: 'podpisInformovan', label: 'Informován', verze: ['bo', 'techdata'], ph: 'kdo byl o zakázce informován…' },
+  /* KL-7: patička z předlohy. 20. 8. 2026 (zadání J. V.) přejmenovaná na
+   * „Ostatní" — nejsou to podpisy, ale doprovodné údaje listu; „Dne" se
+   * předvyplňuje DATEM TISKU (ručně přepsatelné jako každé jiné pole)
+   * a „Informován" se rozpadl na dvě oddělení, protože se běžně liší. */
+  { sekce: 'Ostatní', pole: [
+    { id: 'podpisDne', label: 'Dne', verze: ['bo', 'techdata'], typ: 'date',
+      prefill: () => kryciDnesIso(), src: 'datum tisku' },
+    { id: 'podpisObchodnik', label: 'Obchodník', verze: ['bo', 'techdata'], prefill: c => kryciObchodnikJmeno(c.firma), src: 'přihlášený uživatel / Nastavení → Firma' },
+    { id: 'podpisInformovanBo', label: 'Informováno Backoffice', verze: ['bo', 'techdata'], ph: 'kdo z BO byl o zakázce informován…' },
+    { id: 'podpisInformovanTech', label: 'Informováno Technické odd.', verze: ['bo', 'techdata'], ph: 'kdo z technického oddělení byl informován…' },
   ] },
 ];
 

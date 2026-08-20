@@ -137,11 +137,11 @@ const poleScoring = kr.KRYCI_SEKCE.flatMap(s => s.pole).find(p => p.id === 'scor
 test('KL-6 scoring je typu link', poleScoring && poleScoring.typ === 'link', poleScoring && poleScoring.typ);
 
 // KL-7: patička s podpisem
-test('KL-7 BO obsahuje sekci Podpis', sekBo.includes('Podpis'), sekBo.join('|'));
-test('KL-7 Techdata obsahuje sekci Podpis', sekTd.includes('Podpis'), sekTd.join('|'));
+test('KL-7 BO obsahuje sekci Ostatní', sekBo.includes('Ostatní'), sekBo.join('|'));
+test('KL-7 Techdata obsahuje sekci Ostatní', sekTd.includes('Ostatní'), sekTd.join('|'));
 test('KL-7 podpis obchodníka bez přihlášení prázdný (nese ho uživatel, 19. 8.)',
-  !najdi(bo, 'Podpis obchodníka'), najdi(bo, 'Podpis obchodníka'));
-test('KL-7 řádek Informován', labely.includes('Informován'), labely.join('|'));
+  !najdi(bo, 'Obchodník'), najdi(bo, 'Obchodník'));
+test('KL-7 řádek Informováno Backoffice', labely.includes('Informováno Backoffice'), labely.join('|'));
 
 // 4) ruční přepis má přednost
 v.data.kryci = { hodnoty: { obchodnik: 'Jan Novák' } };

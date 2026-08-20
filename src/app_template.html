@@ -156,12 +156,10 @@
      `nastaveni.otevrit`. Ostatní dřívější `admin-only` prvky se dnes
      nekreslí vůbec (podmínka přímo v šabloně), což je průhlednější. */
   body:not(.smi-nastaveni) .admin-only { display:none !important; }
-  #btnZpetAdmin { display:none; background:#b45309; border-color:#b45309; color:#fff; }
   /* Návrat z náhledu se nabízí jen tomu, kdo se do náhledu má jak vrátit,
      tedy skutečnému administrátorovi (třída `muze-admin` se nastavuje
      v render() podle role ze serveru). Do 5. 8. 2026 stačilo `role-user`
      a tlačítko svítilo i obchodníkovi — jeden klik a měl otevřené ceníky. */
-  body.role-user.muze-admin #btnZpetAdmin { display:inline-block; }
   /* ochrana rozpracované práce (#1): Zpět/Znovu, stav zálohy, lišta obnovy */
   /* Zpět/Znovu jsou po úklidu hlavičky (4. 8. 2026) jediná pracovní tlačítka
      nahoře – a zároveň jediná pojistka proti ztrátě rozdělané práce. Dokud
@@ -682,7 +680,9 @@
     <!-- Vstup zůstává v dokumentu: „Načíst zakázku" na záložce Přehled
          cenových nabídek na něj klikne za uživatele. -->
     <input type="file" id="fileIn" accept=".json" style="display:none" onchange="nactiZakazku(event)">
-    <button id="btnZpetAdmin" onclick="nastSetAdmin(true)">← Ukončit náhled uživatele</button>
+    <!-- Tlačítko „← Ukončit náhled uživatele" bylo 20. 8. 2026 odstraněno jako
+         duplicitní: náhled se ukončuje v oranžovém pruhu pod lištou a klikem
+         na jméno vpravo nahoře (viz #nahledLista a renderOnlineLista). -->
     <!-- pravý horní roh: kdo je přihlášený + Změnit heslo + Odhlásit (4. 8. 2026) -->
     <span id="onlineLista" class="online-lista"></span>
     <button id="btnNastaveni" class="gear admin-only" title="Nastavení (jen administrátor)" onclick="otevriNastaveni()">⚙</button>

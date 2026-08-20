@@ -30,7 +30,7 @@ const NAST_PANELY = [
   { id: 'firma', nazev: 'Firma', klic: 'nastaveni.firma', telo: () => nastFirma() },
   { id: 'uzivatele', nazev: 'Uživatelé', klic: 'nastaveni.uzivatele', telo: () => nastUzivatele() },
   { id: 'slevy', nazev: 'Slevy', klic: 'nastaveni.slevy', telo: () => nastSlevy() },
-  { id: 'sablony', nazev: 'Šablony', klic: 'nastaveni.sablony', telo: () => nastSablony() },
+  { id: 'sablony', nazev: 'Smlouvy / Šablony', klic: 'nastaveni.sablony', telo: () => nastSablony() },
   { id: 'zobrazeni', nazev: 'Zobrazení', klic: 'nastaveni.zobrazeni', telo: () => nastZobrazeni() },
   { id: 'konfigurace', nazev: 'Konfigurace', klic: 'nastaveni.konfigurace', telo: () => nastKonfigurace() },
   { id: 'slovnik', nazev: 'Slovník', klic: 'nastaveni.slovnik', telo: () => nastSlovnik() },
@@ -235,7 +235,12 @@ function nastFirma() {
       ${p.symbol ? `<span class="note" style="flex:none;width:210px;font-size:11.5px"><code>{{${p.symbol}}}</code></span>` : '<span style="flex:none;width:210px"></span>'}</div>`;
   };
 
-  const sekce = FIRMA_SEKCE.map(s => {
+  /* Smluvní standardy a Logo firmy se 20. 8. 2026 (zadání J. V.) přestěhovaly
+   * na začátek záložky **Smlouvy / Šablony** — patří k dokumentům, ne
+   * k identifikaci firmy, a v seznamu firemních polí jen odtlačovaly dolů to,
+   * co obchodník hledá. Data zůstávají tam, kde byla (NAST.firma), takže
+   * uložené konfigurace se nemění. */
+  const sekce = FIRMA_SEKCE.filter(s => s !== 'Smluvní standardy').map(s => {
     const pole = FIRMA_POLE.filter(p => p.sekce === s);
     const skryt = s === 'Korespondenční adresa' && f.korShodna;
     return `<div class="sec-title">${esc(s)}</div>
@@ -256,15 +261,8 @@ function nastFirma() {
 
     ${sekce}
 
-    <div class="sec-title">Logo firmy</div>
-    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      ${f.logo ? `<img src="${esc(f.logo)}" alt="logo" style="max-height:56px;max-width:220px;border:1px solid var(--line);border-radius:6px;padding:4px">` : '<span class="note">Logo zatím nenahráno.</span>'}
-      <div class="btns"><button onclick="firmaLogoNahraj()">Nahrát logo</button>
-        ${f.logo ? '<button class="mini" onclick="firmaLogoSmaz()">Odebrat</button>' : ''}</div>
-      ${f.logoNazev ? `<span class="note">${esc(f.logoNazev)}</span>` : ''}
-    </div>
-    <div class="note" style="margin-top:6px">PNG / JPG / SVG do 400 kB. Ukládá se přímo do konfigurace (data URL),
-      aby se přeneslo spolu s ostatním nastavením. Logo se zobrazuje v hlavičce tiskových náhledů.</div>
+    <div class="note" style="margin-top:10px">Smluvní standardy a logo firmy najdete na záložce
+      <b>Smlouvy / Šablony</b> — patří k dokumentům, ne k identifikaci firmy.</div>
 
     <div class="sec-title">Zástupné symboly do .docx šablon</div>
     <div class="note" style="line-height:1.9">${symboly}</div>
@@ -463,6 +461,34 @@ function sablonyRezimUI(rezim) {
     .catch(e => { sablonaOnlineStav('Chyba: ' + e.message, true); nastRefresh(); });
 }
 
+/* Bloky přestěhované 20. 8. 2026 z Nastavení → Firma na začátek záložky
+ * Smlouvy / Šablony: firemní smluvní standardy (věty, které jdou do každé
+ * nabídky a smlouvy) a logo do hlaviček dokumentů. Obojí se pořád ukládá do
+ * NAST.firma — přestěhovalo se jen místo, kde se to vyplňuje. */
+function nastSmluvniStandardy() {
+  const f = NAST.firma || (NAST.firma = firmaDefault());
+  const pole = FIRMA_POLE.filter(p => p.sekce === 'Smluvní standardy');
+  const radek = p => `<div class="row"><label>${esc(p.label)}</label>
+    <input type="text" value="${esc(f[p.id] == null ? '' : f[p.id])}"
+      onchange="firmaSet('${p.id}', this.value)">
+    <span class="note" style="flex:none;width:210px;font-size:11.5px"><code>{{${p.symbol}}}</code></span></div>`;
+  return `<div class="sec-title">Smluvní standardy</div>
+    <div class="note" style="margin-top:0">Věty, které platí pro celou firmu a propisují se do
+      <b>každé</b> nabídky, smlouvy i krycího listu. Mění se jednou za čas a pro všechny naráz —
+      proto tady, a ne v každé zakázce zvlášť.</div>
+    ${pole.map(radek).join('')}
+
+    <div class="sec-title">Logo firmy</div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      ${f.logo ? `<img src="${esc(f.logo)}" alt="logo" style="max-height:56px;max-width:220px;border:1px solid var(--line);border-radius:6px;padding:4px">` : '<span class="note">Logo zatím nenahráno.</span>'}
+      <div class="btns"><button onclick="firmaLogoNahraj()">Nahrát logo</button>
+        ${f.logo ? '<button class="mini" onclick="firmaLogoSmaz()">Odebrat</button>' : ''}</div>
+      ${f.logoNazev ? `<span class="note">${esc(f.logoNazev)}</span>` : ''}
+    </div>
+    <div class="note" style="margin-top:6px">PNG / JPG / SVG do 400 kB. Ukládá se přímo do konfigurace (data URL),
+      aby se přeneslo spolu s ostatním nastavením. Logo se zobrazuje v hlavičce tiskových náhledů.</div>`;
+}
+
 function nastSablony() {
   /* Řádek platné serverové verze daného typu (#139). Ukazuje se každému
    * přihlášenému — obchodník má vědět, ze které verze se tiskne. */
@@ -525,7 +551,10 @@ function nastSablony() {
         ${r.rezimZmenil ? `Naposledy přepnul ${esc(r.rezimZmenil)} ${esc((r.rezimKdy || '').slice(0, 10))}.` : ''}</div>
       <div id="sablOnlineStav" class="note" style="margin-top:6px"></div></div>`;
   };
-  return `<div class="note">Šablony <b>.docx</b> se od 13. 8. 2026 řídí <b>centrálně</b> (#139): administrátor je zveřejní
+  return `${nastSmluvniStandardy()}
+
+    <div class="sec-title">Šablony dokumentů</div>
+    <div class="note">Šablony <b>.docx</b> se od 13. 8. 2026 řídí <b>centrálně</b> (#139): administrátor je zveřejní
     na serveru a všichni přihlášení z nich automaticky tisknou — nikdo nemůže omylem použít starou verzi. Nahrání
     souboru níže je příprava (a nouzová cesta pro práci bez serveru); teprve <b>„Zveřejnit online"</b> ji učiní platnou
     pro všechny. Šablony se plní zástupnými symboly <code>{{KLÍČ}}</code> a jsou součástí všech záloh.</div>

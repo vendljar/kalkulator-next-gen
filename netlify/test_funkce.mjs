@@ -400,8 +400,18 @@ const DOCX2 = 'UEsDBBQABgAIAAAAIQ' + 'B'.repeat(400);   // jiná data = jiný ot
   const ulozeny = await uloz.cti('den/' + dnes);
   test('analytika: dávky se PŘIČÍTAJÍ do denního agregátu (žádné záznamy po lidech)',
     ulozeny && ulozeny.kliky['kalk|BUTTON|nabidkaWord(…)'] === 4 && ulozeny.pocty.tiskyWord === 4);
-  test('analytika: v uloženém dni není žádný e-mail ani jméno',
-    !JSON.stringify(ulozeny).includes('@'));
+  /* 20. 8. 2026 (zadání J. V. „filtrování užívání dle uživatele"): u ŠESTI
+   * počítadel se nově ukládá i rozpad po uživatelích. Zbytek zůstává
+   * anonymní — a přesně to sada hlídá, aby se rozsah zase nerozšířil. */
+  test('analytika: počítadla se přiřadí přihlášenému uživateli',
+    ulozeny && ulozeny.poUzivateli && ulozeny.poUzivateli['obchodnik@engineers-cz.cz']
+    && ulozeny.poUzivateli['obchodnik@engineers-cz.cz'].tiskyWord === 4,
+    JSON.stringify(ulozeny && ulozeny.poUzivateli));
+  test('analytika: e-mail je JEN v rozpadu počítadel, nikde jinde',
+    !JSON.stringify({ kliky: ulozeny.kliky, zdrz: ulozeny.zdrz,
+                      zalozky: ulozeny.zalozky, pocty: ulozeny.pocty }).includes('@'));
+  test('analytika: klient svůj e-mail neposílá (atribuci dělá server z relace)',
+    !JSON.stringify(den1).includes('@'));
 
   /* čas zakázky se akumuluje pod číslem zakázky */
   await post(analytika, 'http://x/api/analytika', { akce: 'udalosti',

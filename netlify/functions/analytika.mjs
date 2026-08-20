@@ -74,7 +74,7 @@ export default async (req) => {
   }
 
   if (t.akce === 'udalosti') {
-    const { chyba } = await vyzadujRoli(req);                // stačí být přihlášen
+    const { chyba, relace } = await vyzadujRoli(req);        // stačí být přihlášen
     if (chyba) return chyba;
     const rez = (await s.cti('rezim')) || g.analytikaRezimNovy();
     /* Vypnutý sběr: dávka se TIŠE zahodí (ok:true). Klient o vypnutí ví
@@ -84,7 +84,12 @@ export default async (req) => {
 
     if (t.den && typeof t.den === 'object') {
       const stary = await s.cti('den/' + dnes);
-      await s.zapis('den/' + dnes, g.analytikaSlij(stary, t.den));
+      const novy = g.analytikaSlij(stary, t.den);
+      /* Atribuci počítadel dělá SERVER z přihlášené relace (20. 8. 2026):
+       * klient svůj e-mail neposílá, takže ho nemůže podvrhnout, a zbytek
+       * analytiky (klíče prvků, záložky, zdržení) zůstává anonymní. */
+      g.analytikaPrictiUzivateli(novy, relace && relace.email, (t.den || {}).pocty);
+      await s.zapis('den/' + dnes, novy);
     }
     /* časy zakázek: { '2026-OPR-CN-0155': { ock: 120, proj: 30 }, … } */
     if (t.casy && typeof t.casy === 'object') {

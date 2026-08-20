@@ -1063,6 +1063,16 @@ function renderPrihlaseni() {
 
 /* ---------- pravý horní roh: kdo je přihlášený ---------- */
 
+/* Ikony v liště. Emoji (👤 / 👁) měla vlastní barvu z fontu a nešla sladit
+ * se jménem vedle sebe — proto vlastní SVG s `fill="currentColor"`. */
+const IKONA_OSOBA = `<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"
+  style="vertical-align:-2px;fill:currentColor"><circle cx="8" cy="4.6" r="3.1"/>
+  <path d="M8 9c-3.3 0-6 2-6 4.5V15h12v-1.5C14 11 11.3 9 8 9z"/></svg>`;
+const IKONA_OKO = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"
+  style="vertical-align:-2px;fill:currentColor"><path d="M8 3C4.4 3 1.5 5.6 0.5 8c1 2.4 3.9 5 7.5 5
+  s6.5-2.6 7.5-5c-1-2.4-3.9-5-7.5-5zm0 8.2A3.2 3.2 0 1 1 8 4.8a3.2 3.2 0 0 1 0 6.4z"/>
+  <circle cx="8" cy="8" r="1.6"/></svg>`;
+
 function renderOnlineLista() {
   const el = document.getElementById('onlineLista');
   if (!el) return;
@@ -1093,7 +1103,10 @@ function renderOnlineLista() {
     : (onlineJmenoSTitulem() || ONLINE_STAV.ja.email);
   const role = nahled ? NAST.nahledUzivatel.role : ONLINE_STAV.ja.role;
   const barva = nahled ? '#f87171' : '#86e8ad';
-  const ikona = nahled ? '👁' : '👤';
+  /* Ikona je SVG s `fill: currentColor`, ne emoji (20. 8. 2026): emoji si
+   * nese vlastní barvu z fontu, takže postavička zůstávala fialová vedle
+   * zeleného jména. SVG se obarví přesně tak jako text. */
+  const ikona = nahled ? IKONA_OKO : IKONA_OSOBA;
   const titulek = nahled
     ? 'náhled cizího pohledu — kliknutím ho ukončíte'
     : (smiNahled ? 'kliknutím se podíváte na aplikaci očima jiného uživatele' : '');

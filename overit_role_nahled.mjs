@@ -122,8 +122,14 @@ test('administrátor je po přihlášení v pohledu administrátora',
   await page.evaluate(() => NAST.jeAdmin === true));
 test('administrátorovi funguje náhled běžného uživatele',
   await page.evaluate(() => { nastSetAdmin(false); return NAST.jeAdmin === false; }));
-test('z náhledu vede tlačítko zpět a je vidět',
-  await page.locator('#btnZpetAdmin').isVisible());
+/* Tlačítko „← Ukončit náhled uživatele" v horní liště bylo 20. 8. 2026
+ * odstraněno jako duplicitní — cestu ven drží oranžový pruh. */
+test('z náhledu role vede ven oranžový pruh (a žádné druhé tlačítko v liště)',
+  await page.evaluate(() => {
+    const p = document.getElementById('nahledLista').innerHTML;
+    return p.includes('Ukončit náhled') && p.includes('Náhled role')
+      && !document.getElementById('btnZpetAdmin');
+  }));
 test('administrátor se z náhledu vrátí',
   await page.evaluate(() => { nastSetAdmin(true); return NAST.jeAdmin === true; }));
 
@@ -140,10 +146,17 @@ await page.evaluate(() => zavriNastaveni());
 /* ---------- 1b) náhled POHLEDEM KONKRÉTNÍHO UŽIVATELE (20. 8. 2026) ----------
  * Do 20. 8. šla přepnout jen ROLE („nějaký obchodník"). Zadání J. V.: chci
  * vidět, co uvidí Petr Novák, a přepínat to klikem na jméno vpravo nahoře. */
-test('v liště je jméno klikací (přepínač náhledu) a postavička je zelená',
+/* Postavička je SVG s fill:currentColor, ne emoji (20. 8. 2026) — jinak by
+ * si nesla vlastní barvu z fontu a nešla sladit se zeleným jménem. */
+test('v liště je jméno klikací (přepínač náhledu) a postavička má barvu jména',
   await page.evaluate(() => {
     const h = document.getElementById('onlineLista').innerHTML;
-    return h.includes('nahledMenuPrepni()') && h.includes('👤') && h.includes('#86e8ad');
+    const btn = document.querySelector('#onlineLista button[onclick*="nahledMenuPrepni"]');
+    const svg = btn && btn.querySelector('svg');
+    if (!svg) return false;
+    const barvaTextu = getComputedStyle(btn).color;
+    const barvaIkony = getComputedStyle(svg).fill;
+    return h.includes('#86e8ad') && barvaTextu === barvaIkony && !h.includes('👤');
   }));
 test('nabídka náhledu vypíše založený účet',
   await page.evaluate(() => {
@@ -156,10 +169,13 @@ test('zapnutí náhledu převezme roli vybraného účtu',
     return nahledAktivni() && NAST.nahledUzivatel.role === 'Obchodník'
       && NAST.jeAdmin === false && zobrazeniRole() === 'Obchodník';
   }));
-test('postavička se změní na červené oko a v liště svítí jméno náhledu',
+test('ikona se změní na oko v červené barvě jména a v liště svítí jméno náhledu',
   await page.evaluate(() => {
     const h = document.getElementById('onlineLista').innerHTML;
-    return h.includes('👁') && h.includes('#f87171') && h.includes('Petr Novák');
+    const btn = document.querySelector('#onlineLista button[onclick*="nahledMenuPrepni"]');
+    const svg = btn && btn.querySelector('svg');
+    return !!svg && h.includes('#f87171') && h.includes('Petr Novák')
+      && getComputedStyle(btn).color === getComputedStyle(svg).fill;
   }));
 test('přes celou šířku svítí pruh náhledu',
   await page.evaluate(() => {
@@ -196,12 +212,16 @@ test('obchodník je v pohledu běžného uživatele',
   await page.evaluate(() => NAST.jeAdmin === false));
 test('stránka nese třídu role-user',
   await page.evaluate(() => document.body.classList.contains('role-user')));
+test('obchodník nemá pruh náhledu (nic si přepnout nemůže)',
+  await page.evaluate(() => document.getElementById('nahledLista').innerHTML === ''));
 test('stránka NEnese třídu muze-admin',
   await page.evaluate(() => !document.body.classList.contains('muze-admin')));
 
-/* Jádro nálezu: tlačítko „← Ukončit náhled uživatele" svítilo i obchodníkovi. */
-test('tlačítko „Ukončit náhled uživatele" obchodník nevidí',
-  !(await page.locator('#btnZpetAdmin').isVisible()));
+/* Jádro nálezu (5. 8. 2026): tlačítko „← Ukončit náhled uživatele" svítilo
+ * i obchodníkovi. 20. 8. 2026 bylo odstraněno úplně jako duplicitní k pruhu —
+ * kontrola tedy zůstává, jen se ptá, že prvek v dokumentu VŮBEC není. */
+test('tlačítko „Ukončit náhled uživatele" v aplikaci není',
+  await page.evaluate(() => !document.getElementById('btnZpetAdmin')));
 
 /* Skrýt nestačí — funkce jde zavolat z konzole prohlížeče. */
 poslednihlaska = '';
