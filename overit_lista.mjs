@@ -247,18 +247,35 @@ await p.locator('#tab-zakazka').click();
 await p.waitForTimeout(500);
 // nadpisy karet mají CSS text-transform:uppercase, proto porovnání bez ohledu na velikost písmen
 const prehledText = await p.locator('#page-zakazka').innerText();
-ok('přehled obsahuje kartu Cenová nabídka OCK (CN)', /cenová nabídka ock \(cn\)/i.test(prehledText));
-ok('přehled obsahuje kartu Cenová nabídka PROJ (OVP-CN)', /cenová nabídka proj \(ovp-cn\)/i.test(prehledText));
-/* Dokumentová sekce OCK se 19. 8. 2026 přestěhovala na konec Technické
- * specifikace — v přehledu tiskne jen PROJ a karta OCK vede tlačítkem
- * „Technická specifikace" na místo, kde se nabídka OCK nově tvoří. */
-ok('v přehledu tiskne PROJ a karta OCK vede na Technickou specifikaci',
-   await p.locator('#page-zakazka button:has-text("Kompletní náhled a tisk nabídky")').count() >= 1
-   /* 19. 8. 2026 večer: tlačítko přejmenováno na „Přejít na technickou specifikaci" */
-   && await p.locator('#page-zakazka button:has-text("Přejít na technickou specifikaci")').count() >= 1);
+/* PŘESKLÁDÁNO 21. 8. 2026 večer (zadání J. V.): záložka je teď především
+ * VYHLEDÁVÁNÍ nabídek a hned pod ním souhrn řídící varianty. Karty, které
+ * se vyplňují jinde (hlavička, obě cenové nabídky, smluvní a platební
+ * podmínky, nastavení PROJ, poznámky, online databáze), tu být NESMÍ —
+ * právě jejich zdvojení bylo důvodem úklidu. */
+ok('přehled začíná vyhledáváním nabídek', /vyhledání nabídek/i.test(prehledText));
+ok('a hledá se v něm i podle obchodníka',
+   await p.locator('#page-zakazka input[placeholder*="obchodníka"]').count() === 1);
+ok('lze zúžit na OCK nebo PROJ', await p.evaluate(() => {
+  const s = [...document.querySelectorAll('#page-zakazka select')]
+    .find(x => [...x.options].some(o => o.value === 'PROJ'));
+  return !!s && [...s.options].map(o => o.value).join(',') === 'vse,OCK,PROJ';
+}));
+ok('souhrn řídící varianty stojí hned pod hledáním', await p.evaluate(() => {
+  const h = [...document.querySelectorAll('#page-zakazka .card h2')].map(x => x.textContent.trim());
+  return /vyhledání nabídek/i.test(h[0] || '') && /souhrn řídící varianty/i.test(h[1] || '');
+}));
+const zdvojene = await p.evaluate(() => {
+  const pryc = ['cenová nabídka ock (cn)', 'cenová nabídka proj (ovp-cn)',
+    'smluvní a platební podmínky', 'zakázka proj', 'interní poznámky', 'online databáze'];
+  const h = [...document.querySelectorAll('#page-zakazka .card h2')]
+    .map(x => x.textContent.trim().toLowerCase());
+  return pryc.filter(n => h.some(x => x.includes(n)));
+});
+ok('a zdvojené karty jsou pryč', zdvojene.length === 0, zdvojene.join(' · '));
 ok('stavový řádek nabídky OCK je nově jen u dokumentové sekce v Technické specifikaci',
    await p.locator('.nabidkaStav').count() === 1 && await p.locator('#nabidkaStav').count() === 0);
-ok('poznámka vysvětluje, že se nabídky neukládají', prehledText.includes('generují se vždy živě'));
+ok('záchrana do souboru z přehledu nezmizela',
+   await p.locator('#page-zakazka button:has-text("Uložit do souboru (JSON)")').count() === 1);
 
 /* --- #34 zámek odeslané nabídky -------------------------------------------
  * Seznam ZAMEK_CHRANENE je ruční; přejmenovaná nebo nová zapisující funkce,
@@ -877,14 +894,19 @@ ok('všechna pravidla jsou varování (úroveň 2)', k33.uroven);
 ok('nad ukázkovým ceníkem svítí varování', k33.nalezy.includes('ukazkovyCenik'),
    k33.nalezy.join(','));
 
-const panel = p.locator('#page-zakazka .kontroly-panel').first();
-ok('panel kontrol je v kartě cenové nabídky', await panel.count() === 1);
+/* Panel kontrol se 19. 8. 2026 přestěhoval s dokumentovou sekcí na konec
+ * Technické specifikace OCK; 21. 8. večer zmizela i karta „Cenová nabídka
+ * OCK" z Přehledu, takže je specifikace jediné místo, kde panel je. */
+await p.locator('#tab-spec').click();
+await p.waitForTimeout(400);
+const panel = p.locator('#page-spec .kontroly-panel').first();
+ok('panel kontrol je v kartě cenové nabídky (Technická specifikace)', await panel.count() === 1);
 ok('panel vyjmenuje nálezy',
-   await p.locator('#page-zakazka .kontroly-panel .kontroly-seznam li').count() >= 1);
+   await p.locator('#page-spec .kontroly-panel .kontroly-seznam li').count() >= 1);
 
 /* Nic se neblokuje: tlačítka nabídky zůstávají funkční i s rozsvíceným panelem. */
 const tlacitka = await p.evaluate(() => {
-  const b = [...document.querySelectorAll('#page-zakazka button')]
+  const b = [...document.querySelectorAll('#page-spec button')]
     .filter(x => /tisk nabídky|nabídku \(Word\)/i.test(x.textContent));
   return { pocet: b.length, zakazana: b.filter(x => x.disabled).length };
 });
@@ -896,7 +918,7 @@ ok('tlačítka nabídky nejsou zablokovaná',
 const odklep = await p.evaluate(() => {
   kontrolyPotvrd();
   const v = aktivniVarianta(ZAK);
-  const poOdklepu = document.querySelector('#page-zakazka .kontroly-panel');
+  const poOdklepu = document.querySelector('#page-spec .kontroly-panel');
   const bylo = { kody: (v.kontroly || {}).kody || [],
                  trida: poOdklepu ? poOdklepu.className : '' };
   /* Nový nález, který v odklepnutém stavu určitě nebyl: jedno nástupiště.
@@ -905,7 +927,7 @@ const odklep = await p.evaluate(() => {
   const zaloha = Z.nastupiste;
   Z.nastupiste = 1;
   render();
-  const znovu = document.querySelector('#page-zakazka .kontroly-panel');
+  const znovu = document.querySelector('#page-spec .kontroly-panel');
   const potom = { kody: kontrolyStavAkt().kody,
                   plati: kontrolyPotvrzeniPlati(v.kontroly, kontrolyStavAkt()),
                   trida: znovu ? znovu.className : '' };
@@ -938,14 +960,19 @@ const p37 = await p.evaluate(() => ({
 ok('modul poznámek je v sestavení', p37.logika && p37.karta, JSON.stringify(p37));
 ok('druhů poznámek je pět', p37.druhu === 5);
 
+/* Poznámky se 21. 8. 2026 večer přestěhovaly z Přehledu cenových nabídek
+ * na konec Kalkulace OCK — „proč jsme šli s cenou dolů" má být na očích tam,
+ * kde se ta cena dělá (zadání J. V.). */
+await p.locator('#tab-kalk').click();
+await p.waitForTimeout(400);
 const kartaPozn = await p.evaluate(() => {
-  const h = [...document.querySelectorAll('#page-zakazka .card h2')]
+  const h = [...document.querySelectorAll('#page-kalk .card h2')]
     .find(x => /Interní poznámky/i.test(x.textContent));
   return { je: !!h, nadpis: h ? h.textContent.trim() : '',
-           zapis: !!document.querySelector('#page-zakazka .pozn-zapis'),
+           zapis: !!document.querySelector('#page-kalk .pozn-zapis'),
            pole: !!document.getElementById('poznText') };
 });
-ok('karta poznámek je na záložce Zakázka', kartaPozn.je, kartaPozn.nadpis);
+ok('karta poznámek je na konci Kalkulace OCK', kartaPozn.je, kartaPozn.nadpis);
 ok('a v nadpisu stojí, že se netiskne', /netisknou se/i.test(kartaPozn.nadpis), kartaPozn.nadpis);
 ok('karta má zápisník i pole pro text', kartaPozn.zapis && kartaPozn.pole);
 
@@ -956,9 +983,9 @@ const zapis37 = await p.evaluate((tajne) => {
                        velikost: 2048, data: 'data:application/pdf;base64,AAAA' }, { kdo: 'Test' });
   render();
   return {
-    radku: document.querySelectorAll('#page-zakazka .pozn-seznam .pozn-radek').length,
-    priloh: document.querySelectorAll('#page-zakazka .pozn-prilohy .pozn-priloha').length,
-    vidim: document.getElementById('page-zakazka').innerText.includes(tajne),
+    radku: document.querySelectorAll('#page-kalk .pozn-seznam .pozn-radek').length,
+    priloh: document.querySelectorAll('#page-kalk .pozn-prilohy .pozn-priloha').length,
+    vidim: document.getElementById('page-kalk').innerText.includes(tajne),
   };
 }, TAJNE37);
 ok('poznámka se objeví v seznamu', zapis37.radku >= 1, JSON.stringify(zapis37));
@@ -970,11 +997,11 @@ ok('a text poznámky je v kartě opravdu vidět', zapis37.vidim);
 const smaz37 = await p.evaluate(() => {
   const id = poznamkySeznam(ZAK)[0].id;
   poznamkySmazUI(id);
-  const po = { vidi: document.querySelectorAll('#page-zakazka .pozn-seznam .pozn-radek').length,
+  const po = { vidi: document.querySelectorAll('#page-kalk .pozn-seznam .pozn-radek').length,
                vDatech: ZAK.poznamky.length,
                stopa: !!(ZAK.poznamky.find(x => x.id === id) || {}).smazano };
   poznamkySmazanePrepni();
-  po.skrz = document.querySelectorAll('#page-zakazka .pozn-radek.smazana').length;
+  po.skrz = document.querySelectorAll('#page-kalk .pozn-radek.smazana').length;
   poznamkyObnovUI(id);
   po.zpet = poznamkySeznam(ZAK).length;
   poznamkySmazanePrepni();
@@ -1190,14 +1217,17 @@ await p.evaluate(() => {
 const ares = await p.evaluate(async () => {
   const puvodniFetch = window.fetch;
   const out = {};
-  const btny = () => [...document.querySelectorAll('#page-zakazka button')]
+  /* Hlavička zakázky (a s ní tlačítko ARES) je od 21. 8. 2026 večer už jen
+   * v liště „Zakázka a varianta" nad kalkulací — karta hlavičky v Přehledu
+   * cenových nabídek zanikla, protože byla její kopií. */
+  const btny = () => [...document.querySelectorAll('#page-kalk button')]
     .filter(b => /Najít firmu v ARES/.test(b.textContent));
   const panelText = () => {
-    const p = document.querySelector('#page-zakazka .ares-panel');
+    const p = document.querySelector('#page-kalk .ares-panel');
     return p ? p.innerText : '';
   };
 
-  prepniTab('zakazka');
+  prepniTab('kalk');
   ZAK.ico = ''; ZAK.objednatel = ''; ZAK.adresaObjednatele = ''; ZAK.kontakt = 'Ing. Ruční';
   ZAK.protokol = []; NAST.uzivatel = 'Zkoušející';
   render();
@@ -1220,18 +1250,18 @@ const ares = await p.evaluate(async () => {
   ZAK.ico = '25596641'; render();
   await aresHledej('ock');
   out.nalezenoText = panelText();
-  out.radku = document.querySelectorAll('#page-zakazka .ares-tab tr').length;
+  out.radku = document.querySelectorAll('#page-kalk .ares-tab tr').length;
   out.pred = { objednatel: ZAK.objednatel, adresa: ZAK.adresaObjednatele };
 
   /* teprve potvrzení přepíše hlavičku */
-  const potvrd = [...document.querySelectorAll('#page-zakazka .ares-panel button')]
+  const potvrd = [...document.querySelectorAll('#page-kalk .ares-panel button')]
     .find(b => /Přepsat údaje/.test(b.textContent));
   out.maPotvrzeni = !!potvrd;
-  out.maOdmitnuti = !![...document.querySelectorAll('#page-zakazka .ares-panel button')]
+  out.maOdmitnuti = !![...document.querySelectorAll('#page-kalk .ares-panel button')]
     .find(b => /Nechat, jak je/.test(b.textContent));
   if (potvrd) potvrd.click();
   out.po = { objednatel: ZAK.objednatel, adresa: ZAK.adresaObjednatele, kontakt: ZAK.kontakt };
-  out.panelPoPotvrzeni = document.querySelectorAll('#page-zakazka .ares-panel').length;
+  out.panelPoPotvrzeni = document.querySelectorAll('#page-kalk .ares-panel').length;
   if (typeof protokolZapisTed === 'function') protokolZapisTed();
   out.protokol = (ZAK.protokol || []).map(z => z.co + ': ' + z.po).join(' | ');
 
@@ -1319,26 +1349,50 @@ ok('OCK: globální přirážka v hlavičce zůstala',
    JSON.stringify(hlav.ock.sloupce[2]));
 
 const zarovnani = await p.evaluate(() => {
-  prepniTab('zakazka'); render();
-  const karty = [...document.querySelectorAll('#page-zakazka .card')]
-    .filter(c => c.querySelector('button') && /Najít firmu v ARES/.test(c.innerText));
-  return karty.map(k => {
-    /* Od 4. 8. 2026 stojí na začátku karty hlavičky ještě trojice
-     * „Uložit / Načíst / Nová zakázka", takže první tlačítko na kartě už
-     * není to od ARESu – hledá se podle popisku. */
-    const tl = [...k.querySelectorAll('button')]
-      .find(b => /Najít firmu v ARES/.test(b.textContent || ''));
-    const vstupy = [...k.querySelectorAll('.row input[type=text]')];
-    if (!tl || !vstupy.length) return null;
-    return { tlacitko: tl.getBoundingClientRect().right,
-             pole: vstupy[0].getBoundingClientRect().right };
-  });
+  /* Hlavička je od 21. 8. 2026 večer jen v liště nad kalkulací a stojí ve
+   * TŘECH sloupcích — pravá hrana tlačítka ARES se proto porovnává s polem
+   * IČO v TÉMŽE sloupci, ne s prvním textovým polem karty (to je číslo
+   * nabídky v prvním sloupci a leželo by o 400 px vlevo). */
+  prepniTab('kalk'); render();
+  const rada = document.querySelector('#page-kalk .ares-tlacitka');
+  if (!rada) return null;
+  const sloupec = rada.closest('.zak-head-col');
+  const tl = [...rada.querySelectorAll('button')].pop();
+  const vstupy = sloupec ? [...sloupec.querySelectorAll('.row input[type=text]')] : [];
+  const popisek = sloupec
+    ? [...sloupec.querySelectorAll('.row > label')].find(l => /IČO/.test(l.textContent)) : null;
+  const prvni = rada.querySelector('button');
+  return {
+    tlacitko: tl ? tl.getBoundingClientRect().right : null,
+    pole: vstupy.length ? vstupy[vstupy.length - 1].getBoundingClientRect().right : null,
+    /* Levá hrana se měří na KONTEJNERU řady, ne na prvním tlačítku:
+     * tlačítka databáze zákazníků se kreslí až po přihlášení a offline
+     * je v řadě jen ARES, který se drží u pravého okraje. */
+    radaVlevo: rada.getBoundingClientRect().left,
+    popisekVlevo: popisek ? popisek.getBoundingClientRect().left : null,
+    popisky: [...rada.querySelectorAll('button')].map(x => x.textContent.trim()),
+    radku: new Set([...rada.querySelectorAll('button')]
+      .map(x => Math.round(x.getBoundingClientRect().top))).size,
+  };
 });
-ok(`tlačítko ARES je na kartě společné hlavičky (${zarovnani.length})`, zarovnani.length === 1);
-zarovnani.forEach((z, i) => ok(
-  `tlačítko ARES má pravý okraj v řadě s ostatními buňkami (karta ${i + 1}: `
-  + `${z ? Math.round(z.tlacitko) + ' vs ' + Math.round(z.pole) : 'neměřeno'})`,
-  !!z && Math.abs(z.tlacitko - z.pole) < 1.5));
+ok('tlačítko ARES je v liště společné hlavičky', !!zarovnani);
+/* Tři cesty „odkud vzít údaje o firmě" musí být v JEDNOM řádku (zadání J. V.
+ * 21. 8. 2026 večer); dvouřádková varianta vypadala jako porucha. Tlačítka
+ * databáze zákazníků se kreslí jen po přihlášení, takže se kontroluje KONEC
+ * pořadí — ARES je vždy poslední. */
+const POradi = ['Vybrat z databáze zákazníků', 'Uložit jako zákazníka', 'Najít firmu v ARES'];
+ok(`tlačítka zákazníků a ARES jsou v jednom řádku (${zarovnani ? zarovnani.radku : '—'})`,
+   !!zarovnani && zarovnani.radku === 1, JSON.stringify(zarovnani && zarovnani.popisky));
+ok('pořadí končí ARESem a v popiscích nejsou ikonky',
+   !!zarovnani && zarovnani.popisky.join(' | ')
+     === POradi.slice(POradi.length - zarovnani.popisky.length).join(' | '),
+   JSON.stringify(zarovnani && zarovnani.popisky));
+ok(`řada lícuje vlevo s popiskem „IČO zákazníka" (${zarovnani ? Math.round(zarovnani.radaVlevo) : '—'}`
+   + ` vs ${zarovnani ? Math.round(zarovnani.popisekVlevo) : '—'})`,
+   !!zarovnani && Math.abs(zarovnani.radaVlevo - zarovnani.popisekVlevo) < 1.5);
+ok(`a vpravo s pravou hranou pole IČO (${zarovnani ? Math.round(zarovnani.tlacitko) : '—'}`
+   + ` vs ${zarovnani ? Math.round(zarovnani.pole) : '—'})`,
+   !!zarovnani && Math.abs(zarovnani.tlacitko - zarovnani.pole) < 1.5);
 
 /* ---------- zábrana: nenahraný ceník (30. 7. 2026) ----------
  * „Buď se z databáze natáhne ostrý ceník, anebo svítí všude nuly a není
@@ -1355,18 +1409,21 @@ const zab = await p.evaluate(() => {
   nulyz(DEFAULT_CENIK); nulyz(DEFAULT_CENIK_PROJ);
   DEFAULT_CENIK.prazdny = true; DEFAULT_CENIK_PROJ.prazdny = true;
   DEFAULT_CENIK.ukazkove = true; DEFAULT_CENIK_PROJ.ukazkove = true;
-  ZAK = novaZakazka(); syncVarianta(); prepniTab('zakazka'); render();
-  const btn = [...document.querySelectorAll('#page-zakazka button')]
+  /* 21. 8. 2026: karty s dokumenty už v Přehledu nejsou — nabídka OCK je
+   * na konci Technické specifikace, nabídka PROJ v Kalkulaci PROJ. Zábrana
+   * se proto hledá tam, kde tlačítka opravdu jsou. */
+  ZAK = novaZakazka(); syncVarianta(); prepniTab('proj'); render();
+  const btn = [...document.querySelectorAll('#page-proj button')]
     .filter(x => /tisk nabídky|nabídku \(Word\)/i.test(x.textContent));
   const stav = kontrolyStavAkt();
   return {
-    panel: document.querySelectorAll('#page-zakazka .zabrana-panel').length,
-    panelText: (document.querySelector('#page-zakazka .zabrana-panel') || {}).innerText || '',
+    panel: document.querySelectorAll('#page-proj .zabrana-panel').length,
+    panelText: (document.querySelector('#page-proj .zabrana-panel') || {}).innerText || '',
     tlacitek: btn.length, zhaslych: btn.filter(x => x.disabled).length,
     titulek: btn.length ? btn[0].getAttribute('title') || '' : '',
     brani: stav.brani, kodyBrani: (stav.kodyBrani || []).join(','),
-    odklep: (() => { kontrolyPotvrd();
-      return !!document.querySelector('#page-zakazka .kontroly-btns'); })(),
+    odklep: (() => { kontrolyPotvrd(); prepniTab('spec'); render();
+      return !!document.querySelector('#page-spec .kontroly-btns'); })(),
     duvod: dokumentZabrana(),
   };
 });

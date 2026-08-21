@@ -61,6 +61,9 @@ const ONLINE_STAV = {
    * z ní nepozná, jestli tam poslední úprava opravdu je. Otevření zakázky
    * čas NENASTAVUJE: otevřít není totéž co uložit. */
   kdyUlozeno: null,
+  /* Stav vyhledávání nabídek v záložce Přehled cenových nabídek (21. 8. 2026).
+   * Je to nastavení okna, ne dat — do zakázky se neukládá. */
+  prehled: { hledat: '', druh: 'vse' },
   auto: true,
   timer: null,
   hledat: '',
@@ -1477,7 +1480,7 @@ function renderOnlineKarta() {
 function renderOnlineCenikKarta() {
   if (!onlineMozne() || !ONLINE_STAV.bezi) return '';
   const stav = !ONLINE_STAV.ja
-    ? 'Nepřihlášen – online ceník se načte po přihlášení (záložka Zakázka).'
+    ? 'Nepřihlášen – online ceník se načte po přihlášení (Nastavení → Databáze).'
     : (ONLINE_STAV.db
       ? 'Online ' + programSouhrn(ONLINE_STAV.db)
       + (ONLINE_STAV.cenikPouzit ? ' · právě platí v aplikaci' : ' · v aplikaci teď platí ceník ze složky')
@@ -1513,19 +1516,105 @@ function onlineHledatSet(v) {
   renderOnlinePanel();
 }
 
+/* Hlavička seznamu zakázek. Jedna pro obě místa, kde se seznam kreslí
+ * (okno „Zakázky online" a vyhledávání v Přehledu cenových nabídek) — jinak
+ * by se sloupce mezi nimi rozešly. */
+function onlineHlavickaZakazek() {
+  return `<tr><th style="text-align:left">Číslo</th><th style="text-align:left">Akce</th>
+      <th style="text-align:left">Zákazník</th>
+      <th style="text-align:left" title="kdo zakázku založil">Obchodník</th>
+      <th>Druh</th><th>Datum</th><th>Variant</th>
+      <th>Odesláno</th><th>Uloženo</th><th></th></tr>`;
+}
+
 function onlineRadekZakazky(z) {
   const otevrena = z.soubor === ONLINE_STAV.soubor;
   const odeslane = z.odeslane ? `<span title="odeslané (vytištěné) nabídky">🔒 ${z.odeslane}</span>` : '';
+  /* Obchodník = autor zakázky (21. 8. 2026, zadání J. V.). Jméno chodí
+   * z rejstříku; u starších záznamů, které ho ještě nenesou, se ukáže
+   * e-mail — vymýšlet se nic nebude. */
+  const kdo = (typeof uloObchodnik === 'function') ? uloObchodnik(z) : (z.autor || '—');
+  const druh = (typeof uloDruhZakazky === 'function') ? uloDruhZakazky(z) : '';
   return `<tr class="${otevrena ? 'aktivni' : ''}">
     <td style="text-align:left">${esc(z.cislo || '(bez čísla)')}</td>
     <td style="text-align:left;white-space:normal">${esc(z.nazevAkce || '—')}</td>
     <td style="text-align:left;white-space:normal">${esc(z.objednatel || '—')}</td>
+    <td style="text-align:left;white-space:normal">${esc(kdo)}</td>
+    <td><span class="pill mut">${esc(druh)}</span></td>
     <td>${esc(z.datum || '')}</td>
     <td>${z.variant}</td>
     <td>${odeslane}</td>
     <td>${esc((z.upraveno || '').slice(0, 16).replace('T', ' '))}</td>
     <td><button class="mini" onclick="onlineOtevri('${escJs(z.soubor)}')">Otevřít</button></td>
   </tr>`;
+}
+
+/* ============================================================
+ * VYHLEDÁVÁNÍ NABÍDEK v záložce Přehled cenových nabídek
+ * (21. 8. 2026 večer, zadání J. V.: „uprav hlavičku tak, aby primárně
+ * sloužila k vyhledávání nabídek OCK nebo PROJ").
+ *
+ * Do té doby začínala záložka kartou „Zakázka – hlavička OCK" — týmiž poli,
+ * která jsou v liště nad kalkulací. Kdo hledal starší nabídku, musel otevřít
+ * okno „Zakázky online" o dvě karty níž. Teď je hledání první věcí na
+ * stránce a okno zůstává, kde bylo (nic se nemaže).
+ *
+ * Tělo se překresluje SAMO O SOBĚ (renderPrehledHledaniTelo), ne globálním
+ * render() — hledá se při psaní a kurzor by z políčka po prvním písmenu
+ * vyskočil. Stejná úvaha jako u seznamu variant (seznam_ui.js).
+ * ============================================================ */
+
+function prehledHledatSet(v) { ONLINE_STAV.prehled.hledat = v; renderPrehledHledaniTelo(); }
+function prehledDruhSet(v) { ONLINE_STAV.prehled.druh = v; renderPrehledHledaniTelo(); }
+
+function prehledNabidky() {
+  const p = ONLINE_STAV.prehled;
+  const radky = (typeof uloHledej === 'function')
+    ? uloHledej(ONLINE_STAV.rejstrik, p.hledat) : (ONLINE_STAV.rejstrik || []);
+  if (p.druh === 'vse') return radky;
+  return radky.filter(z => uloDruhZakazky(z) === p.druh);
+}
+
+function renderPrehledHledaniTelo() {
+  const el = document.getElementById('prehledHledaniTelo');
+  if (!el) return;
+  const radky = prehledNabidky();
+  el.innerHTML = radky.length
+    ? `<div class="tab-scroll"><table class="vartbl archtbl">${onlineHlavickaZakazek()}
+        ${radky.map(onlineRadekZakazky).join('')}</table></div>`
+    : `<div class="seznam-prazdno">${(ONLINE_STAV.rejstrik || []).length
+      ? 'Tomuhle hledání neodpovídá žádná nabídka.'
+      : 'V databázi zatím není žádná uložená zakázka.'}</div>`;
+  const p = document.getElementById('prehledHledaniPocet');
+  if (p) p.textContent = radky.length + ' z ' + (ONLINE_STAV.rejstrik || []).length;
+}
+
+function prehledHledaniKarta() {
+  /* Ovládání se kreslí VŽDY, i bez přihlášení: jinak by záložka po odhlášení
+   * (nebo při běhu ze souboru) začínala prázdnem a vypadala rozbitě.
+   * Nepřihlášenému se jen nahoře řekne, proč je seznam prázdný. */
+  const bezDb = (!onlineMozne() || !ONLINE_STAV.ja)
+    ? `<div class="note" style="margin-top:0">Seznam uložených nabídek se načte po přihlášení
+        k databázi (Nastavení → Databáze). Otevřená zakázka a její varianty jsou vidět níž.</div>`
+    : '';
+  const p = ONLINE_STAV.prehled;
+  const volba = (id, popis) => `<option value="${id}" ${p.druh === id ? 'selected' : ''}>${esc(popis)}</option>`;
+  return card('Vyhledání nabídek',
+    bezDb + `<div class="seznam-ovladani noprint">
+      <input type="search" class="seznam-hledat" placeholder="Hledat číslo, akci, zákazníka, obchodníka…"
+        title="Hledá se v čísle nabídky, názvu akce, zákazníkovi, datu i jménu obchodníka."
+        value="${esc(p.hledat)}" oninput="prehledHledatSet(this.value)">
+      <select onchange="prehledDruhSet(this.value)" title="druh nabídky">
+        ${volba('vse', 'OCK i PROJ')}${volba('OCK', 'jen OCK')}${volba('PROJ', 'jen PROJ')}</select>
+      <button class="mini" onclick="prehledHledatSet('');prehledDruhSet('vse')"
+        title="zrušit hledání i filtr">Zrušit zúžení</button>
+      <span class="sp"></span>
+      <span class="note" id="prehledHledaniPocet"></span>
+    </div>
+    <div id="prehledHledaniTelo"></div>
+    <div class="note">Druh se pozná podle přepínače <b>„jen projekce"</b> v zakázce; u starších
+      zakázek podle čísla nabídky (OVP = projekce). Kliknutím na <b>Otevřít</b> se zakázka načte
+      do aplikace — rozpracovanou práci si předtím uložte.</div>`);
 }
 
 function onlinePanelZakazky() {
@@ -1536,10 +1625,7 @@ function onlinePanelZakazky() {
       <span class="note">${radky.length} z ${ONLINE_STAV.rejstrik.length}</span>
     </div>
     ${radky.length
-    ? `<table class="vartbl archtbl">
-        <tr><th style="text-align:left">Číslo</th><th style="text-align:left">Akce</th>
-            <th style="text-align:left">Zákazník</th><th>Datum</th><th>Variant</th>
-            <th>Odesláno</th><th>Uloženo</th><th></th></tr>
+    ? `<table class="vartbl archtbl">${onlineHlavickaZakazek()}
         ${radky.map(onlineRadekZakazky).join('')}</table>`
     : `<div class="seznam-prazdno">${ONLINE_STAV.rejstrik.length
       ? 'Hledání „' + esc(ONLINE_STAV.hledat) + '" nic nenašlo.'

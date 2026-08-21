@@ -100,13 +100,16 @@ function aresRadek(kde, sJednotkou, navic) {
    * IČO hlídá overit_lista.mjs. */
   const tlacitko = `<button class="mini noprint" style="margin-left:auto" onclick="aresHledej('${kde}')"
     title="${muze ? 'zeptat se rejstříku ARES, jaká firma pod tímto IČO je'
-                  : 'nejdřív vyplňte IČO zákazníka'}"${muze ? '' : ' disabled'}>🔎 Najít firmu v ARES</button>`;
+                  : 'nejdřív vyplňte IČO zákazníka'}"${muze ? '' : ' disabled'}>Najít firmu v ARES</button>`;
   const panel = (ARES.kde === kde) ? aresPanel(kde) : '';
-  /* Prázdný sloupeček „jednotka" se kreslí VŽDY (21. 8. 2026): řádky
-   * s poli ho mají taky, a bez něj by tlačítková řada končila o 42 px dál
-   * než pole nad ní. Právě tohle zarovnání hlídá overit_lista.mjs. */
-  const jednotka = '<span class="u"></span>';
-  void sJednotkou;
+  /* Prázdný sloupeček „jednotka" se kreslí jen tam, kde ho mají i řádky
+   * s poli — jinak by tlačítková řada končila o 42 px JINDE než pole nad ní.
+   * Do 21. 8. 2026 stála hlavička v kartě Přehledu, jejíž řádky z inp()
+   * jednotku měly, a spacer byl proto vždycky. Po přestěhování hlavičky
+   * do lišty nad kalkulací (kde se řádky skládají bez jednotky) by ale
+   * pravou hranu naopak rozhodil. Rozhoduje tedy volající. Zarovnání
+   * hlídá overit_lista.mjs. */
+  const jednotka = sJednotkou ? '<span class="u"></span>' : '';
   /* Pořadí (21. 8. 2026, zadání J. V.): nejdřív databáze zákazníků, pak
    * uložení, ARES až nakonec — u známého zákazníka je databáze rychlejší
    * cesta než rejstřík. Řádek se roztahuje přes popisek i pole, takže levá
@@ -118,8 +121,15 @@ function aresRadek(kde, sJednotkou, navic) {
   /* Řádek si NEPŘENASTAVUJE gap: `.row` má 8 px a podle nich se počítá, kde
    * končí sloupec s poli. Vlastních 6 px posunulo pravou hranu o dva pixely
    * a zarovnání se rozešlo (nález ze zkoušky 21. 8. 2026). */
+  /* JEDEN ŘÁDEK, NE DVA (21. 8. 2026 večer). `flex-wrap:wrap` lámal poslední
+   * tlačítko pod ostatní, jakmile se trojice o pár pixelů nevešla — a vypadalo
+   * to jako porucha. Zalamování je proto vypnuté a tlačítka se smějí zúžit
+   * (`min-width:0`); místo na to vzniklo tím, že z popisků zmizely ikonky
+   * a tři tečky (zadání J. V.: „pokud se tlačítka vedle sebe nevejdou,
+   * odstraň z tlačítek ikonky"). Delší popisek se v úzkém okně zkrátí
+   * výpustkou, ale řádek zůstane jeden. */
   return `<div class="row noprint">
-      <div style="display:flex;gap:6px;flex-wrap:wrap;flex:1">${navic || ''}${tlacitko}</div>
+      <div class="ares-tlacitka">${navic || ''}${tlacitko}</div>
       ${jednotka}</div>${panel}`;
 }
 

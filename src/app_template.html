@@ -155,7 +155,10 @@
   .modal .body { padding:18px 20px; }
   .modal .sec-title { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--mut); font-weight:700; margin:18px 0 8px; }
   .modal .sec-title:first-child { margin-top:0; }
-  .modal .nast-tabs { display:flex; gap:4px; padding:10px 20px 0; border-bottom:1px solid var(--line); }
+  /* Záložek Nastavení přibývá (21. 8. 2026 přibyla Databáze) a na užším
+     monitoru se do jedné řádky nevejdou — proto se zalamují. Bez toho
+     přetékaly z okna a poslední záložka nešla trefit. */
+  .modal .nast-tabs { display:flex; flex-wrap:wrap; row-gap:4px; gap:4px; padding:10px 20px 0; border-bottom:1px solid var(--line); }
   .modal .nast-tabs button { border:1px solid var(--line); border-bottom:none; background:#f3f6fa; color:var(--ink);
     padding:7px 14px; border-radius:8px 8px 0 0; font-size:13px; cursor:pointer; }
   .modal .nast-tabs button.act { background:#fff; font-weight:600; color:#1d4ed8; position:relative; top:1px; }
@@ -557,6 +560,11 @@
   /* ARES (#10): odpověď z rejstříku. Modrá, ne žlutá ani červená – nic se
      neděje špatně, jen se ukazuje, co veřejný rejstřík ví. Tabulka staví
      „teď" a „z rejstříku" vedle sebe, aby bylo potvrzení vědomé. */
+  /* Řada „odkud vzít údaje o firmě" (databáze / uložit / ARES). Jeden řádek:
+     nezalamuje se, tlačítka se smějí zúžit a dlouhý popisek se zkrátí
+     výpustkou — dvouřádková varianta vypadala jako porucha (21. 8. 2026). */
+  .ares-tlacitka { display:flex; gap:6px; flex-wrap:nowrap; flex:1; min-width:0; }
+  .ares-tlacitka .mini { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .ares-panel { margin:6px 0 10px; background:#f0f7ff; border:1px solid #bfdbfe;
     color:#13315c; border-radius:8px; padding:9px 12px; font-size:12.5px; line-height:1.5; }
   .ares-panel.chyba { background:#fff7ed; border-color:#fed7aa; color:#7c2d12; }

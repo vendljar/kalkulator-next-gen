@@ -188,7 +188,11 @@ const zak = await page.locator('#page-zakazka').innerText();
  * k nalezení, aby se práce nedala ztratit ani při výpadku databáze. */
 test('„Uložit do souboru (JSON)" je na záložce Přehled cenových nabídek', zak.includes('Uložit do souboru (JSON)'));
 test('„Načíst ze souboru" je na záložce Přehled cenových nabídek', zak.includes('Načíst ze souboru'));
-test('trojice pro databázi je na záložce taky (Uložit zakázku)', zak.includes('Uložit zakázku'));
+/* Trojice „Uložit / Načíst / Nová zakázka" byla do 21. 8. 2026 i v kartě
+ * hlavičky na téhle záložce; s úklidem Přehledu (zdvojené karty pryč) zůstala
+ * jen v liště nad kalkulací, kde stojí od 4. 8. 2026. */
+test('trojice pro databázi je v liště nad kalkulací (Uložit zakázku)',
+  (await page.locator('#page-kalk').innerText()).includes('Uložit zakázku'));
 await page.evaluate(() => prepniTab('kalk'));
 await page.waitForTimeout(150);
 
@@ -207,12 +211,15 @@ test('Slovník vysvětlí, že se nic nezapíše samo',
   (await page.locator('#nastaveni-panel .body').innerText()).includes('Nic se nezapíše samo'));
 await page.evaluate(() => zavriNastaveni());
 
-/* ---- ATYP přirážka (#22) ---- */
-await page.evaluate(() => { NAST.jeAdmin = true; nastPanel('obecne'); otevriNastaveni(); });
-await page.waitForTimeout(150);
-test('nastavení ATYP přirážky je dostupné',
-  (await page.locator('#nastaveni-panel .body').innerText()).toUpperCase().includes('ATYP'));
-await page.evaluate(() => zavriNastaveni());
+/* ---- ATYP přirážka (#22) ----
+ * Sazba se 21. 8. 2026 přestěhovala z Nastavení → Obecné do Kalkulace OCK,
+ * k zaškrtávátku ATYP: mění ji ten, kdo vidí nákladové sloupce. */
+test('nastavení ATYP přirážky je u zaškrtávátka v kalkulaci OCK',
+  await page.evaluate(() => {
+    NAST.jeAdmin = true; prepniTab('kalk'); render();
+    const t = document.getElementById('page-kalk').innerText.toUpperCase();
+    return t.includes('ATYP (NESTANDARDNÍ ZAKÁZKA)') && t.includes('PŘIRÁŽKA ZA ATYP');
+  }));
 
 /* ---- rozvržení OCK na plnou šířku (zadání 3. 8. 2026) ----
  * Zadání šachty, Dimenze profilů a Práce a režie stojí v hlavním sloupci

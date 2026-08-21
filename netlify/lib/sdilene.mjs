@@ -136,7 +136,22 @@ function tajemstvi() {
       + 'Nastav ji v Netlify: Site configuration → Environment variables.');
   return t;
 }
-function podpis(data) { return createHmac('sha256', tajemstvi()).update(data).digest('base64url'); }
+/* Do podpisu vstupuje i JMÉNO PROSTŘEDÍ (21. 8. 2026). Kdyby testovací web
+ * dostal omylem stejné TAJEMSTVI_RELACE jako ostrý, platila by cookie
+ * z testu i v ostré aplikaci — a přihlášení do sandboxu by byl klíč
+ * k ostrým datům. Takhle je podpis pro každé prostředí jiný, i když je
+ * tajemství stejné.
+ *
+ * OSTRÝ PROVOZ SE NEMĚNÍ: bez proměnné PROSTREDI se podepisuje přesně jako
+ * dosud, takže tímhle nasazením nikomu nevyprší přihlášení. Přidává se
+ * jen tam, kde je PROSTREDI vyplněné (tedy na testovacím webu). */
+function prostrediPodpisu() {
+  return String(process.env.PROSTREDI || '').trim().toLowerCase();
+}
+function podpis(data) {
+  const p = prostrediPodpisu();
+  return createHmac('sha256', tajemstvi()).update(p ? (p + '|' + data) : data).digest('base64url');
+}
 
 export function relaceVytvor(email, role) {
   const telo = Buffer.from(JSON.stringify({ email, role, exp: Date.now() + 12 * 3600 * 1000 }))

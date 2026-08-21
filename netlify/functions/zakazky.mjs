@@ -74,12 +74,27 @@ export default async (req) => {
    * a uložil — a razítko by ztratilo smysl. Kdo naposledy sáhl, je `upravil`. */
   if (!zak.autor) zak.autor = relace.email;
   zak.upravil = relace.email;
+  /* Jméno obchodníka do rejstříku (21. 8. 2026, zadání J. V.). Bere se
+   * z RELACE, ne od klienta — jméno v seznamu je stejné razítko jako autor
+   * a nesmí jít podvrhnout. Zapisuje se při každém uložení, aby se
+   * v seznamu projevila i změna jména v profilu. */
+  if (zak.autor === relace.email && relace.jmeno) zak.autorJmeno = relace.jmeno;
 
   const razitko = ULO.uloRazitkoNove();
   zak.uloRazitko = razitko;
   await s.zapis('z/' + jmeno, zak);
   const rejstrik = (await s.cti('_rejstrik')) || { schema: 1, zakazky: [] };
-  const novy = ULO.uloRejstrikSloucit(Array.isArray(rejstrik.zakazky) ? rejstrik.zakazky : [],
+  /* Doplnění jména u STARŠÍCH záznamů téhož autora. Rejstřík se stejně
+   * přepisuje celý, takže je to zadarmo — a seznam se tím postupně
+   * dovyplní, jak si každý svoje zakázky jednou uloží. Cizí řádky se
+   * nikdy nedotýkají: jméno známe jen o tom, kdo je právě přihlášený. */
+  const stavajici = (Array.isArray(rejstrik.zakazky) ? rejstrik.zakazky : []).map(z => {
+    if (z && !z.autorJmeno && relace.jmeno
+        && String(z.autor || '').toLowerCase() === String(relace.email).toLowerCase())
+      return { ...z, autorJmeno: relace.jmeno };
+    return z;
+  });
+  const novy = ULO.uloRejstrikSloucit(stavajici,
     ULO.uloRejstrikZaznam(zak, { soubor: jmeno, razitko }));
   await s.zapis('_rejstrik', { schema: 1, zakazky: ULO.uloRejstrikSerad(novy), kdo: relace.email,
                                upraveno: new Date().toISOString() });

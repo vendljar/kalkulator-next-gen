@@ -281,6 +281,117 @@ function progStahni() {
   return true;
 }
 
+/* ============================================================
+ * PŘENOS PLATNÉHO CENÍKU MEZI WEBY (21. 8. 2026)
+ *
+ * Zadání J. V. k testovacímu prostředí: „ceníky musíme mít v testu stejné
+ * jako v ostré verzi, když budu testovat, musí mi to vždy vycházet stejně."
+ *
+ * Netlify Blobs jsou vázané na site, takže testovací web má vlastní
+ * databázi — a tedy i vlastní (prázdný) ceník. Dokud v něm ceník není,
+ * počítá test z výchozích cen ze sestavení a výsledky se s ostrým webem
+ * neshodují. Tahle dvojice tlačítek je most: v ostrém webu se platný ceník
+ * stáhne do souboru, v testovacím se z něj zveřejní.
+ *
+ * ZÁMĚRNĚ TO NENÍ AUTOMATICKÉ SPOJENÍ mezi weby. Testovací web by se pak
+ * musel umět přihlásit do ostrého — a to je přesně ta cesta, kterou nikdo
+ * nechce mít otevřenou. Soubor projde rukama administrátora.
+ * ============================================================ */
+
+/* Co se přenáší: přesně to, co bere zveřejnění (/api/program). Nic víc —
+ * zakázky, účty ani zálohy v souboru nejsou. */
+function cenikPrenosData() {
+  const akt = cenikAktivniDb();
+  const p = akt.db && akt.db.platny;
+  if (!p) return null;
+  return {
+    typ: 'kalkulator-cenik', schema: 1,
+    verze: p.verze || null, platnoOd: p.platnoOd || '',
+    poznamka: p.poznamka || '',
+    cenik: p.cenik || {}, cenikProj: p.cenikProj || {},
+    katalog: p.katalog || {}, slevy: p.slevy || {},
+  };
+}
+
+function cenikPrenosStahni() {
+  if (!jeAdmin()) { progZprava('Ceník smí stáhnout jen administrátor.', 'varovani'); render(); return false; }
+  const d = cenikPrenosData();
+  if (!d) {
+    progZprava('Není co stahovat — platný ceník zatím není zveřejněný.', 'varovani');
+    render(); return false;
+  }
+  const jmeno = 'cenik_platny_v' + (d.verze || 0) + '.json';
+  souborKeStazeni(jmeno, JSON.stringify(d, null, 1));
+  progZprava('Ceník ' + jmeno + ' je ve Staženích. Na testovacím webu ho nahrajte tlačítkem vedle.');
+  render();
+  return true;
+}
+
+function cenikPrenosNahraj() {
+  if (!jeAdmin()) { progZprava('Ceník smí zveřejnit jen administrátor.', 'varovani'); render(); return; }
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.json,application/json';
+  inp.onchange = () => {
+    const f = inp.files && inp.files[0];
+    if (!f) return;
+    const fr = new FileReader();
+    fr.onload = () => {
+      let d;
+      try { d = JSON.parse(String(fr.result)); } catch (e) { d = null; }
+      /* Vadný nebo cizí soubor se NEZVEŘEJNÍ. Ceník je to jediné, z čeho
+       * se počítají nabídky — radši nic než něco, co jsme nečetli. */
+      if (!d || d.typ !== 'kalkulator-cenik' || !d.cenik) {
+        progZprava('Soubor ' + f.name + ' není stažený ceník z této aplikace — nic se nezveřejnilo.', 'chyba');
+        render(); return;
+      }
+      const kam = (typeof ONLINE_STAV !== 'undefined' && ONLINE_STAV.prostredi === 'test')
+        ? 'TESTOVACÍHO webu' : 'OSTRÉHO webu';
+      if (!confirm('Zveřejnit ceník ze souboru „' + f.name + '" (verze ' + (d.verze || '?') + ') '
+        + 'jako platný ceník ' + kam + '?\n\n'
+        + 'Od té chvíle z něj vycházejí všechny nové nabídky. Dosavadní verze se odloží '
+        + 'do historie a jde se k ní vrátit. Vytištěné (uzamčené) nabídky se nemění.')) return;
+      if (typeof ONLINE_STAV === 'undefined' || !ONLINE_STAV.ja) {
+        progZprava('Zveřejnění jde jen online — přihlaste se v Nastavení → Databáze.', 'varovani');
+        render(); return;
+      }
+      PROG_STAV.pracuje = true; render();
+      onlineApi('/api/program', {
+        cenik: d.cenik, cenikProj: d.cenikProj || {}, katalog: d.katalog || {}, slevy: d.slevy || {},
+        poznamka: 'převzato ze souboru ' + f.name + (d.verze ? ' (ostrá verze ' + d.verze + ')' : ''),
+        build: (typeof buildVerze === 'function' ? buildVerze() : ''),
+      }).then(o => {
+        progZprava('Ceník ze souboru ' + f.name + ' je zveřejněný jako verze ' + o.verze + '.');
+        if (typeof onlineNactiProgram === 'function') return onlineNactiProgram();
+        return true;
+      }).catch(e => { progZprava('Zveřejnit se nepodařilo: ' + e.message, 'chyba'); })
+        .then(() => { PROG_STAV.pracuje = false; render(); });
+    };
+    fr.readAsText(f);
+  };
+  inp.click();
+}
+
+/* Karta pro Nastavení → Databáze. Je schválně tady, u ceníku, a ne
+ * v nastaveni_ui.js — obsluha i data patří k sobě. */
+function cenikPrenosKarta() {
+  if (!jeAdmin()) return '';
+  const d = cenikPrenosData();
+  const stav = d
+    ? 'Platný ceník: verze ' + (d.verze || '?') + (d.platnoOd ? ' (od ' + esc(String(d.platnoOd).slice(0, 10)) + ')' : '')
+    : 'Platný ceník zatím není zveřejněný — platí ceny ze sestavení aplikace.';
+  return card('Přenos ceníku mezi ostrým a testovacím webem',
+    `<div class="note" style="margin-top:0">${stav}</div>
+     <div class="btns" style="margin-top:8px">
+       <button onclick="cenikPrenosStahni()" ${PROG_STAV.pracuje ? 'disabled' : ''}>Stáhnout platný ceník (JSON)</button>
+       <button onclick="cenikPrenosNahraj()" ${PROG_STAV.pracuje ? 'disabled' : ''}>Zveřejnit ceník ze souboru…</button>
+     </div>
+     <div class="note">Testovací web má vlastní databázi, a tedy i vlastní ceník — bez přenosu by
+       v něm nabídky vycházely jinak než v ostrém provozu. Postup: v <b>ostrém</b> webu ceník
+       stáhněte, v <b>testovacím</b> ho zveřejněte. Soubor obsahuje ceny, katalog a stropy slev;
+       zakázky ani účty v něm nejsou. Přenáší se vždy ručně — automatické spojení mezi weby
+       by znamenalo, že se test umí přihlásit do ostrého provozu.</div>`);
+}
+
 /* Převzetí starší verze do aktivní varianty. Nezveřejňuje – jen nasype
  * historické ceny do ceníku varianty, aby šlo spočítat, jak by nabídka
  * vypadala tehdy. Zveřejnit se dá až samostatným krokem. */

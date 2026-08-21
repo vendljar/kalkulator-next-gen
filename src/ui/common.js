@@ -203,6 +203,13 @@ function renderProstrediLista() {
   const el = document.getElementById('prostrediLista');
   if (!el) return;
   const t = (typeof ONLINE_STAV !== 'undefined' && ONLINE_STAV) ? ONLINE_STAV : {};
+  /* Jméno prostředí i do TITULKU KARTY prohlížeče (21. 8. 2026). Pruh je
+   * vidět, jen když je aplikace na obrazovce; v přepínači oken a v seznamu
+   * karet se ostrá a testovací kalkulačka bez tohohle nerozeznají. */
+  if (typeof document !== 'undefined') {
+    const zaklad = 'Kalkulátor OCK + PROJ';
+    document.title = (t.prostredi === 'test') ? ('[TEST] ' + zaklad) : zaklad;
+  }
   if (t.prostredi !== 'test') { el.innerHTML = ''; return; }
   el.innerHTML = `<div class="prostredi-pruh">🧪
     <span><b>TESTOVACÍ PROSTŘEDÍ</b> — vlastní databáze, ostrých dat se nedotkne.
@@ -506,6 +513,11 @@ function set(path, v) {
   const ks = path.split('.'); const last = ks.pop();
   ks.reduce((o, k) => o[k], rootObj())[last] = v;
   aktivniVarianta(ZAK).upraveno = new Date().toISOString();
+  /* Změna zadání může posunout šachtu mimo standard — ATYP se pak zaškrtne
+   * sám (zadání J. V. 21. 8. 2026 večer). Stojí to TADY, ne v render():
+   * render se volá i z míst, kde se nic nemění, a zápis do dat uvnitř
+   * vykreslování je cesta k nekonečné smyčce. */
+  if (path.startsWith('Z.') && typeof standardAtypAutomat === 'function') standardAtypAutomat();
   render();
 }
 
@@ -598,6 +610,45 @@ function standardPill() {
 }
 
 function standardRozpisPrepni() { STD_ROZPIS = !STD_ROZPIS; render(); }
+
+/* ---------- ATYP se u nestandardní šachty zaškrtne sám (21. 8. 2026 večer) ----
+ *
+ * Zadání J. V.: „pokud je zakázka vyhodnocena jako nestandardní, automaticky
+ * zaškrtni políčko ATYP." Je to vědomý ústup od zásady „přirážku zapíná
+ * vždycky člověk" (návrh z 21. 8. ráno) — proto tři pojistky, aby se z toho
+ * nestal stroj, který obchodníkovi přepisuje práci:
+ *
+ *  1. NIKDY NEVYPÍNÁ. Když se šachta vrátí do standardu, ATYP zůstane
+ *     zaškrtnutý — důvodů k atypu je víc než rozměry a odškrtnout ho umí
+ *     jen ten, kdo ty důvody zná.
+ *  2. RUČNÍ ODŠKRTNUTÍ SE RESPEKTUJE. Kdo ATYP u nestandardní šachty vypne,
+ *     řekl tím „vím o tom". Zapamatuje se to v zadání (`atypRucneVypnut`)
+ *     a automat na tu zakázku už nesáhne, dokud se šachta nevrátí
+ *     do standardu. Bez toho by se zaškrtávátko po každé změně vracelo
+ *     a nešlo by vypnout vůbec.
+ *  3. NESAHÁ NA ZAMČENOU VARIANTU ANI V NÁHLEDU. Odeslaná nabídka se nemění
+ *     nikdy a náhled cizíma očima je jen ke čtení.
+ *
+ * Vrací true, když opravdu přepnul (pro testy a pro hlášku). */
+function standardAtypAutomat() {
+  if (typeof standardVysledek !== 'function' || typeof atypPrepni !== 'function') return false;
+  if (typeof nahledAktivni === 'function' && nahledAktivni()) return false;
+  if (typeof variantaUzamcena === 'function' && variantaUzamcena(aktivniVarianta(ZAK))) return false;
+
+  let v = null;
+  try { v = standardVysledek(); } catch (e) { return false; }
+  if (!v || v.stav === 'vypnuto') return false;
+
+  if (v.stav !== 'atyp') {
+    /* Zpátky ve standardu: ruční „ne" ztrácí platnost, aby příští odchylka
+     * zase zabrala. */
+    if (Z.atypRucneVypnut) delete Z.atypRucneVypnut;
+    return false;
+  }
+  if (Z.atyp || Z.atypRucneVypnut) return false;
+  atypPrepni(true, { automat: true });
+  return true;
+}
 
 /* Rozpis pod lištou — kreslí se jen rozbalený a jen tam, kde má smysl
  * (Kalkulace OCK a Technická specifikace). */
@@ -740,7 +791,7 @@ function zakazkaHlavicka(ock) {
     const zakDbBtns = (typeof zakazniciMozne === 'function' && zakazniciMozne() && kde === 'ock')
       ? `<button class="mini noprint" onclick="prepniTab('zakaznici')"
            title="vybrat zákazníka z databáze — přenese hlavičku i kontakty do krycích listů"
-           >👤 Vybrat z databáze zákazníků…</button>
+           >Vybrat z databáze zákazníků</button>
          <button class="mini noprint" onclick="zakaznikZeZakazkyUI()"
            title="uložit údaje z téhle hlavičky jako novou kartu zákazníka">Uložit jako zákazníka</button>`
       : '';
@@ -1317,6 +1368,13 @@ function prepniTab(t) {
    * (hlášeno J. V.). Načtení si samo zavolá překreslení, až dorazí. */
   if (t === 'zakaznici' && typeof zakazniciNacti === 'function'
       && typeof ZAK_DB !== 'undefined' && !ZAK_DB.nacteno) zakazniciNacti();
+  /* Přehled cenových nabídek je od 21. 8. 2026 večer především VYHLEDÁVÁNÍ
+   * nabídek (zadání J. V.), takže při jeho otevření má smysl mít čerstvý
+   * rejstřík — kolega mohl mezitím uložit další. Selhání se neřeší:
+   * seznam se prostě vypíše z toho, co je v paměti. */
+  if (t === 'zakazka' && typeof onlineNactiRejstrik === 'function'
+      && typeof ONLINE_STAV !== 'undefined' && ONLINE_STAV.ja)
+    onlineNactiRejstrik().then(() => { if (TAB === 'zakazka') renderPrehledHledaniTelo(); }).catch(() => {});
   TABY.forEach(x => {
     document.getElementById('page-' + x).style.display = x === t ? '' : 'none';
     document.getElementById('tab-' + x).className = (x === t ? 'act' : '') + (tabViditelny(x) ? '' : ' skryt');

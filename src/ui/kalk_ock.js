@@ -98,8 +98,16 @@ function renderInputs() {
 
 /* Zaškrtnutí ATYP: předvyplnění rezerv a zámečníka (17. 8. 2026 večer).
  * Stojí MIMO renderInputs — volá se z onchange, musí být globální. */
-function atypPrepni(zap) {
+function atypPrepni(zap, opts) {
   if (typeof zamekStop === 'function' && zamekStop()) return;
+  /* Ruční odškrtnutí u nestandardní šachty je rozhodnutí člověka a automat
+   * (standardAtypAutomat v common.js) ho musí respektovat — jinak by se
+   * zaškrtávátko po každé změně zadání vracelo zpátky. Zapamatuje se
+   * v zadání, takže putuje se zakázkou. Zapnutí značku zase maže. */
+  if (!(opts && opts.automat)) {
+    if (zap) delete Z.atypRucneVypnut;
+    else Z.atypRucneVypnut = true;
+  }
   Z.atyp = !!zap;
   Z.rezervaProfilyPct = zap ? 0.30 : 0;
   Z.rezervaPlechyPct = zap ? 0.30 : 0;
@@ -303,14 +311,25 @@ function gripHtml(r, sekceKey) {
 function adminKoncBunky(r, sekceKey) {
   const key = radekKey(r), ka = keyAttr(key);
   const vis = `<td class="admincol"><input type="checkbox" ${jeSkryta(key) ? '' : 'checked'} onchange="viditelnostSet('${ka}', this.checked)" title="viditelné pro běžného uživatele"></td>`;
-  /* Sloupec Výchozí (funkční od 20. 8. 2026): jen u katalogových volitelných
-   * položek — vlastní řádek zakázky žádný „výchozí stav pro nové zakázky“
-   * nemá, ten v nové zakázce vůbec nevznikne. */
-  const vych = `<td class="admincol">${(sekceKey === 'volitelne' && !r.vlastni)
-    ? vychoziPolozkaChk('ock.' + key, volitelneVychoziZaklad(key),
-      'zaškrtnuto = položka je v NOVÉ zakázce rovnou v základní ceně (platí pro všechny)')
-    : ''}</td>`;
-  return vis + vych;
+  /* Sloupec Výchozí. Od 21. 8. 2026 večer ho mají VŠECHNY položky kalkulace
+   * (zadání J. V.), ne jen volitelné — u sekcí Hrubá OCK, Opláštění a Režie
+   * říká, jestli se položka v NOVÉ zakázce vůbec počítá.
+   *
+   * Dvě různá úložiště pro jednu otázku, protože jde o dvě různé věci:
+   *   volitelná položka → `ock.<klíč>`      = je rovnou v základní ceně,
+   *   běžná položka     → `ock.pocitat:<název>` = počítá se vůbec.
+   * Vlastní řádek zakázky sloupec nemá: v nové zakázce vůbec nevznikne,
+   * takže není co přednastavovat. */
+  let vych = '';
+  if (sekceKey === 'volitelne' && !r.vlastni) {
+    vych = vychoziPolozkaChk('ock.' + key, volitelneVychoziZaklad(key),
+      'zaškrtnuto = položka je v NOVÉ zakázce rovnou v základní ceně (platí pro všechny)');
+  } else if (!r.vlastni) {
+    vych = vychoziPolozkaChk(ZOBRAZENI_POCITAT + String(r.origNazev || r.nazev), true,
+      'zaškrtnuto = položka se v NOVÉ zakázce počítá (platí pro všechny); '
+      + 'odškrtnutím ji z každé nové kalkulace vyřadíte. Otevřená zakázka se nemění.');
+  }
+  return vis + `<td class="admincol">${vych}</td>`;
 }
 function radekKalk(r, sekceKey) {
   const { admin, showCost } = kalkSloupce();
@@ -599,7 +618,7 @@ function renderOutputs() {
   </div>`;
 
   const thCena = col.admin ? 'Cena vč. přirážky' : 'Cena';
-  const adminTh = col.admin ? '<th class="admincol" title="viditelné pro běžného uživatele">Viditelné</th><th class="admincol" title="výchozí zaškrtnutí volitelné položky">Výchozí</th>' : '';
+  const adminTh = col.admin ? '<th class="admincol" title="viditelné pro běžného uživatele">Viditelné</th><th class="admincol" title="výchozí stav položky v NOVÉ zakázce: u volitelných „rovnou v základní ceně", u ostatních „počítá se">Výchozí</th>' : '';
   const adminTd = col.admin ? '<td class="admincol"></td><td class="admincol"></td>' : '';
   const kalkulace = `<table>
     <tr><th>Položka</th><th>Množství</th>${col.admin ? '<th>Jedn. cena</th>' : ''}${col.showCost ? '<th>Náklad</th><th>Přirážka</th>' : ''}<th>${thCena}</th>${adminTh}</tr>
@@ -611,7 +630,9 @@ function renderOutputs() {
     <tr class="tot"><td>CELKEM (zaokrouhleno ↑ na tisíce)</td><td></td>${col.admin ? '<td></td>' : ''}${col.showCost ? `<td>${fmt(r.souhrn.zakladNaklad)}</td><td>${fmt(r.souhrn.zakladMarze)}</td>` : ''}<td>${fmt0(r.souhrn.zakladCena)}</td>${adminTd}</tr>
   </table>
   ${col.admin ? `<div class="note">Řádky přetáhnete úchopem <b>⠿</b> vlevo (v rámci sekce). Zaškrtávátko <b>Viditelné</b> určuje,
-  zda položku vidí běžný uživatel; u volitelných navíc <b>Výchozí</b> určuje výchozí zaškrtnutí. Název i jednotkovou cenu
+  zda položku vidí běžný uživatel. Zaškrtávátko <b>Výchozí</b> platí pro <b>nové</b> zakázky, ne pro tuhle:
+    u volitelné položky znamená „je rovnou v základní ceně", u ostatních „počítá se". Odškrtnutá položka
+    se v každé nové kalkulaci vynechá; otevřená zakázka se tím nemění. Název i jednotkovou cenu
   lze přepsat přímo v tabulce (cena s ceníkovou vazbou obousměrně s Ceníkem).</div>` : ''}`;
 
   const vynech = Z.priplatkyVynechat || [];
@@ -709,7 +730,15 @@ function renderOutputs() {
      * obchodník vidí jako úplně stejné bloky. */
     kartaRezim('ock', 'priplatky', 'Příplatkové položky (ceník variant)', prip, 'ock-priplatky') +
     sirotciKarta(r) +
-    (col.admin ? kartaRezim('ock', 'detailMezivypoctu', 'Detail mezivýpočtů', det, 'ock-detail') : '');
+    (col.admin ? kartaRezim('ock', 'detailMezivypoctu', 'Detail mezivýpočtů', det, 'ock-detail') : '') +
+    /* Interní poznámky a přílohy (#37). Do 21. 8. 2026 večer stály v Přehledu
+     * cenových nabídek; ten se na pokyn J. V. pročistil na vyhledávání
+     * a souhrn, a poznámky se přestěhovaly sem — „proč jsme šli s cenou
+     * dolů" je potřeba mít na očích tam, kde se ta cena dělá.
+     * Do žádného dokumentu se nedostanou. */
+    (typeof poznamkyKarta === 'function'
+      ? kartaRezim('ock', 'poznamky', 'Interní poznámky a přílohy k zakázce (netisknou se)',
+        poznamkyKarta(), 'ock-poznamky') : '');
 }
 
 function zkontrolujTl(key) {

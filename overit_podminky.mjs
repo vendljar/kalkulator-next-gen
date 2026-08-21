@@ -44,7 +44,12 @@ await p.evaluate(([c, cp]) => {
 }, [ZC.zkusebniCenik(), ZC.zkusebniCenikProj()]);
 await p.waitForTimeout(300);
 
-await p.click('#tab-zakazka');
+/* Karty s cenovými nabídkami se 21. 8. 2026 večer v Přehledu zrušily jako
+ * zdvojené (zadání J. V.) — nabídka OCK i s blokem podmínek žije v Kalkulaci
+ * OCK, nabídka PROJ v Kalkulaci PROJ. Obě stránky jsou vykreslené pořád
+ * (přepínání záložek jen mění viditelnost), takže se hledá v celém dokumentu
+ * a k „pod cenou" se přepne tam, kde blok OCK opravdu je. */
+await p.click('#tab-kalk');
 await p.waitForTimeout(400);
 
 // --- 1) blok se vůbec vykreslí a je pod cenami -----------------------------
@@ -54,13 +59,13 @@ await p.waitForTimeout(400);
  * dvě stejná id v dokumentu nechceme), pozná se podle třídy uvnitř. */
 const rozvrzeni = await p.evaluate(() => {
   const karta = tr => {
-    const d = document.querySelector('#page-zakazka .' + tr);
+    const d = document.querySelector('.' + tr);
     return d ? d.closest('.card') : null;
   };
   const karty = [karta('kl-podminky-ock'), karta('kl-podminky-proj')].filter(Boolean);
   const nadpisy = karty.map(x => (x.querySelector('h2') || {}).textContent || '');
   /* „pod Celkem s DPH“ = blok OCK musí být v DOM až za buňkou s tím popiskem. */
-  const bunka = [...document.querySelectorAll('#page-zakazka td')]
+  const bunka = [...document.querySelectorAll('#page-kalk td')]
     .find(td => /Celkem s DPH/.test(td.textContent));
   const ock = karta('kl-podminky-ock');
   const podCenou = !!(bunka && ock)
@@ -72,9 +77,9 @@ const rozvrzeni = await p.evaluate(() => {
   const dvojiId = [...document.querySelectorAll('[id]')].map(x => x.id)
     .filter((v, i, a) => v && a.indexOf(v) !== i);
   return { pocet: karty.length, nadpisy, podCenou, otevrene, dvojiId,
-           radky: document.querySelectorAll('#page-zakazka .kl-podminky').length };
+           radky: document.querySelectorAll('.kl-podminky').length };
 });
-ok('v Přehledu cenových nabídek jsou dva bloky podmínek (OCK a PROJ)', rozvrzeni.pocet === 2,
+ok('v kalkulacích jsou dva bloky podmínek (OCK a PROJ)', rozvrzeni.pocet === 2,
    JSON.stringify(rozvrzeni.nadpisy));
 ok('blok OCK má vlastní nadpis se zkratkou OCK',
    rozvrzeni.nadpisy.some(t => /OCK/.test(t)), JSON.stringify(rozvrzeni.nadpisy));
@@ -90,7 +95,7 @@ ok('podmínky nevyrobily v dokumentu dvojí id', rozvrzeni.dvojiId.length === 0,
  * přejmenovat, aniž si toho někdo všimne. */
 const sekce = await p.evaluate(() => {
   const nadpis = tr => {
-    const d = document.querySelector('#page-zakazka .' + tr);
+    const d = document.querySelector('.' + tr);
     return d ? [...d.querySelectorAll('h3')].map(h => h.textContent.trim()) : [];
   };
   return { ock: nadpis('kl-podminky-ock'), proj: nadpis('kl-podminky-proj') };
@@ -107,7 +112,7 @@ ok('blok PROJ nese i smluvní sekci',
 /* Pole hlavičky (objednatel, číslo nabídky) do bloku nepatří – vyplňují se
  * v kartě Zakázka o kus výš a dvakrát na jedné obrazovce by mátla. */
 const bezHlavicky = await p.evaluate(() =>
-  [...document.querySelectorAll('#page-zakazka .kl-podminky .kl-row .lbl')]
+  [...document.querySelectorAll('.kl-podminky .kl-row .lbl')]
     .map(x => x.textContent.trim())
     .filter(t => /objednatel|číslo nabídky|adresa stavby|název akce/i.test(t)));
 ok('v podmínkách nejsou pole hlavičky zakázky', bezHlavicky.length === 0, JSON.stringify(bezHlavicky));
@@ -119,7 +124,7 @@ ok('v podmínkách nejsou pole hlavičky zakázky', bezHlavicky.length === 0, JS
 await p.evaluate(() => klSet('splatnostDni', '30'));
 await p.waitForTimeout(200);
 const vNabidce = await p.evaluate(() => {
-  const r = [...document.querySelectorAll('#page-zakazka .kl-podminky .kl-row')]
+  const r = [...document.querySelectorAll('#page-kalk .kl-podminky .kl-row')]
     .find(x => /splatnost/i.test(x.querySelector('.lbl').textContent));
   return r ? r.querySelector('input').value : null;
 });
@@ -137,10 +142,15 @@ ok('tatáž splatnost je vidět v krycím listu OCK (propsalo se)', vKrycim === 
 // --- 3) a opačně: zápis v krycím listu OCK → vidí ho souhrn nabídky ---------
 await p.evaluate(() => klSet('splatnostDni', '60'));
 await p.waitForTimeout(200);
-await p.click('#tab-zakazka');
+/* Karty s cenovými nabídkami se 21. 8. 2026 večer v Přehledu zrušily jako
+ * zdvojené (zadání J. V.) — nabídka OCK i s blokem podmínek žije v Kalkulaci
+ * OCK, nabídka PROJ v Kalkulaci PROJ. Obě stránky jsou vykreslené pořád
+ * (přepínání záložek jen mění viditelnost), takže se hledá v celém dokumentu
+ * a k „pod cenou" se přepne tam, kde blok OCK opravdu je. */
+await p.click('#tab-kalk');
 await p.waitForTimeout(400);
 const zpetOck = await p.evaluate(() => {
-  const r = [...document.querySelectorAll('#page-zakazka .kl-podminky .kl-row')]
+  const r = [...document.querySelectorAll('#page-kalk .kl-podminky .kl-row')]
     .find(x => /splatnost/i.test(x.querySelector('.lbl').textContent));
   return r ? r.querySelector('input').value : null;
 });
@@ -166,15 +176,20 @@ const vKrycimProj = await p.evaluate(() => {
 ok('splatnost z nabídky PROJ je vidět v krycím listu PROJ', vKrycimProj === '45', String(vKrycimProj));
 
 // --- 5) ↺ vrátí automatiku i z nabídky --------------------------------------
-await p.click('#tab-zakazka');
+/* Karty s cenovými nabídkami se 21. 8. 2026 večer v Přehledu zrušily jako
+ * zdvojené (zadání J. V.) — nabídka OCK i s blokem podmínek žije v Kalkulaci
+ * OCK, nabídka PROJ v Kalkulaci PROJ. Obě stránky jsou vykreslené pořád
+ * (přepínání záložek jen mění viditelnost), takže se hledá v celém dokumentu
+ * a k „pod cenou" se přepne tam, kde blok OCK opravdu je. */
+await p.click('#tab-kalk');
 await p.waitForTimeout(400);
 const poResetu = await p.evaluate(() => {
-  const r = [...document.querySelectorAll('#page-zakazka .kl-podminky .kl-row')]
+  const r = [...document.querySelectorAll('#page-kalk .kl-podminky .kl-row')]
     .find(x => /splatnost/i.test(x.querySelector('.lbl').textContent));
   const b = r && r.querySelector('.src button');
   if (!b) return { tlacitko: false };
   b.click();
-  const r2 = [...document.querySelectorAll('#page-zakazka .kl-podminky .kl-row')]
+  const r2 = [...document.querySelectorAll('#page-kalk .kl-podminky .kl-row')]
     .find(x => /splatnost/i.test(x.querySelector('.lbl').textContent));
   return { tlacitko: true, hodnota: r2.querySelector('input').value,
            rucne: (KL.hodnoty || {}).splatnostDni };
@@ -233,7 +248,8 @@ const volba = await p.evaluate(() => {
     .find(x => /typ smlouvy/i.test(x.querySelector('.lbl').textContent));
   const zaskrtnute = [...znovu.querySelectorAll('input[type=radio]')].filter(i => i.checked);
   /* Táž volba musí být vidět i v druhé kopii — je to jeden a týž záznam. */
-  const vPrehledu = [...document.querySelectorAll('#page-zakazka .kl-podminky-ock .kl-row')]
+  /* Druhá kopie bloku OCK je v krycím listu (do 21. 8. 2026 to byl Přehled). */
+  const vPrehledu = [...document.querySelectorAll('#page-kryci .kl-row')]
     .find(x => /typ smlouvy/i.test(x.querySelector('.lbl').textContent));
   const zaskrtnuteJinde = vPrehledu
     ? [...vPrehledu.querySelectorAll('input[type=radio]')].filter(i => i.checked) : [];
@@ -264,8 +280,7 @@ ok('volba Ano/Ne u zádržného zůstane po překreslení vidět',
    anoNe.videt === 'Ano', JSON.stringify(anoNe));
 
 const projRadio = await p.evaluate(() => {
-  const blok = document.querySelector('#page-zakazka .kl-podminky-proj')
-    || document.querySelector('.kl-podminky-proj');
+  const blok = document.querySelector('.kl-podminky-proj');
   if (!blok) return { chyba: 'blok PROJ nenalezen' };
   const radek = [...blok.querySelectorAll('.kl-row')]
     .find(x => x.querySelector('input[type=radio]'));
@@ -360,7 +375,7 @@ const zHlavicky = await p.evaluate(() => {
     const s = r && r.querySelector('select');
     return s ? s.value : null;
   };
-  return { vKalkulaci: v('#page-kalk .kl-podminky-ock'), vPrehledu: v('#page-zakazka .kl-podminky-ock') };
+  return { vKalkulaci: v('#page-kalk .kl-podminky-ock'), vPrehledu: v('#page-kryci') };
 });
 ok('změna sazby v hlavičce se projeví v podmínkách u nabídky',
    zHlavicky.vKalkulaci === '21' && zHlavicky.vPrehledu === '21', JSON.stringify(zHlavicky));
@@ -379,12 +394,17 @@ ok('i v krycím listu OCK je sazba výběr s hodnotou z hlavičky',
 
 /* PROJ má vlastní sazbu — projekce bývá v jiné sazbě než stavební část,
  * takže přepnutí u projekce nesmí sáhnout na sazbu OCK. */
-await p.click('#tab-zakazka');
+/* Karty s cenovými nabídkami se 21. 8. 2026 večer v Přehledu zrušily jako
+ * zdvojené (zadání J. V.) — nabídka OCK i s blokem podmínek žije v Kalkulaci
+ * OCK, nabídka PROJ v Kalkulaci PROJ. Obě stránky jsou vykreslené pořád
+ * (přepínání záložek jen mění viditelnost), takže se hledá v celém dokumentu
+ * a k „pod cenou" se přepne tam, kde blok OCK opravdu je. */
+await p.click('#tab-kalk');
 await p.waitForTimeout(400);
 const dphProj = await p.evaluate(() => {
-  const blok = document.querySelector('#page-zakazka .kl-podminky-proj');
+  const blok = document.querySelector('.kl-podminky-proj');
   if (!blok) return { chyba: 'blok PROJ nenalezen' };
-  const najdi = () => [...document.querySelectorAll('#page-zakazka .kl-podminky-proj .kl-row')]
+  const najdi = () => [...document.querySelectorAll('.kl-podminky-proj .kl-row')]
     .find(x => /sazba dph/i.test(x.querySelector('.lbl').textContent));
   const r = najdi();
   if (!r) return { chyba: 'řádek sazba DPH v PROJ nenalezen' };

@@ -1251,6 +1251,31 @@ test('heslo se ověřuje dřív, než se rozhoduje o brzdě',
 test('u neznámého účtu se scrypt počítá proti zástupnému otisku (#93)',
   /hesloSedi\([\s\S]{0,120}FALESNY_OTISK/.test(kodPrihlaseni));
 
+/* ---------- oddělení testovacího a ostrého prostředí (21. 8. 2026) ----------
+ * Kdyby testovací web dostal omylem stejné TAJEMSTVI_RELACE jako ostrý,
+ * platila by cookie z testu i v ostré aplikaci. Do podpisu proto vstupuje
+ * i jméno prostředí — a ostrý provoz (bez proměnné PROSTREDI) se přitom
+ * nesmí změnit, jinak by nasazení všechny odhlásilo. */
+{
+  const { relaceVytvor, relaceOver } = await import('./lib/sdilene.mjs');
+  const cookie = t => 'relace=' + t;
+  delete process.env.PROSTREDI;
+  const ostra = relaceVytvor('kdo@example.com', 'Administrátor');
+  test('ostrá relace platí v ostrém prostředí', !!relaceOver(cookie(ostra)));
+
+  process.env.PROSTREDI = 'test';
+  const testovaci = relaceVytvor('kdo@example.com', 'Administrátor');
+  test('relace z testu platí v testu', !!relaceOver(cookie(testovaci)));
+  test('ostrá relace v testu NEPLATÍ (stejné tajemství nestačí)',
+    relaceOver(cookie(ostra)) === null);
+
+  delete process.env.PROSTREDI;
+  test('a relace z testu neplatí v ostrém provozu', relaceOver(cookie(testovaci)) === null);
+  /* A hlavně: relace vydaná PŘED touhle úpravou (tedy bez PROSTREDI) platí
+   * v ostrém provozu dál — nasazení nikoho neodhlásí. */
+  test('ostrá relace platí i po přepnutí prostředí tam a zpět', !!relaceOver(cookie(ostra)));
+}
+
 console.log(`\n${ok} prošlo, ${fail} selhalo`);
 if (fail) { console.log('\nSelhalo:\n - ' + selhalo.join('\n - ')); }
 process.exit(fail ? 1 : 0);

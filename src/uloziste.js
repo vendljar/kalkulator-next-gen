@@ -166,7 +166,7 @@ function uloUlozeniStav(vstup) {
         + 'Uložte ji do souboru, ať o práci nepřijdete.' };
   if (!v.prihlasen)
     return { stav: 'neprihlasen', muzeSam: false, chybi: nejmensi, cas,
-      text: 'Zakázka se do databáze neukládá – nejste přihlášeni. Přihlaste se na záložce Zakázka.' };
+      text: 'Zakázka se do databáze neukládá – nejste přihlášeni. Přihlaste se v Nastavení → Databáze.' };
   if (ulozeno && !v.zmeneno)
     return { stav: 'ulozeno', muzeSam: true, chybi: nejmensi, cas,
       text: 'Uloženo v databázi jako ' + ulozeno + (cas ? ' v ' + cas : '') + '.' };
@@ -306,10 +306,17 @@ function uloRejstrikZaznam(zak, opts) {
      * kolegovi" bez čtení všech souborů zvlášť. Prázdno u starších zakázek
      * je v pořádku: znamená to jen „vzniklo dřív, než se autor zapisoval". */
     autor: String((zak && zak.autor) || ''),
+    /* Jméno obchodníka (21. 8. 2026, zadání J. V.: „přidej do seznamu zakázek
+     * i jméno obchodníka"). V rejstříku, ne dohledávané z účtů: seznam se
+     * musí vypsat jedním čtením a jméno je jediné, co z účtu potřebuje.
+     * Prázdno u starších zakázek je v pořádku — seznam pak ukáže e-mail. */
+    autorJmeno: String((zak && zak.autorJmeno) || ''),
     cislo: uloCisloVyplneno(zak && zak.cislo) ? String(zak.cislo).trim() : '',
     nazevAkce: String((zak && zak.nazevAkce) || ''),
     objednatel: String((zak && zak.objednatel) || ''),
     datum: String((zak && zak.datum) || ''),
+    /* Druh zakázky pro filtr OCK × PROJ v přehledu nabídek. */
+    jenProj: !!(zak && zak.jenProj),
     variant: varianty.length,
     odeslane: varianty.filter(zamcena).length,
     upraveno,
@@ -329,14 +336,35 @@ function uloRejstrikNormalizuj(x) {
     .map(z => ({
       soubor: z.soubor,
       autor: String(z.autor || ''),
+      autorJmeno: String(z.autorJmeno || ''),
       cislo: String(z.cislo || ''),
       nazevAkce: String(z.nazevAkce || ''),
       objednatel: String(z.objednatel || ''),
       datum: String(z.datum || ''),
+      jenProj: !!z.jenProj,
       variant: cislo(z.variant),
       odeslane: cislo(z.odeslane),
       upraveno: String(z.upraveno || ''),
     }));
+}
+
+/* Druh zakázky pro vyhledávání v přehledu nabídek (21. 8. 2026).
+ * Pořadí je záměrné: příznak „jen projekce" je pravda ze zakázky, číslo je
+ * jen vodítko pro starší záznamy, které příznak v rejstříku ještě nemají
+ * (projekční nabídky nesou v čísle OVP, konstrukční OPR). Když nesedí ani
+ * jedno, je to zakázka s ocelovou konstrukcí — tak jich je většina. */
+function uloDruhZakazky(z) {
+  if (z && z.jenProj) return 'PROJ';
+  if (/ovp/i.test(String((z && z.cislo) || ''))) return 'PROJ';
+  return 'OCK';
+}
+
+/* Jméno obchodníka do seznamu: jméno, jinak e-mail, jinak pomlčka. */
+function uloObchodnik(z) {
+  const j = String((z && z.autorJmeno) || '').trim();
+  if (j) return j;
+  const e = String((z && z.autor) || '').trim();
+  return e || '—';
 }
 
 function uloRejstrikSloucit(rejstrik, zaznam) {
@@ -367,7 +395,10 @@ function uloHledej(rejstrik, dotaz) {
   const slova = uloSlova(dotaz);
   if (!slova.length) return pole;
   return pole.filter(z => {
-    const text = uloNorm([z.cislo, z.nazevAkce, z.objednatel, z.datum, z.soubor].join(' '));
+    /* Hledá se i ve jménu obchodníka (21. 8. 2026) — v seznamu je jeho
+     * sloupec, takže se podle něj lidé přirozeně ptají. */
+    const text = uloNorm([z.cislo, z.nazevAkce, z.objednatel, z.datum, z.soubor,
+      z.autorJmeno, z.autor].join(' '));
     return slova.every(s => text.includes(s));
   });
 }
@@ -434,5 +465,6 @@ if (typeof module !== 'undefined')
                      uloZalohaSmiPrepsat,
                      uloRazitkoNove, uloRazitko, uloKolize,
                      uloRejstrikZaznam, uloRejstrikNormalizuj, uloRejstrikSloucit,
+                     uloDruhZakazky, uloObchodnik,
                      uloRejstrikOdeber, uloRejstrikSerad, uloHledej,
                      uloZamekKlic, uloPocetOdemceni, uloKontrolaZamku, uloProblemPopis };

@@ -48,13 +48,24 @@ test('výška nad 30 m je atyp',
   S.standardVyhodnot(ext(), 31, std()).stav === 'atyp');
 test('hloubka nad 2000 mm je atyp',
   S.standardVyhodnot(ext({ hloubka: 2.48 }), 25, std()).stav === 'atyp');
-const dvaNalezy = S.standardVyhodnot(ext({ hloubka: 2.48, profily: { sloupek: { dim: '120x120' } } }), 25, std());
+/* Exteriér má od 21. 8. 2026 tabulku PO PROFILECH stejně jako interiér. */
+test('exteriér bere limity z řádku svého profilu', (() => {
+  const s = std();
+  s.exterier.profily[1].hloubkaMaxMm = 2500;          // 100x100 smí víc
+  return S.standardVyhodnot(ext({ hloubka: 2.48 }), 25, s).stav === 'atyp'
+    && S.standardVyhodnot(ext({ hloubka: 2.48, profily: { sloupek: { dim: '100x100' } } }), 25, s).stav === 'standard';
+})());
+/* Dva prohřešky na ZNÁMÉM profilu. U neznámého profilu se rozměry
+ * neposuzují (neznáme jeho limity) — to hlídá vlastní kontrola níž. */
+const dvaNalezy = S.standardVyhodnot(ext({ hloubka: 2.48 }), 31, std());
 test('dva prohřešky = dva nálezy', dvaNalezy.nalezy.length === 2, JSON.stringify(dvaNalezy.nalezy));
 test('nález nese limit i zadanou hodnotu',
   dvaNalezy.nalezy.some(n => n.limit === 'max 2000 mm' && n.zadano === '2480 mm'),
   JSON.stringify(dvaNalezy.nalezy));
 test('popisek počítá jen skutečné prohřešky',
   S.standardPopis(dvaNalezy) === 'ATYP OCK · 2 nálezy', S.standardPopis(dvaNalezy));
+test('u neznámého profilu exteriéru se rozměry neposuzují proti cizí tabulce',
+  S.standardVyhodnot(ext({ hloubka: 2.48, profily: { sloupek: { dim: '120x120' } } }), 25, std()).nalezy.length === 1);
 
 /* ---------- 3) interiér: limity podle profilu ---------- */
 
@@ -71,8 +82,16 @@ test('u neznámého profilu se rozměry neposuzují proti cizí tabulce',
   S.standardVyhodnot(int({ hloubka: 9, profily: { sloupek: { dim: '999x999' } } }), 20, std()).nalezy.length === 1);
 test('zápis profilu se srovnává (80 × 80 = 80x80)',
   S.standardNormProfil('80 × 80') === '80x80' && S.standardNormProfil('80X80') === '80x80');
-test('sklo do rámečku místo terčů je v interiéru atyp',
-  S.standardVyhodnot(int({ zaskleni: 'do rámečku' }), 20, std()).stav === 'atyp');
+/* Sklo do rámečku (v zadání volba „mezi příčníky") JE standard interiéru —
+ * do 21. 8. 2026 se hlásilo jako atyp (nález J. V.). */
+test('sklo do rámečku je v interiéru standard',
+  S.standardVyhodnot(int({ zaskleni: 'mezi příčníky' }), 20, std()).stav === 'standard');
+test('cizí způsob zaskleni je v interiéru pořád atyp',
+  S.standardVyhodnot(int({ zaskleni: 'lepené na sraz' }), 20, std()).stav === 'atyp');
+test('prázdný seznam povolených způsobů = nekontroluje se', (() => {
+  const s = std(); s.interier.zaskleniPovolene = [];
+  return S.standardVyhodnot(int({ zaskleni: 'lepené na sraz' }), 20, s).stav === 'standard';
+})());
 
 /* ---------- 4) můstek a třetí stav ---------- */
 
@@ -117,7 +136,7 @@ test('vypnuté pravidlo se nekontroluje', (() => {
 /* ---------- 6) limity opravdu z tabulky, ne z kódu ---------- */
 
 test('změna limitu v Nastavení hned mění výsledek', (() => {
-  const s = std(); s.exterier.hloubkaMaxMm = 2500;
+  const s = std(); s.exterier.profily[0].hloubkaMaxMm = 2500;
   return S.standardVyhodnot(ext({ hloubka: 2.48 }), 25, s).stav === 'standard';
 })());
 test('přidaný profil do interiéru se hned uzná', (() => {
@@ -128,12 +147,20 @@ test('přidaný profil do interiéru se hned uzná', (() => {
 
 /* ---------- 7) očista uloženého standardu ---------- */
 
-const oc = S.standardOciste({ zapnuto: true, exterier: { vyskaMaxM: -5, sirkaMaxMm: 'nesmysl' },
+const oc = S.standardOciste({ zapnuto: true,
+  exterier: { profily: [{ profil: '80x80', vyskaMaxM: -5, sirkaMaxMm: 'nesmysl' }] },
   interier: { profily: [{ profil: '' }] }, necoCizi: 1 });
-test('nesmyslný limit se zahodí a platí výchozí',
-  oc.exterier.vyskaMaxM === S.STANDARD_VYCHOZI.exterier.vyskaMaxM
-  && oc.exterier.sirkaMaxMm === S.STANDARD_VYCHOZI.exterier.sirkaMaxMm);
+test('nesmyslný limit se zahodí (zůstane prázdno, ne výmysl)',
+  oc.exterier.profily[0].vyskaMaxM === null && oc.exterier.profily[0].sirkaMaxMm === null);
 test('řádek bez profilu se zahodí', oc.interier.profily.length === 2);
+/* Migrace staršího tvaru: exteriér byl seznam ŘETĚZCŮ a limity ležely vedle. */
+const mig = S.standardOciste({ zapnuto: true,
+  exterier: { profily: ['80x80', '120x120'], vyskaMaxM: 28, sirkaMaxMm: 1900, hloubkaMaxMm: 1900 } });
+test('starší tvar exteriéru se převede na řádky',
+  mig.exterier.profily.length === 2 && mig.exterier.profily[1].profil === '120x120',
+  JSON.stringify(mig.exterier.profily));
+test('a limity zůstanou zachované, ne výchozí',
+  mig.exterier.profily[0].vyskaMaxM === 28 && mig.exterier.profily[0].hloubkaMaxMm === 1900);
 test('neznámý klíč se neuloží', oc.necoCizi === undefined);
 test('očista bez vstupu vrátí výchozí znění s vypnutou kontrolou',
   S.standardOciste(null).zapnuto === false);

@@ -199,6 +199,15 @@ const KRYCI_SEKCE = [
       prefill: c => c.dph + ' %', src: 'z hlavičky kalkulace OCK' },
     { id: 'zarukaMesicu', label: 'Doba trvání záruky (měsíců)', verze: ['bo'], prefill: () => '60', src: 'výchozí' },
   ] },
+  /* TERMÍN DODÁNÍ (21. 8. 2026, zadání J. V.: „atyp = + 4 týdny v CN termín").
+   * Vlastní sekce, ne řádek mezi datumovými termíny: jako jediná z termínů
+   * patří do cenové nabídky (je v KRYCI_NABIDKA_SEKCE), takže z ní vzniká
+   * symbol {{PODM_TERMIN_DODANI}} do šablony. Datumy převzetí a předání
+   * se do nabídky nedávají — ty se domlouvají až u smlouvy. */
+  { sekce: 'Termín dodání', pole: [
+    { id: 'terminDodani', label: 'Termín dodání OCK', verze: ['bo', 'techdata'],
+      prefill: c => kryciTerminDodani(c), src: 'Nastavení → Firma (+ ATYP)' },
+  ] },
   { sekce: 'Termíny', pole: [
     { id: 'terminPrevzeti', label: 'Převzetí staveniště k montáži šachty', verze: ['bo', 'techdata'], typ: 'date' },
     { id: 'terminMontaz', label: 'Ukončení montáže šachty a předání montáži výtahu', verze: ['bo', 'techdata'], typ: 'date' },
@@ -380,11 +389,42 @@ function kryciCtx(zak, varianta, jekly) {
   const firma = (typeof firmaAktualni === 'function') ? firmaAktualni() : {};
   return {
     zak, varianta, ext: Zv.typSachty === 'exteriérová', dph: Math.round((Cv.dph || 0) * 100),
+    /* ATYP z otevřené varianty — termín dodání se podle něj prodlužuje. */
+    atyp: !!Zv.atyp,
     hodnota, priplatky, firma, typProduktu,
     sken3d: kryciSken3d(d, rOck),
     projAno: key => (projSekce[key] > 0 ? 'Ano' : 'Ne'),
   };
 }
+/* ---------- termín dodání a přirážka za ATYP (21. 8. 2026) ----------
+ *
+ * Zadání J. V.: „atyp = + 4 týdny v CN termín." Standardní lhůta je firemní
+ * údaj (Nastavení → Firma), o kolik ji ATYP prodlouží taky — v kódu není ani
+ * jedno číslo, aby se to dalo změnit bez nové dávky.
+ *
+ * Prodlužuje se PRVNÍ ČÍSLO v textu, ne celý text: lhůta se píše jako věta
+ * („12 týdnů od podpisu smlouvy") a zbytek věty musí zůstat, jak je.
+ * Když v ní žádné číslo není (nebo lhůta není vyplněná vůbec), NIC SE
+ * NEVYMÝŠLÍ — vrátí se, co tam je, a k tomu poznámka o atypu; termín pak
+ * doplní člověk. Stejné pravidlo jako u cen. */
+function kryciTerminDodaniText(zakladniText, atyp, tydnyNavic) {
+  const zaklad = String(zakladniText == null ? '' : zakladniText).trim();
+  const navic = Math.round(+String(tydnyNavic == null ? '' : tydnyNavic).replace(',', '.')) || 0;
+  if (!atyp || navic <= 0) return zaklad;
+  const m = zaklad.match(/\d+/);
+  if (!m) return zaklad ? (zaklad + ' + ' + navic + ' týdnů (ATYP)') : '';
+  const nove = String(parseInt(m[0], 10) + navic);
+  return zaklad.slice(0, m.index) + nove + zaklad.slice(m.index + m[0].length)
+    + ' (vč. ' + navic + ' týdnů za ATYP)';
+}
+
+function kryciTerminDodani(c) {
+  const f = (c && c.firma) || {};
+  const zaklad = (typeof firmaHodnota === 'function') ? firmaHodnota(f, 'terminDodaniOck') : (f.terminDodaniOck || '');
+  const tydny = (typeof firmaHodnota === 'function') ? firmaHodnota(f, 'terminAtypTydny') : (f.terminAtypTydny || '');
+  return kryciTerminDodaniText(zaklad, !!(c && c.atyp), tydny);
+}
+
 /* hodnota pole: ruční přepis (data.kryci.hodnoty) > prefill > '' */
 function kryciHodnota(pole, kl, c) {
   /* `dphBind` je totéž provázání jako `bind`, jen mířené do sazby DPH
@@ -430,7 +470,7 @@ if (typeof dokumentRegistruj === 'function') {
  * (varianta.data.kryci.hodnoty), takže se změna projeví na obou místech.
  * Názvy musí přesně odpovídat `sekce` v KRYCI_SEKCE výše; test_nabidka_podminky.js
  * to hlídá, aby přejmenování sekce nabídku tiše nevyprázdnilo. */
-const KRYCI_NABIDKA_SEKCE = ['Typ smlouvy a produktu', 'Platební podmínky'];
+const KRYCI_NABIDKA_SEKCE = ['Typ smlouvy a produktu', 'Platební podmínky', 'Termín dodání'];
 
 /* ---------- symboly {{PODM_…}} do šablony nabídky (5. 8. 2026, #147) --------
  *
@@ -516,5 +556,6 @@ if (typeof module !== 'undefined')
   module.exports = { KRYCI_SEKCE, KRYCI_NABIDKA_SEKCE, KRYCI_DPH_SAZBY, KRYCI_POKUTY, kryciCtx, kryciHodnota,
     kryciData, kryciMigraceZadrzne, kryciMigraceSazbaDph,
     PODM_PREFIX, kryciSymbolId, kryciCisloZTextu, kryciProcentoZTextu,
+    kryciTerminDodani, kryciTerminDodaniText,
     kryciSymbolyZeSekci, kryciPodminkoveSymboly,
     kryciFaktura2Dopocet, kryciFaktura2Sync };

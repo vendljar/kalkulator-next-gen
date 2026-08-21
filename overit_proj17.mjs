@@ -230,10 +230,31 @@ test('tlačítko Uložit zakázku svítí červeně, dokud zakázka není ulože
     window.zakUlozeniStav = () => ({ stav: 'ulozit', chybi: [], text: '' });
     const cervene = /vyzva/.test(zakTrojice()) && !/ulozeno-ok/.test(zakTrojice());
     window.zakUlozeniStav = () => ({ stav: 'ulozeno', chybi: [], text: 'Uloženo.' });
-    const zelene = /ulozeno-ok/.test(zakTrojice()) && !/vyzva/.test(zakTrojice())
-      && /ulozeno-ok/.test(zakUlozeniRadek());
+    const zelene = /ulozeno-ok/.test(zakTrojice()) && !/vyzva/.test(zakTrojice());
     window.zakUlozeniStav = puvodni;
     return cervene && zelene;
+  }));
+/* Hláška o uložení svítí JEN CHVÍLI po zápisu (21. 8. 2026 večer, zadání
+ * J. V.: „informaci o uložení zobraz vždy jen jednou a po chvíli skryj").
+ * Trvalý zelený pruh přestal nést informaci — stav teď drží tlačítko. */
+test('zelený pruh o uložení se ukáže po zápisu a pak zmizí',
+  await p.evaluate(() => {
+    const puvodni = window.zakUlozeniStav;
+    const puvodniKanal = window.zakKanal;
+    const puvodniKdy = ONLINE_STAV.kdyUlozeno;
+    window.zakKanal = () => 'online';
+    window.zakUlozeniStav = () => ({ stav: 'ulozeno', chybi: [], text: 'Uloženo.' });
+    ONLINE_STAV.kdyUlozeno = new Date();
+    const hned = /ulozeno-ok/.test(zakUlozeniRadek());
+    ONLINE_STAV.kdyUlozeno = new Date(Date.now() - 60000);   // minuta zpátky
+    const pozdeji = zakUlozeniRadek();
+    window.zakUlozeniStav = () => ({ stav: 'ceka', chybi: [], text: 'Změny se za chvíli uloží samy.' });
+    const priZmene = zakUlozeniRadek();
+    window.zakUlozeniStav = () => ({ stav: 'neprihlasen', chybi: [], text: 'Nejste přihlášeni.' });
+    const varovani = zakUlozeniRadek();
+    window.zakUlozeniStav = puvodni; window.zakKanal = puvodniKanal;
+    ONLINE_STAV.kdyUlozeno = puvodniKdy;
+    return hned && pozdeji === '' && priZmene === '' && /Nejste přihlášeni/.test(varovani);
   }));
 test('jméno přihlášeného je v liště světle zelené a heat mapa stojí za Změnit heslo',
   await p.evaluate(() => {

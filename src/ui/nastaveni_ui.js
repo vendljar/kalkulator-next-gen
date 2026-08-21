@@ -29,6 +29,12 @@ const NAST_PANELY = [
   { id: 'obecne', nazev: 'Obecné', telo: () => nastObecne() },
   { id: 'firma', nazev: 'Firma', klic: 'nastaveni.firma', telo: () => nastFirma() },
   { id: 'uzivatele', nazev: 'Uživatelé', klic: 'nastaveni.uzivatele', telo: () => nastUzivatele() },
+  /* Databáze (21. 8. 2026 večer, zadání J. V.: „Online databáze přesuň do nové
+   * záložky v nastavení s názvem Databáze"). Karta stála na začátku Přehledu
+   * cenových nabídek, kde se pletla do cesty práci s nabídkami — je to
+   * nastavení spojení, ne nástroj obchodníka. Vidí ji každý přihlášený:
+   * jsou v ní tlačítka „Uložit online", „Zakázky online…" a odhlášení. */
+  { id: 'databaze', nazev: 'Databáze', telo: () => nastDatabaze() },
   { id: 'slevy', nazev: 'Slevy', klic: 'nastaveni.slevy', telo: () => nastSlevy() },
   { id: 'sablony', nazev: 'Smlouvy / Šablony', klic: 'nastaveni.sablony', telo: () => nastSablony() },
   { id: 'standard', nazev: 'Standard OCK', klic: 'nastaveni.standard', telo: () => nastStandard() },
@@ -177,26 +183,51 @@ function stdSet(cesta, hodnota) {
   nastRefresh();
 }
 
-function stdProfilySet(kde, text) {
-  stdSet(kde + '.profily', String(text || '').split(',').map(x => x.trim()).filter(Boolean));
-}
-
-function stdRadaSet(i, klic, hodnota) {
+/* Řádek tabulky limitů. Od 21. 8. 2026 večer má TENTÝŽ tvar exteriér
+ * i interiér (zadání J. V.: „sjednoť vizuál nastavení standardu OCK podle
+ * vnitřní šachty") — proto jedna sada obsluh s parametrem větve, ne dvě. */
+function stdRadaSet(vetev, i, klic, hodnota) {
   const s = stdData();
-  if (!s.interier || !Array.isArray(s.interier.profily)) return;
-  s.interier.profily[i][klic] = klic === 'profil' ? String(hodnota).trim() : (+hodnota || 0);
+  if (!s[vetev] || !Array.isArray(s[vetev].profily)) return;
+  const r = s[vetev].profily[i];
+  if (!r) return;
+  if (klic === 'profil') r.profil = String(hodnota).trim();
+  else {
+    /* Prázdné pole znamená „limit se nehlídá", ne nulu — „prázdno není nula". */
+    const t = String(hodnota == null ? '' : hodnota).trim().replace(',', '.');
+    const n = t === '' ? null : +t;
+    r[klic] = (n !== null && isFinite(n) && n > 0) ? n : null;
+  }
   nastRefresh();
 }
 
-function stdRadaPridej() {
+function stdRadaPridej(vetev) {
   const s = stdData();
-  s.interier.profily.push({ profil: '', vyskaMaxM: 25, sirkaMaxMm: 1800, hloubkaMaxMm: 1800 });
+  if (!s[vetev] || !Array.isArray(s[vetev].profily)) return;
+  const vzor = vetev === 'exterier'
+    ? { profil: '', vyskaMaxM: 30, sirkaMaxMm: 2000, hloubkaMaxMm: 2000 }
+    : { profil: '', vyskaMaxM: 25, sirkaMaxMm: 1800, hloubkaMaxMm: 1800 };
+  s[vetev].profily.push(vzor);
   nastRefresh();
 }
 
-function stdRadaSmaz(i) {
+function stdRadaSmaz(vetev, i) {
   const s = stdData();
-  s.interier.profily.splice(i, 1);
+  if (!s[vetev] || !Array.isArray(s[vetev].profily)) return;
+  s[vetev].profily.splice(i, 1);
+  nastRefresh();
+}
+
+/* Povolený způsob zasklení interiéru (terče × sklo do rámečku). Seznam,
+ * ne dvě zaškrtávátka natvrdo: standard se může rozšířit o další způsob
+ * a nemá se kvůli tomu vydávat nová dávka. */
+function stdZaskleniPrepni(hodnota, zapnuto) {
+  const s = stdData();
+  const pole = Array.isArray(s.interier.zaskleniPovolene) ? s.interier.zaskleniPovolene.slice() : [];
+  const i = pole.indexOf(hodnota);
+  if (zapnuto && i < 0) pole.push(hodnota);
+  if (!zapnuto && i >= 0) pole.splice(i, 1);
+  s.interier.zaskleniPovolene = pole;
   nastRefresh();
 }
 
@@ -206,6 +237,32 @@ function stdObnovVychozi() {
   nastRefresh();
 }
 
+/* Štítek u pole, které aplikace zatím NEUMÍ posoudit z dat kalkulace
+ * (zadání J. V. 21. 8. 2026 večer: „v sekci můstky označ pole, která
+ * v technické specifikaci, resp. v zadání kalkulace zatím nehlídáme").
+ * Je to poctivost vůči tomu, kdo standard nastavuje: číslo si tu vyplní,
+ * ale žádný štítek se podle něj nerozsvítí. */
+function stdNehlidame(proc) {
+  return `<span class="pill warn" style="margin-left:8px" title="${esc(proc)}">zatím nehlídáme</span>`;
+}
+
+/* Důvody stojí v konstantě, ne přímo ve volání: dlouhý literál uvnitř
+ * `${…}` v šabloně vypadá pro kontrolu escapování (test_escape.js) jako
+ * neošetřená hodnota, a ta kontrola má být přísná. */
+const STD_NEHLIDAME = {
+  oplasteni: 'Souvislost opláštění se z dat kalkulace poznat nedá — v zadání pro ni není údaj. '
+    + 'Text slouží jako popis do nálezu.',
+  mustekReseni: 'Standard připouští jediné konstrukční řešení můstku a mění se u něj pouze '
+    + 'hloubkový rozměr. Zadání kalkulace ani technická specifikace dnes nenesou údaj, podle '
+    + 'kterého by šlo jiné řešení poznat — hlídá se proto jen hloubka a šířka.',
+};
+
+/* Volby zasklení odpovídají poli „Způsob zasklení" v Zadání šachty. */
+const STD_ZASKLENI_VOLBY = [
+  ['na terče', 'zasklívací terče na profily'],
+  ['mezi příčníky', 'sklo do rámečku (mezi příčníky, lišty)'],
+];
+
 function nastStandard() {
   if (!smiZobrazit('nastaveni.standard'))
     return `<div class="note">Firemní standard OCK smí měnit <b>administrátor a vedoucí</b>.</div>`;
@@ -213,56 +270,51 @@ function nastStandard() {
   NAST.standard = s;
   const zap = s.zapnuto;
 
-  const radaHtml = (r, i) => `<tr>
-    <td><input type="text" style="width:100px" value="${esc(r.profil)}" onchange="stdRadaSet(${i}, 'profil', this.value)"></td>
-    <td><input type="number" step="0.5" style="width:78px" value="${esc(r.vyskaMaxM)}" onchange="stdRadaSet(${i}, 'vyskaMaxM', this.value)"> m</td>
-    <td><input type="number" step="10" style="width:90px" value="${esc(r.sirkaMaxMm)}" onchange="stdRadaSet(${i}, 'sirkaMaxMm', this.value)"> mm</td>
-    <td><input type="number" step="10" style="width:90px" value="${esc(r.hloubkaMaxMm)}" onchange="stdRadaSet(${i}, 'hloubkaMaxMm', this.value)"> mm</td>
-    <td><button class="mini" onclick="stdRadaSmaz(${i})" title="odebrat řádek">✕</button></td></tr>`;
+  const cis = v => (v == null ? '' : v);
+  const radaHtml = (vetev) => (r, i) => `<tr>
+    <td><input type="text" style="width:100px" value="${esc(r.profil)}" onchange="stdRadaSet('${vetev}', ${i}, 'profil', this.value)"></td>
+    <td><input type="number" step="0.5" style="width:78px" value="${esc(cis(r.vyskaMaxM))}" onchange="stdRadaSet('${vetev}', ${i}, 'vyskaMaxM', this.value)"> m</td>
+    <td><input type="number" step="10" style="width:90px" value="${esc(cis(r.sirkaMaxMm))}" onchange="stdRadaSet('${vetev}', ${i}, 'sirkaMaxMm', this.value)"> mm</td>
+    <td><input type="number" step="10" style="width:90px" value="${esc(cis(r.hloubkaMaxMm))}" onchange="stdRadaSet('${vetev}', ${i}, 'hloubkaMaxMm', this.value)"> mm</td>
+    <td><button class="mini" onclick="stdRadaSmaz('${vetev}', ${i})" title="odebrat řádek">✕</button></td></tr>`;
+
+  const tabulka = (vetev) => `<table class="sd-tbl"><thead><tr><th>Profil sloupku</th><th>Výška max</th>
+      <th>Vnitřní šířka max</th><th>Vnitřní hloubka max</th><th></th></tr></thead>
+      <tbody>${(s[vetev].profily || []).map(radaHtml(vetev)).join('')}</tbody></table>
+    <div class="btns"><button class="mini" onclick="stdRadaPridej('${vetev}')">+ přidat profil</button></div>`;
+
+  const zaskleniChk = STD_ZASKLENI_VOLBY.map(([hod, popis]) => {
+    const je = (s.interier.zaskleniPovolene || []).indexOf(hod) >= 0;
+    return `<label style="display:flex;align-items:center;gap:8px;margin:4px 0">
+      <input type="checkbox" ${je ? 'checked' : ''}
+        onchange="stdZaskleniPrepni('${escJs(hod)}', this.checked)"> ${esc(popis)}</label>`;
+  }).join('');
 
   return `<div class="note" style="margin-top:0">Podle téhle tabulky se v <b>Kalkulaci OCK</b>
       i v <b>Technické specifikaci</b> rozhoduje, jestli je šachta <b>standardní</b>, nebo <b>atyp</b>.
-      Kontrola <b>nikdy nic neblokuje a nemění cenu</b> — jen ukazuje štítek a seznam nálezů;
-      přirážku ATYP zapíná vždycky člověk. Rozměry se posuzují jako <b>vnitřní</b>,
-      výška jako <b>celková výška konstrukce</b> (zdvih + horní přejezd + prohlubeň)
-      a o typu konstrukce rozhoduje <b>profil sloupku</b>.</div>
+      Kontrola <b>nikdy nic neblokuje</b> — ukazuje štítek a seznam nálezů; od 21. 8. 2026 večer
+      navíc u nálezu <b>zaškrtne ATYP</b> (zadání J. V.), a to jde kdykoli vrátit ručně.
+      Rozměry se posuzují jako <b>vnitřní</b>, výška jako <b>celková výška konstrukce</b>
+      (zdvih + horní přejezd + prohlubeň) a o typu konstrukce rozhoduje <b>profil sloupku</b>.</div>
 
     <div class="sec-title">Kontrola standardu</div>
     <div class="btns">
       <button class="${zap ? 'primary' : ''}" onclick="stdPrepniKontrolu()">
         Kontrola STD: ${zap ? 'Aktivní' : 'Neaktivní'}</button>
       <span class="note" style="margin-left:8px">${zap
-        ? 'Štítek STANDARD OCK / ATYP OCK svítí v liště kalkulace i ve specifikaci.'
-        : 'Vypnuto — nikde se nic nekreslí. Zapněte, až bude tabulka odladěná.'}</span>
+    ? 'Štítek STANDARD OCK / ATYP OCK svítí v liště kalkulace i ve specifikaci.'
+    : 'Vypnuto — nikde se nic nekreslí a ATYP se sám nezaškrtává.'}</span>
     </div>
 
-    <div class="sec-title">Exteriér (venkovní šachta)</div>
-    <div class="row"><label>Povolené profily sloupku <span class="note">(oddělte čárkou)</span></label>
-      <input type="text" value="${esc((s.exterier.profily || []).join(', '))}"
-        onchange="stdProfilySet('exterier', this.value)"><span class="u"></span></div>
-    <div class="row"><label>Výška konstrukce max</label>
-      <input type="number" step="0.5" style="width:100px" value="${esc(s.exterier.vyskaMaxM)}"
-        onchange="stdSet('exterier.vyskaMaxM', +this.value)"><span class="u">m</span></div>
-    <div class="row"><label>Vnitřní šířka max</label>
-      <input type="number" step="10" style="width:100px" value="${esc(s.exterier.sirkaMaxMm)}"
-        onchange="stdSet('exterier.sirkaMaxMm', +this.value)"><span class="u">mm</span></div>
-    <div class="row"><label>Vnitřní hloubka max</label>
-      <input type="number" step="10" style="width:100px" value="${esc(s.exterier.hloubkaMaxMm)}"
-        onchange="stdSet('exterier.hloubkaMaxMm', +this.value)"><span class="u">mm</span></div>
-    <div class="row"><label>Opláštění <span class="note">(popis do nálezu)</span></label>
+    <div class="sec-title">Exteriér (venkovní šachta) — limity podle profilu</div>
+    ${tabulka('exterier')}
+    <div class="row"><label>Opláštění ${stdNehlidame(STD_NEHLIDAME.oplasteni)}</label>
       <input type="text" value="${esc(s.exterier.zaskleni)}"
         onchange="stdSet('exterier.zaskleni', this.value)"><span class="u"></span></div>
 
-    <div class="sec-title">Interiér (vnitřní šachta) — limity podle profilu</div>
-    <table class="sd-tbl"><thead><tr><th>Profil sloupku</th><th>Výška max</th>
-      <th>Vnitřní šířka max</th><th>Vnitřní hloubka max</th><th></th></tr></thead>
-      <tbody>${(s.interier.profily || []).map(radaHtml).join('')}</tbody></table>
-    <div class="btns"><button class="mini" onclick="stdRadaPridej()">+ přidat profil</button></div>
-    <div class="row"><label>Opláštění <span class="note">(standard: terče na profily)</span></label>
-      <input type="text" value="${esc(s.interier.zaskleni)}"
-        onchange="stdSet('interier.zaskleni', this.value)"><span class="u"></span></div>
-
-    <div class="sec-title">Můstek</div>
+    <div class="sec-title">Můstek mezi budovou a OCK</div>
+    <div class="note" style="margin-top:0">Můstek patří k venkovní šachtě — proto stojí tady
+      (zadání J. V. 21. 8. 2026). Hlídá se jen tehdy, když je v zadání šachty zaškrtnutý.</div>
     <div class="row"><label>Hloubka max <span class="note">(mezi budovou a OCK)</span></label>
       <input type="number" step="10" style="width:100px" value="${esc(s.mustek.hloubkaMaxMm)}"
         onchange="stdSet('mustek.hloubkaMaxMm', +this.value)"><span class="u">mm</span></div>
@@ -272,9 +324,26 @@ function nastStandard() {
     <label style="display:flex;align-items:center;gap:8px;margin:6px 0">
       <input type="checkbox" ${s.mustek.sirkaJakoOck ? 'checked' : ''}
         onchange="stdSet('mustek.sirkaJakoOck', this.checked)"> Šířka můstku nesmí přesáhnout šířku OCK</label>
+    <div class="row"><label>Konstrukční řešení ${stdNehlidame(STD_NEHLIDAME.mustekReseni)}</label>
+      <input type="text" value="jedno řešení, mění se pouze hloubkový rozměr" disabled><span class="u"></span></div>
+
+    <div class="sec-title">Interiér (vnitřní šachta) — limity podle profilu</div>
+    ${tabulka('interier')}
+    <div class="note" style="margin:8px 0 2px"><b>Povolené způsoby zasklení</b> — odpovídají volbě
+      „Způsob zasklení" v zadání šachty. Nezaškrtnutý způsob je atyp; když nezaškrtnete žádný,
+      zasklení se nekontroluje vůbec.</div>
+    ${zaskleniChk}
+    <div class="row"><label>Popis opláštění <span class="note">(text do nálezu)</span></label>
+      <input type="text" value="${esc(s.interier.zaskleni)}"
+        onchange="stdSet('interier.zaskleni', this.value)"><span class="u"></span></div>
+
+    <div class="sec-title">Společná pravidla</div>
     <label style="display:flex;align-items:center;gap:8px;margin:6px 0">
       <input type="checkbox" ${s.jedenTypZaskleni ? 'checked' : ''}
         onchange="stdSet('jedenTypZaskleni', this.checked)"> Standard je <b>jeden typ zasklení</b> — míchání druhů skel je atyp</label>
+    <div class="note" style="margin-top:2px">Dva druhy skla v nabídce hlásí aplikace jako
+      <b>„nelze posoudit"</b>, ne jako atyp: z dat nepozná rozdíl mezi dvěma variantami na výběr
+      pro zákazníka a dvěma skly na jedné šachtě.</div>
 
     <div class="btns" style="margin-top:12px">
       <button class="mini" onclick="stdObnovVychozi()">↺ Vrátit výchozí znění</button>
@@ -283,6 +352,20 @@ function nastStandard() {
       firemní údaje. Zakázka si při uložení pamatuje jen svoje zadání — vyhodnocení se počítá
       vždy podle <b>aktuálního</b> znění standardu, takže po jeho změně se štítky u starších
       nabídek přepočítají.</div>`;
+}
+
+/* ---------- vnitřní záložka: Databáze (21. 8. 2026) ----------
+ * Nic vlastního nekreslí — jen dá dohromady karty, které do 21. 8. 2026
+ * stály na začátku Přehledu cenových nabídek. Složková databáze je mrtvý
+ * archiv (rozhodnutí #150) a vidí ji jen ten, kdo na ni má právo. */
+function nastDatabaze() {
+  const online = (typeof renderOnlineKarta === 'function') ? renderOnlineKarta() : '';
+  const slozka = (smiZobrazit('uloziste.slozka') && typeof renderUlozisteKarta === 'function')
+    ? renderUlozisteKarta() : '';
+  const prenos = (typeof cenikPrenosKarta === 'function') ? cenikPrenosKarta() : '';
+  return `<div class="note" style="margin-top:0">Spojení s databází, ukládání a zálohy.
+      Zakázku samotnou ukládá tlačítko <b>Uložit zakázku</b> v liště nad kalkulací —
+      tady je jen to, co se nastavuje jednou.</div>${online}${slozka}${prenos}`;
 }
 
 /* ---------- vnitřní záložka: Obecné ---------- */

@@ -345,18 +345,23 @@ ok('obsluha slevy projekce je chráněná zámkem varianty', audit.zamek);
 // --- přepínač „jen projekce" i v kalkulaci PROJ (3. 8. 2026) ---------------
 /* Uživatel ho hledal v hlavičce kalkulace projekce — tak tam je: týž stav
  * ZAK.jenProj, druhé vykreslení (stejný vzor jako karty slevy). */
+/* Od 21. 8. 2026 večer je přepínač JEN v Kalkulaci PROJ: karta „Zakázka PROJ
+ * — nastavení" v Přehledu cenových nabídek byla jeho druhou kopií a s úklidem
+ * záložky zmizela (zadání J. V.). Kontroluje se tedy, že přepínač existuje
+ * právě jednou a že se jeho stav opravdu zapíše. */
 const jp = await p.evaluate(() => {
   const sel = 'input[onchange*="ZAK.jenProj"]';
+  const vsude = document.querySelectorAll(sel).length;
   const naProj = document.querySelector('#page-proj ' + sel);
-  const naZak = document.querySelector('#page-zakazka ' + sel);
-  if (!naProj || !naZak) return { nalezen: false };
+  if (!naProj) return { nalezen: false, vsude };
   naProj.click();                                    // zaškrtnout → set() → render()
   const poZaskrtnuti = ZAK.jenProj === true
-    && document.querySelector('#page-zakazka ' + sel).checked === true;
+    && document.querySelector('#page-proj ' + sel).checked === true;
   document.querySelector('#page-proj ' + sel).click();   // vrátit zpět
-  return { nalezen: true, poZaskrtnuti, vraceno: ZAK.jenProj === false };
+  return { nalezen: true, vsude, poZaskrtnuti, vraceno: ZAK.jenProj === false };
 });
-ok('přepínač „jen projekce" je i v kalkulaci PROJ', jp.nalezen === true);
+ok('přepínač „jen projekce" je v kalkulaci PROJ', jp.nalezen === true);
+ok('a je v aplikaci jen jednou (zdvojená karta v Přehledu zanikla)', jp.vsude === 1, String(jp.vsude));
 ok('je to týž stav jako v hlavičce PROJ (obě místa se propisují)',
    jp.poZaskrtnuti === true && jp.vraceno === true, JSON.stringify(jp));
 

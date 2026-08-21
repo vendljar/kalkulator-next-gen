@@ -149,6 +149,12 @@ const DEFAULT_ZADANI = {
   mustek: false, mustekHloubkaMm: '', mustekSirkaMm: '',
   volitelneVychozi: {}, // výchozí zaškrtnutí volitelných { klíč: bool }
   priplatkyVynechat: [], // klíče příplatků, které se nemají propsat do nabídky
+  /* Položky, které se v TÉTO zakázce nepočítají (21. 8. 2026, zadání J. V.:
+   * „přidej ke všem položkám kalkulace OCK možnost zaškrtnout výchozí
+   * počítání"). Seznam PŮVODNÍCH názvů řádků; prázdný seznam = počítá se
+   * všechno, tedy přesně dnešní chování a Model 1 se nemění ani o korunu.
+   * Vyplňuje ho sloupec Výchozí u nové zakázky (zobrazeniVychoziAplikuj). */
+  nepocitat: [],
 };
 
 function vypocet(zadani, cenik, jekly, fixes = true) {
@@ -557,13 +563,22 @@ function vypocet(zadani, cenik, jekly, fixes = true) {
         pozn: `${Math.round(atypSazba * 1000) / 10} % z nákladu režie (${Math.round(atypZaklad).toLocaleString('cs-CZ')} Kč)` }));
   }
 
-  const sekce = { hrubaOck, oplasteni, volitelne, rezie };
+  /* VYŘAZENÉ POLOŽKY (21. 8. 2026). Filtr stojí schválně až tady, na jednom
+   * jediném místě těsně před součty: kdyby se rozházel po výpočtu, každá
+   * nová položka by musela na vyřazení znovu myslet. Volitelné se nefiltrují —
+   * ty mají vlastní, starší zaškrtávátko „počítat do základní ceny".
+   * Prázdný seznam nedělá nic, takže starší zakázky počítají beze změny. */
+  const nepocitat = Array.isArray(z.nepocitat) ? z.nepocitat.map(String) : [];
+  const jenPocitane = rows => nepocitat.length
+    ? rows.filter(r => nepocitat.indexOf(String(r.origNazev || r.nazev)) < 0) : rows;
+  const sekce = { hrubaOck: jenPocitane(hrubaOck), oplasteni: jenPocitane(oplasteni),
+                  volitelne, rezie: jenPocitane(rezie) };
   const sum = rows => ({
     naklad: rows.reduce((a, r) => a + r.naklad, 0),
     marze: rows.reduce((a, r) => a + r.marze, 0),
     sMarzi: rows.reduce((a, r) => a + r.sMarzi, 0),
   });
-  const s1 = sum(hrubaOck), s2 = sum(oplasteni), s3 = sum(volitelne), s4 = sum(rezie);
+  const s1 = sum(sekce.hrubaOck), s2 = sum(sekce.oplasteni), s3 = sum(sekce.volitelne), s4 = sum(sekce.rezie);
   const nakladBezRezervy = s1.naklad + s2.naklad + s3.naklad + s4.naklad;
   const sMarziBezRezervy = s1.sMarzi + s2.sMarzi + s3.sMarzi + s4.sMarzi;
 

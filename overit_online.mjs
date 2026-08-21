@@ -483,11 +483,20 @@ test('obchodník je přihlášený a roh to říká',
   (await roh()).includes('Zkušební Obchodník') && (await roh()).includes('Obchodník'));
 test('obchodník NENÍ administrátor aplikace',
   await page.evaluate(() => NAST.jeAdmin === false));
-await page.evaluate(() => prepniTab('zakazka'));
-const stranka = await page.locator('#page-zakazka').innerHTML();
+/* Karty databáze se 21. 8. 2026 večer přestěhovaly z Přehledu cenových
+ * nabídek do Nastavení → Databáze (zadání J. V.) — je to nastavení spojení,
+ * ne nástroj obchodníka. Práva se tím nemění: složku vidí jen administrátor,
+ * online databázi každý přihlášený. */
+const stranka = await page.evaluate(() => {
+  otevriNastaveni(); nastPanel('databaze');
+  const el = document.getElementById('nastaveni-panel');
+  const html = el ? el.innerHTML : '';
+  zavriNastaveni();
+  return html;
+});
 test('obchodník nevidí kartu složky _DB (mapování jen pro administrátora)',
   !stranka.includes('Databáze zakázek (složka)'));
-test('obchodník kartu Online databáze vidí',
+test('obchodník kartu Online databáze vidí v Nastavení → Databáze',
   stranka.includes('Online databáze (schaftscalc.netlify.app)'));
 
 /* Přesně to, co uživatel hlásil: „Přihlásil jsem se jako nový uživatel

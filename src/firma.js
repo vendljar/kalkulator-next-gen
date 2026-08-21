@@ -63,6 +63,13 @@ const FIRMA_POLE = [
   { id: 'zpusobFakturaceOck', sekce: 'Smluvní standardy', label: 'Způsob fakturace — OCK', symbol: 'FIRMA_FAKTURACE_OCK' },
   { id: 'zpusobFakturaceProj', sekce: 'Smluvní standardy', label: 'Způsob fakturace — projekce', symbol: 'FIRMA_FAKTURACE_PROJ' },
   { id: 'rozsahDefinice', sekce: 'Smluvní standardy', label: 'Rozsah díla — čím je definován', symbol: 'FIRMA_ROZSAH' },
+  /* Termín dodání OCK (21. 8. 2026, zadání J. V. „atyp = + 4 týdny v CN
+   * termín"). Standardní lhůta je firemní údaj, ne údaj zakázky — mění se
+   * jednou za čas a pro všechny. V krycím listu i v nabídce se předvyplní
+   * a jde přepsat. ŽÁDNÉ VÝCHOZÍ ČÍSLO SE NEVYMÝŠLÍ: dokud tu lhůta není,
+   * zůstane pole v nabídce prázdné (stejné pravidlo jako u cen). */
+  { id: 'terminDodaniOck', sekce: 'Smluvní standardy', label: 'Termín dodání OCK — standardní lhůta', symbol: 'FIRMA_TERMIN_DODANI_OCK' },
+  { id: 'terminAtypTydny', sekce: 'Smluvní standardy', label: '— o kolik týdnů ho prodlužuje ATYP', symbol: 'FIRMA_TERMIN_ATYP_TYDNY' },
 
   /* --- zástupci zhotovitele (20. 8. 2026) ---
    *
@@ -144,6 +151,10 @@ const DEFAULT_FIRMA = {
   zpusobFakturaceOck: 'Náš standard / měsíční',
   zpusobFakturaceProj: 'po dokončení jednotlivých stupňů dokumentace',
   rozsahDefinice: 'je definován přílohou ke smlouvě (specifikace)',
+  /* Prázdná lhůta = „nemáme ji nastavenou"; nabídka pak termín neuvádí
+   * a doplní se ručně. Prodloužení za ATYP je 4 týdny (zadání J. V.). */
+  terminDodaniOck: '',
+  terminAtypTydny: '4',
 
   /* logo: data URL (obrázek se ukládá přímo v konfiguraci, aby šel přenést) */
   logo: '', logoNazev: '',

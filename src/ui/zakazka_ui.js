@@ -85,79 +85,26 @@ function renderZakazka() {
   zajistiProjHlavicku(ZAK);   // starší zakázka hlavičku PROJ ještě nemá
 
   document.getElementById('page-zakazka').innerHTML =
-    card('Zakázka – hlavička OCK',
-      /* Trojice stojí i tady, na začátku karty (zadání 4. 8. 2026: „na
-       * začátek lišty"). Právě v téhle kartě se hlavička vyplňuje, takže
-       * hláška „vyplňte CN a název akce, pak uložte" musí být vidět přesně
-       * tady — ne o dvě obrazovky jinde. */
-      `<div class="zak-cena noprint" style="margin-top:0">${zakTrojice()}</div>${zakUlozeniRadek()}` +
-      inp('ZAK.cislo', { type: 'text', l: 'Číslo nabídky (CN)' }) +
-      inp('ZAK.nazevAkce', { type: 'text', l: 'Název akce' }) +
-      inp('ZAK.adresa', { type: 'text', l: 'Adresa stavby' }) +
-      inp('ZAK.objednatel', { type: 'text', l: 'Zákazník' }) +
-      // KL-2: sídlo objednatele je jiná adresa než stavba. Do krycího listu
-      // (fakturace, smlouva) patří sídlo; prázdné pole se tam neuvede.
-      inp('ZAK.adresaObjednatele', { type: 'text', l: 'Adresa (sídlo) zákazníka' }) +
-      inp('ZAK.kontakt', { type: 'text', l: 'Kontaktní osoba zákazníka' }) +
-      // IČO stojí i tady hned za kontaktní osobou, aby se obě hlavičky četly
-      // ve stejném pořadí jako lišta nad kalkulací (zadání z 30. 7. 2026).
-      inp('ZAK.ico', { type: 'text', l: 'IČO objednatele' }) +
-      // DIČ objednatele (19. 8. 2026): potřebují ho smlouvy o dílo
-      // ({{OBJEDNATEL_DIC}}); dotáhne se z ARES spolu s IČO a sídlem.
-      inp('ZAK.dic', { type: 'text', l: 'DIČ objednatele' }) +
-      // dotaz do rejstříku ARES (#10) – ukáže firmu a teprve na potvrzení přepíše
-      (typeof aresRadek === 'function' ? aresRadek('ock', true) : '') +
-      inp('ZAK.datum', { type: 'date', l: 'Datum' }) +
-      `<div class="note">Adresa stavby a sídlo objednatele se často liší (developer sídlí jinde,
-      než staví). Krycí list bere <b>Adresu stavby</b> do řádku „Adresa stavby" a <b>sídlo</b>
-      do řádku „Adresa objednatele" – dokud sídlo nevyplníte, zůstane v krycím listu prázdné.</div>` +
-      /* Původní trojice se 4. 8. 2026 přestěhovala nahoru a míří do databáze.
-       * Tady zůstala jen práce se SOUBOREM – nic se nemazalo, jen se
-       * tlačítka jmenují podle toho, co opravdu dělají (dřív se „Uložit
-       * zakázku (JSON)" tvářilo jako uložení zakázky a přitom jen stáhlo
-       * soubor do Stažených; do databáze se nezapsalo nic). Soubor je
-       * záchrana pro každého: funguje i bez serveru a bez složky. */
-      `<div class="btns" style="margin-top:10px">
-        <button onclick="ulozZakazku()">Uložit do souboru (JSON)</button>
-        <button onclick="document.getElementById('fileIn').click()">Načíst ze souboru</button>
-      </div>
-      <div class="note">Soubor zakázky obsahuje všechny varianty včetně zadání OCK, technické specifikace,
-      kalkulace PROJ i ceníků. Starší soubory „zadání“ z předchozí verze aplikace lze také načíst –
-      převedou se na zakázku s jednou variantou. <b>Do databáze</b> zakázku uloží tlačítko
-      „Uložit zakázku" nahoře; po prvním uložení se ukládá sama po každé změně.</div>`) +
-    (typeof renderOnlineKarta === 'function' ? renderOnlineKarta() : '') +
-    /* Složka _DB je věc administrátora (zadání 4. 8. 2026): běžný uživatel
-     * pracuje čistě s online databází a mapování Disku nikdy nevidí. */
-    (smiZobrazit('uloziste.slozka') && typeof renderUlozisteKarta === 'function' ? renderUlozisteKarta() : '') +
-    card('Zakázka PROJ — nastavení',
-      /* Oddělená hlavička PROJ skončila 19. 8. 2026 (zadání J. V.): hlavička
-       * je JEDNA SPOLEČNÁ — nabídka projekce i OCK nesou tytéž údaje z karty
-       * „Zakázka – hlavička OCK" výše. Zůstává jen to, co je opravdu
-       * projekční: přepínač „jen projekce". */
-      `<div class="row" style="margin-top:2px"><label>Zakázka je jen projekce (bez OCK)</label>
-        <input type="checkbox" ${ZAK.jenProj ? 'checked' : ''} onchange="set('ZAK.jenProj', this.checked)"><span class="u"></span></div>
-      <div class="note">Projekce se někdy prodává samostatně (2. 8. 2026). Se zaškrtnutím přestanou
-        platit kontroly nad zadáním OCK, sleva ZAK-10 (počítá se z ceny šachty) a část OCK
-        v porovnání variant i v marži nabídky — čistě projekční nabídka tak nesvítí varováními
-        o šachtě, kterou nikdo neprodává. Data OCK zůstávají, jen se nikam nepočítají;
-        odškrtnutím se vše vrátí.</div>
-      <div class="note">Hlavička zakázky je od 19. 8. 2026 <b>společná pro OCK i PROJ</b> —
-      vyplňuje se jednou v kartě výše a platí pro cenovou nabídku OCK (CN), nabídku PROJ (OVP-CN)
-      i oba krycí listy.</div>`) +
-    seznamKarta() +
-    /* #37 – interní zápisník zakázky. Stojí nad kartami nabídek schválně:
-     * „proč jsme šli s cenou dolů" je potřeba mít na očích právě ve chvíli,
-     * kdy se nabídka chystá ven. Do žádného dokumentu se nedostane. */
-    (typeof poznamkyKarta === 'function'
-      ? card('Interní poznámky a přílohy k zakázce (netisknou se)', poznamkyKarta()) : '') +
-    /* Obě cenové nabídky na jednom místě. Nabídky se nikam neukládají –
-     * generují se vždy živě z dat otevřené varianty; stejné karty zůstávají
-     * i na konci záložek Kalkulace OCK a Kalkulace PROJ (nic se neodebralo). */
-    card('Cenová nabídka OCK (CN)', nabidkaKarta()) +
-    card('Cenová nabídka PROJ (OVP-CN)',
-      typeof nabidkaProjKarta === 'function' ? nabidkaProjKarta() : '') +
-    porovnaniKarta() +
-    porovnaniPolozkyKarta() +
+    /* PŘESKLÁDÁNO 21. 8. 2026 večer (zadání J. V.). Záložka byla dlouhá
+     * a z velké části zdvojená: hlavička zakázky, nastavení PROJ, obě cenové
+     * nabídky i smluvní a platební podmínky se vyplňují v kalkulacích a
+     * v krycích listech, kde k nim patří vstupy. Tady zůstává to, co se
+     * jinde nedělá — NAJÍT nabídku a PODÍVAT SE, jak zakázka dopadla:
+     *
+     *   1. vyhledání nabídek OCK / PROJ   (nové, nahradilo kartu hlavičky)
+     *   2. souhrn řídící varianty          (hned pod hledáním, pokyn J. V.)
+     *   3. varianty zakázky, porovnání, protokol
+     *
+     * Co se odsud ODSTRANILO a kde to je (nic nezaniklo):
+     *   – Zakázka – hlavička OCK        → lišta „Zakázka a varianta" nad kalkulacemi
+     *   – Zakázka PROJ — nastavení      → přepínač „jen projekce" v Kalkulaci PROJ
+     *   – Interní poznámky a přílohy    → konec záložky Kalkulace OCK
+     *   – Cenová nabídka OCK (CN)       → konec záložky Technická specifikace OCK
+     *   – Cenová nabídka PROJ (OVP-CN)  → Kalkulace PROJ
+     *   – Smluvní a platební podmínky, Typ smlouvy a produktu, Platební podmínky
+     *     (obě verze)                   → krycí listy OCK / PROJ a karty nabídek
+     *   – Online databáze, Zakázky ve složce → Nastavení → Databáze */
+    (typeof prehledHledaniKarta === 'function' ? prehledHledaniKarta() : '') +
     card('Souhrn řídící varianty — ' + esc(rid.nazev),
       `<div class="grand">
         <div class="kpi"><div class="l">OCK bez DPH</div><div class="v">${fmt0(ridOck)}</div></div>
@@ -165,18 +112,33 @@ function renderZakazka() {
         <div class="kpi"><div class="l">PROJ celkem</div><div class="v">${fmt0(ridProj)}</div></div>
         <div class="kpi main"><div class="l">OCK + PROJ bez DPH</div><div class="v">${fmt0(ridOck + ridProj)}</div></div>
       </div>`) +
+    seznamKarta() +
+    porovnaniKarta() +
+    porovnaniPolozkyKarta() +
     /* #41 – protokol o kalkulaci. Stojí naopak úplně dole: není to nástroj
      * k práci, ale doklad, do kterého se chodí, když se někdo ptá zpětně. */
     (typeof protokolKarta === 'function'
       ? card('Protokol o kalkulaci (kdo, kdy a co změnil)', protokolKarta(), true) : '') +
-    `<div class="note">Cenové nabídky se nikam neukládají – generují se vždy živě z aktuálních dat
-     (kartami výše, nebo na konci záložek <b>Kalkulace OCK</b> a <b>Kalkulace PROJ</b> – obojí je totéž).
-     Uložená jsou jen data v souboru zakázky. Údaje objednatele výše se do nabídek propíší.</div>`;
+    /* Soubor je záchrana pro každého: funguje i bez serveru a bez složky.
+     * Karta je schválně poslední a sbalená — do databáze zakázku ukládá
+     * tlačítko „Uložit zakázku" v liště nad kalkulací. */
+    card('Zakázka jako soubor (záloha)',
+      `<div class="btns" style="margin-top:2px">
+        <button onclick="ulozZakazku()">Uložit do souboru (JSON)</button>
+        <button onclick="document.getElementById('fileIn').click()">Načíst ze souboru</button>
+      </div>
+      <div class="note">Soubor zakázky obsahuje všechny varianty včetně zadání OCK, technické specifikace,
+      kalkulace PROJ i ceníků. Starší soubory „zadání" z předchozí verze aplikace lze také načíst –
+      převedou se na zakázku s jednou variantou. <b>Do databáze</b> zakázku uloží tlačítko
+      „Uložit zakázku" v liště nad kalkulací; po prvním uložení se ukládá sama po každé změně.</div>`);
 
   /* Tělo seznamu se plní až po vložení karty do stránky – ovládací lišta
    * je v HTML výše, ale řádky doplňuje renderSeznam, aby se stejnou cestou
    * překreslovaly i při psaní do hledání (bez globálního render()). */
   renderSeznam();
+  /* Totéž u vyhledávání nabídek: tělo se plní až teď, aby šlo při psaní
+   * překreslit samotnou tabulku a kurzor zůstal v políčku. */
+  if (typeof renderPrehledHledaniTelo === 'function') renderPrehledHledaniTelo();
   // Stejný důvod jako u seznamu: tělo protokolu se plní až po vložení karty
   // do stránky, aby šlo překreslit samotný protokol i mimo globální render().
   if (typeof renderProtokol === 'function') renderProtokol();

@@ -33,11 +33,16 @@ const STANDARD_VYCHOZI = {
   /* Kontrola je ve VÝCHOZÍM STAVU VYPNUTÁ (pokyn J. V.): standard se teprve
    * zabíhá a než bude tabulka odladěná, nemá nikomu svítit červený štítek. */
   zapnuto: false,
+  /* OBĚ VĚTVE MAJÍ TÝŽ TVAR (21. 8. 2026 večer, zadání J. V.: „sjednoť vizuál
+   * nastavení standardu OCK podle vnitřní šachty"). Do té doby měl exteriér
+   * jeden společný limit pro všechny profily a interiér tabulku po profilech —
+   * dvě obrazovky pro tutéž věc. Teď má i exteriér řádek na profil; že jsou
+   * dnes u obou profilů čísla stejná, je věc standardu, ne tvaru dat. */
   exterier: {
-    profily: ['80x80', '100x100'],
-    vyskaMaxM: 30,
-    sirkaMaxMm: 2000,
-    hloubkaMaxMm: 2000,
+    profily: [
+      { profil: '80x80', vyskaMaxM: 30, sirkaMaxMm: 2000, hloubkaMaxMm: 2000 },
+      { profil: '100x100', vyskaMaxM: 30, sirkaMaxMm: 2000, hloubkaMaxMm: 2000 },
+    ],
     zaskleni: 'souvislé jednotypové zasklení po celém povrchu',
   },
   /* Interiér má limity PODLE PROFILU — každý profil svou výšku a hloubku. */
@@ -47,6 +52,11 @@ const STANDARD_VYCHOZI = {
       { profil: '80x50', vyskaMaxM: 30, sirkaMaxMm: 1800, hloubkaMaxMm: 2500 },
     ],
     zaskleni: 'zasklívací terče na profily, sklo do rámečku',
+    /* Povolené způsoby zasklení uvnitř budovy. Do 21. 8. 2026 se hlídaly jen
+     * terče a „sklo do rámečku" (v zadání volba „mezi příčníky (lišty)")
+     * hlásilo atyp — přitom je součástí standardu (nález J. V.). Hodnoty
+     * odpovídají volbám v Zadání šachty → Způsob zasklení. */
+    zaskleniPovolene: ['na terče', 'mezi příčníky'],
   },
   mustek: {
     hloubkaMaxMm: 1000,
@@ -71,6 +81,34 @@ function _cislo(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+/* Řádky tabulky limitů (profil + tři čísla). Používají je OBĚ větve, aby se
+ * exteriér a interiér nemohly rozejít tvarem.
+ *
+ * MIGRACE STARŠÍHO TVARU: do 21. 8. 2026 byl `exterier.profily` seznam
+ * ŘETĚZCŮ a limity ležely vedle něj (exterier.vyskaMaxM…). Uložená
+ * konfigurace takový tvar pořád nese, takže se z něj poskládá řádek —
+ * jinak by se firmě po nasazení tiše vrátily výchozí limity. */
+function _radyOciste(pole, spolecneLimity) {
+  if (!Array.isArray(pole)) return null;
+  const rady = pole.map(r => {
+    if (typeof r === 'string') {
+      const p = r.trim();
+      return p ? { profil: p, ...spolecneLimity } : null;
+    }
+    const o = r || {};
+    /* Záporný ani nulový limit nedává smysl — zahodí se na prázdno
+     * („nevíme"), nikdy se nenahrazuje vymyšleným číslem. */
+    const kladne = x => { const n = _cislo(x); return (n !== null && n > 0) ? n : null; };
+    return {
+      profil: String(o.profil || '').trim(),
+      vyskaMaxM: kladne(o.vyskaMaxM),
+      sirkaMaxMm: kladne(o.sirkaMaxMm),
+      hloubkaMaxMm: kladne(o.hloubkaMaxMm),
+    };
+  }).filter(r => r && r.profil);
+  return rady.length ? rady : null;
+}
+
 /* Očista uloženého standardu — server ani starší konfigurace nesmí protlačit
  * nesmysl. Chybějící části se doplní z výchozího znění. */
 function standardOciste(vstup) {
@@ -80,24 +118,29 @@ function standardOciste(vstup) {
   s.zapnuto = v.zapnuto === true;
   if (v.exterier && typeof v.exterier === 'object') {
     const e = v.exterier;
-    if (Array.isArray(e.profily)) s.exterier.profily = e.profily.map(x => String(x).trim()).filter(Boolean);
-    ['vyskaMaxM', 'sirkaMaxMm', 'hloubkaMaxMm'].forEach(k => {
-      const n = _cislo(e[k]); if (n !== null && n > 0) s.exterier[k] = n;
-    });
+    /* Limity ze starého tvaru se použijí jako společný základ řádků. */
+    const spol = {
+      vyskaMaxM: _cislo(e.vyskaMaxM) || d.exterier.profily[0].vyskaMaxM,
+      sirkaMaxMm: _cislo(e.sirkaMaxMm) || d.exterier.profily[0].sirkaMaxMm,
+      hloubkaMaxMm: _cislo(e.hloubkaMaxMm) || d.exterier.profily[0].hloubkaMaxMm,
+    };
+    const rady = _radyOciste(e.profily, spol);
+    if (rady) s.exterier.profily = rady;
     if (typeof e.zaskleni === 'string') s.exterier.zaskleni = e.zaskleni.slice(0, 200);
   }
   if (v.interier && typeof v.interier === 'object') {
     const i = v.interier;
-    if (Array.isArray(i.profily)) {
-      const rady = i.profily.map(r => ({
-        profil: String((r || {}).profil || '').trim(),
-        vyskaMaxM: _cislo((r || {}).vyskaMaxM),
-        sirkaMaxMm: _cislo((r || {}).sirkaMaxMm),
-        hloubkaMaxMm: _cislo((r || {}).hloubkaMaxMm),
-      })).filter(r => r.profil);
-      if (rady.length) s.interier.profily = rady;
-    }
+    const rady = _radyOciste(i.profily, {
+      vyskaMaxM: d.interier.profily[0].vyskaMaxM,
+      sirkaMaxMm: d.interier.profily[0].sirkaMaxMm,
+      hloubkaMaxMm: d.interier.profily[0].hloubkaMaxMm,
+    });
+    if (rady) s.interier.profily = rady;
     if (typeof i.zaskleni === 'string') s.interier.zaskleni = i.zaskleni.slice(0, 200);
+    /* Prázdný seznam povolených způsobů zasklení znamená „nekontroluje se" —
+     * a to je platná volba, takže se NEPŘEPISUJE výchozím zněním. */
+    if (Array.isArray(i.zaskleniPovolene))
+      s.interier.zaskleniPovolene = i.zaskleniPovolene.map(x => String(x).trim()).filter(Boolean);
   }
   if (v.mustek && typeof v.mustek === 'object') {
     const n = _cislo(v.mustek.hloubkaMaxMm); if (n !== null && n > 0) s.mustek.hloubkaMaxMm = n;
@@ -153,17 +196,15 @@ function standardVyhodnot(z, vyskaM, std, pripl) {
   kontrol++;
   if (!profil) {
     nalezy.push(_nalez('Profil sloupku', '—', 'neuvedeno', 'nelze'));
-  } else if (ext) {
-    const povolene = s.exterier.profily.map(standardNormProfil);
-    if (povolene.indexOf(profil) < 0)
-      nalezy.push(_nalez('Profil sloupku (exteriér)', s.exterier.profily.join(' nebo '), profil));
-    limity = { vyskaMaxM: s.exterier.vyskaMaxM, sirkaMaxMm: s.exterier.sirkaMaxMm,
-               hloubkaMaxMm: s.exterier.hloubkaMaxMm };
   } else {
-    const rada = s.interier.profily.find(r => standardNormProfil(r.profil) === profil);
+    /* Jedna větev pro obě strany (21. 8. 2026): exteriér i interiér mají
+     * limity PO PROFILECH, liší se jen tabulka a jméno v nálezu. */
+    const vetev = ext ? s.exterier : s.interier;
+    const kde = ext ? 'exteriér' : 'interiér';
+    const rada = vetev.profily.find(r => standardNormProfil(r.profil) === profil);
     if (!rada) {
-      nalezy.push(_nalez('Profil sloupku (interiér)',
-        s.interier.profily.map(r => r.profil).join(' nebo '), profil));
+      nalezy.push(_nalez('Profil sloupku (' + kde + ')',
+        vetev.profily.map(r => r.profil).join(' nebo '), profil));
       /* Neznámý profil = neznámé limity. Rozměry se pak neposuzují proti
        * cizí tabulce; samotný profil je nález a to stačí. */
     } else {
@@ -196,8 +237,11 @@ function standardVyhodnot(z, vyskaM, std, pripl) {
   kontrol++;
   const zaskleniZad = String(zad.zaskleni || '').toLowerCase();
   if (!ext) {
-    /* Interiér: standardem jsou terče na profily. */
-    if (zaskleniZad && zaskleniZad.indexOf('terč') < 0)
+    /* Interiér: standardem jsou zasklívací terče na profily NEBO sklo do
+     * rámečku (volba „mezi příčníky (lišty)" v zadání). Seznam povolených
+     * způsobů je v Nastavení — prázdný seznam znamená, že se nekontroluje. */
+    const povolene = (s.interier.zaskleniPovolene || []).map(x => String(x).toLowerCase());
+    if (zaskleniZad && povolene.length && povolene.indexOf(zaskleniZad) < 0)
       nalezy.push(_nalez('Opláštění (interiér)', s.interier.zaskleni, zad.zaskleni));
   }
   /* Jednotypovost: víc druhů skla v příplatcích není standard (rozhodnutí
