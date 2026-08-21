@@ -218,8 +218,7 @@ function renderProj() {
    *   Sleva projekce má vlastní kartu pod výpočtem (#134, 12. 8. 2026) a
    *   počítá se z ceny projekce – patří k ceně, která jde ven, ne k tomu,
    *   z čeho se počítá. Popisky sedí vpravo u svých hodnot (.prm). */
-  const hlava = `<div class="kalk-title">${ZAK.cislo ? `<span class="kt-cislo">${esc(ZAK.cislo)}</span>` : ''}${
-    typeof variantaStavPill === 'function' ? variantaStavPill() : ''}${esc(ZAK.nazevAkce || 'Bez názvu akce')}</div>
+  const hlava = `<div class="kalk-title">${ZAK.cislo ? `<span class="kt-cislo">${esc(ZAK.cislo)}</span>` : ''}${esc(ZAK.nazevAkce || 'Bez názvu akce')}</div>
   <div class="grand">
     <div class="kpi main"><div class="l">Základní cena bez DPH</div><div class="v">${fmt0(r.souhrn.cena)}</div></div>
     <div class="kpi kpi-multi">

@@ -123,9 +123,13 @@ const dnesViditelne = Z.ZOBRAZENI_PRVKY.filter(p => ROLE.some(r => p.vychozi[r])
  * detailproj, kryciproj, zakazka, schvalovani). Ty, které dnes vidí každý,
  * musí zůstat výchozí ZAPNUTÉ — jinak by matice sama zhasla půlku aplikace
  * všem, kdo nejsou administrátoři. Proto jsou tady jako výjimky. */
+/* 21. 8. 2026: `nastaveni.standard` je první prvek, který má VEDOUCÍ a
+ * obchodník ne (zadání J. V.: standard smí měnit administrátor a vedoucí).
+ * Do té doby platilo, že vedoucí nemá proti obchodníkovi žádnou výhodu —
+ * ta kontrola níž proto nově zná jednu výjimku. */
 const VYCHOZI_ZAPNUTE = ['nastaveni.slevy', 'nastaveni.sablony', 'kalk.pridatPolozku',
   'tab.spec', 'tab.kryci', 'tab.proj', 'tab.kryciproj', 'tab.zakazka', 'tab.zakaznici',
-  'tab.schvalovani'];
+  'tab.schvalovani', 'nastaveni.standard'];
 test('dnes je pro běžné role viditelné jen to, co je zdokumentované jako výjimka',
   dnesViditelne.every(k => VYCHOZI_ZAPNUTE.includes(k)), dnesViditelne);
 /* Každá záložka z lišty musí mít v matici svůj klíč — jinak se nedá řídit
@@ -137,8 +141,10 @@ test('každá záložka aplikace (kromě domovské) má v matici svůj klíč',
    'tab.kryciproj', 'tab.cenik', 'tab.cenikproj', 'tab.zakazka', 'tab.zakaznici',
    'tab.schvalovani']
     .every(k => KLICE_ZALOZEK.includes(k)), KLICE_ZALOZEK.join(', '));
-test('vedoucí dnes nemá proti obchodníkovi v zobrazení žádnou výhodu',
-  Z.ZOBRAZENI_PRVKY.every(p => p.vychozi['Vedoucí'] === p.vychozi['Obchodník']));
+test('vedoucí má proti obchodníkovi navíc JEN Standard OCK',
+  Z.ZOBRAZENI_PRVKY.filter(p => p.vychozi['Vedoucí'] !== p.vychozi['Obchodník'])
+    .map(p => p.klic).join(',') === 'nastaveni.standard',
+  Z.ZOBRAZENI_PRVKY.filter(p => p.vychozi['Vedoucí'] !== p.vychozi['Obchodník']).map(p => p.klic));
 
 /* ---------- 4) očista uložené matice ---------- */
 

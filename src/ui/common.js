@@ -68,6 +68,11 @@ const NAST = {
    * horním rohu klikem na jméno a v Nastavení → Zobrazení. Náhled je vždy
    * JEN KE ČTENÍ (zamek_ui.js) a po odhlášení i po obnovení stránky se ruší:
    * nikdo se nesmí omylem dívat cizíma očima a myslet si, že jsou jeho. */
+  /* Firemní standard OCK (#163, 21. 8. 2026). Výchozí znění je v
+   * standard_ock.js; zveřejňuje se na server jako ceník a matice zobrazení.
+   * Kontrola je ve výchozím stavu VYPNUTÁ. */
+  standard: (typeof STANDARD_VYCHOZI !== 'undefined')
+    ? JSON.parse(JSON.stringify(STANDARD_VYCHOZI)) : {},
   nahledUzivatel: null,
   nahledMenu: false,           // rozbalená nabídka náhledu pod jménem v liště
   jazyk: 'cz',                 // jazyk dokumentů: cz | en | de | fr (N1 – jazykové mutace)
@@ -541,14 +546,81 @@ function variantaStavPill() {
   const v = (typeof aktivniVarianta === 'function') ? aktivniVarianta(ZAK) : null;
   if (!v) return '';
   const z = (typeof zamekInfo === 'function') ? zamekInfo(v) : null;
+  /* Text je celá věta (21. 8. 2026, zadání J. V.): samotné „aktivní" vedle
+   * čísla nabídky se dalo číst i jako stav zakázky nebo účtu. Štítek sedí
+   * v tlačítkové liště nad kalkulací, kde je vidět i po odrolování. */
   if (z) {
     const kdy = String(z.kdy || '').slice(0, 10);
     return `<span class="stav-pill zamcena" title="Odeslaná nabídka se zpětně needituje.${
       z.popis ? ' ' + esc(z.popis) : ''}${kdy ? ' (' + esc(kdy) + ')' : ''} Pokračujte klonem varianty."
-      >🔒 uzamčená</span>`;
+      >🔒 Nabídka uzamčena</span>`;
   }
   return `<span class="stav-pill aktivni" title="Rozpracovaná varianta — dá se měnit a počítá se z ní nabídka."
-    >● aktivní</span>`;
+    >● Nabídka aktivní</span>`;
+}
+
+/* ---------- štítek Standard OCK (#163, 21. 8. 2026) ----------
+ * Vyhodnocení drží čistá funkce `standardVyhodnot` v src/standard_ock.js;
+ * tady je jen štítek do lišty a rozpis pod ním. Kontrola nic neblokuje
+ * a nic nepřepočítává — je to informace, ne zábrana. Když je vypnutá
+ * (výchozí stav), štítek se vůbec nekreslí. */
+let STD_ROZPIS = false;      // je rozpis nálezů rozbalený? (stav obrazovky)
+
+function standardVysledek() {
+  if (typeof standardVyhodnot !== 'function') return null;
+  let r;
+  try { r = vypocet(Z, C, JEKLY, OCK.fixes); } catch (e) { r = null; }
+  const vyska = r && r.odvozene ? r.odvozene.vyskaSachty : null;
+  /* Jednotypovost zasklení: názvy skel, která opravdu jdou do nabídky.
+   * „Zvolené" znamená dvě věci najednou — příplatek NENÍ vyškrtnutý ze
+   * sloupce Nabídka a má nenulové množství. Bez druhé podmínky by se
+   * hlásilo míchání skel i u šachty, kde je druhé sklo jen v ceníku
+   * s nulou. Míchání dvou druhů není standard (rozhodnutí J. V. 21. 8.). */
+  const vynechane = Z.priplatkyVynechat || [];
+  const skla = (r && r.priplatky ? r.priplatky : [])
+    .filter(x => x && /sklo/i.test(String(x.nazev || ''))
+      && vynechane.indexOf(x.key) < 0 && (+x.mnozstvi || 0) > 0)
+    .map(x => x.nazev);
+  return standardVyhodnot(Z, vyska, NAST.standard, skla);
+}
+
+function standardPill() {
+  const v = standardVysledek();
+  if (!v || v.stav === 'vypnuto') return '';
+  const tridy = { standard: 'ok', atyp: 'atyp', nelze: 'nejisto' };
+  const popis = {
+    standard: 'Šachta odpovídá firemnímu standardu OCK. Kliknutím rozbalíte, co se kontrolovalo.',
+    atyp: 'Šachta je mimo firemní standard. Kliknutím rozbalíte nálezy.',
+    nelze: 'K posouzení chybí údaj. Kliknutím rozbalíte, který.',
+  };
+  return `<span class="std-pill ${tridy[v.stav]}" onclick="standardRozpisPrepni()"
+    title="${esc(popis[v.stav])}">${esc(standardPopis(v))} ${STD_ROZPIS ? '▴' : '▾'}</span>`;
+}
+
+function standardRozpisPrepni() { STD_ROZPIS = !STD_ROZPIS; render(); }
+
+/* Rozpis pod lištou — kreslí se jen rozbalený a jen tam, kde má smysl
+ * (Kalkulace OCK a Technická specifikace). */
+function standardRozpis() {
+  if (!STD_ROZPIS) return '';
+  const v = standardVysledek();
+  if (!v || v.stav === 'vypnuto') return '';
+  const barva = v.stav === 'standard' ? 'background:#dcfce7;color:#166534'
+    : (v.stav === 'atyp' ? 'background:#fee2e2;color:#991b1b' : 'background:#fff7e6;color:#92400e');
+  const radky = v.nalezy.length
+    ? v.nalezy.map(n => `<tr><td>${esc(n.co)}</td><td>${esc(n.limit)}</td>
+        <td style="font-weight:600">${esc(n.zadano)}${n.stav === 'nelze' ? ' <span class="pill mut">nelze posoudit</span>' : ''}</td></tr>`).join('')
+    : `<tr><td colspan="3">Všech ${v.kontrol} kontrolovaných pravidel sedí.</td></tr>`;
+  /* Nabídka zapnout ATYP se ukazuje jen u skutečného atypu a jen tomu, kdo
+   * na to má právo. Nikdy se nezapíná sama — přirážka mění cenu. */
+  const nabidka = (v.stav === 'atyp' && !Z.atyp && smiZobrazit('sloupce.naklad'))
+    ? `<div style="padding:8px 12px;border-top:1px solid var(--line)">
+         <button class="mini" onclick="atypPrepni(true)">Zapnout ATYP a přirážku</button>
+         <span class="note" style="margin-left:8px">Přirážku nikdy nezapínáme sami — cena se nesmí změnit bez vás.</span>
+       </div>` : '';
+  return `<div class="std-panel noprint">
+    <div class="hd" style="${barva}">${esc(standardPopis(v))} — kontrolováno ${v.kontrol} pravidel</div>
+    <table><tr><th>Pravidlo</th><th>Standard</th><th>V zadání</th></tr>${radky}</table>${nabidka}</div>`;
 }
 
 /* Karta s režimem sekce (20. 8. 2026, zadání J. V.).
@@ -605,6 +677,9 @@ function kalkLista(ock) {
     <button class="hist2 jsHistZnovu" disabled onclick="historieZnovu()">↷ Znovu</button>
     <span class="odd"></span>
     ${chips.map(([id, t]) => `<a class="dv-kotva" href="#${id}">${esc(t)}</a>`).join('')}
+    <span style="margin-left:auto;display:inline-flex;gap:8px;align-items:center">${
+      typeof variantaStavPill === 'function' ? variantaStavPill() : ''}${
+      typeof standardPill === 'function' ? standardPill() : ''}</span>
   </div>`;
 }
 
@@ -657,6 +732,11 @@ function zakazkaHlavicka(ock) {
      * „Najít firmu v ARES" (zadání J. V.) — jsou to tři varianty jedné věci:
      * odkud vzít údaje o firmě. Na vlastním řádku pod ARES vypadala jako
      * něco jiného a odsouvala datum o kus níž. */
+    /* Řádek „odkud vzít údaje o firmě" (21. 8. 2026, zadání J. V.):
+     * VŠECHNA tři tlačítka v jednom řádku, v pořadí databáze → uložit → ARES,
+     * zarovnaná zleva s popiskem „IČO zákazníka" a zprava s koncem pole IČO.
+     * Proto vlastní řádek s `justify-content:space-between`, ne mřížka .row
+     * s prázdným popiskem — ta začínala až u pole a tlačítka se lámala. */
     const zakDbBtns = (typeof zakazniciMozne === 'function' && zakazniciMozne() && kde === 'ock')
       ? `<button class="mini noprint" onclick="prepniTab('zakaznici')"
            title="vybrat zákazníka z databáze — přenese hlavičku i kontakty do krycích listů"
@@ -1231,6 +1311,12 @@ const TABY = ['kalk', 'detail', 'spec', 'specdata', 'kryci', 'proj', 'detailproj
 function prepniTab(t) {
   if (!tabViditelny(t)) t = 'kalk';
   TAB = t;
+  /* Přepnutí záložky jen přepíná viditelnost, NEVYKRESLUJE (21. 8. 2026).
+   * Záložka Zákazníci si data stahuje až při otevření — bez tohohle řádku
+   * zůstala viset na „Načítám zákazníky…", dokud uživatel neobnovil stránku
+   * (hlášeno J. V.). Načtení si samo zavolá překreslení, až dorazí. */
+  if (t === 'zakaznici' && typeof zakazniciNacti === 'function'
+      && typeof ZAK_DB !== 'undefined' && !ZAK_DB.nacteno) zakazniciNacti();
   TABY.forEach(x => {
     document.getElementById('page-' + x).style.display = x === t ? '' : 'none';
     document.getElementById('tab-' + x).className = (x === t ? 'act' : '') + (tabViditelny(x) ? '' : ' skryt');

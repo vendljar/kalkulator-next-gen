@@ -140,6 +140,13 @@ const DEFAULT_ZADANI = {
   cenyPrepis: {},       // ruční přepis jedn. ceny u položek bez ceníkové vazby { název: cena }
   poradi: {},           // ruční pořadí řádků v sekcích { sekce: [klíče] } (jen zobrazení)
   skryteProUzivatele: [], // klíče položek skryté běžnému uživateli
+  /* Můstek mezi budovou a OCK (#163, 21. 8. 2026). Do té doby existoval jen
+   * jako věta v technické specifikaci — bez čísel se nedal hlídat standard
+   * („hloubka max 1000 mm, šířka max na šířku OCK"). Do VÝPOČTU nevstupuje:
+   * jsou to evidenční údaje pro kontrolu standardu a pro dokument.
+   * Prázdné rozměry znamenají „nevyplněno", ne nulu — kontrola standardu je
+   * pak hlásí jako „nelze posoudit". */
+  mustek: false, mustekHloubkaMm: '', mustekSirkaMm: '',
   volitelneVychozi: {}, // výchozí zaškrtnutí volitelných { klíč: bool }
   priplatkyVynechat: [], // klíče příplatků, které se nemají propsat do nabídky
 };

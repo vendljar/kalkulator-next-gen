@@ -316,6 +316,77 @@ test('telefon a e-mail mají všude vlastní pole (žádný slepenec „tel / ma
       && h.includes('ZAK.zastupci.smluvniPozice');
   }));
 
+/* ---------- Standard OCK (#163, 21. 8. 2026) ----------
+ * Kontrola nic neblokuje, takže se její chyba pozná jen tichým „zeleno"
+ * tam, kde má být červená. Sada hlídá cestu od vypínače po štítek. */
+test('vypnutá kontrola (výchozí stav) nekreslí žádný štítek',
+  await page.evaluate(() => {
+    prepniTab('kalk'); render();
+    return NAST.standard.zapnuto === false
+      && !document.querySelector('.kalk-lista .std-pill');
+  }));
+test('zapnutá kontrola štítek ukáže a pozná atyp',
+  await page.evaluate(() => {
+    NAST.standard.zapnuto = true;
+    Z.typSachty = 'exteriérová'; Z.hloubka = 2.48; Z.profily.sloupek.dim = '80x80';
+    render();
+    const p = document.querySelector('.kalk-lista .std-pill');
+    return !!p && /ATYP OCK/.test(p.textContent) && p.className.includes('atyp');
+  }));
+test('rozpis se rozbalí a vypíše limit i zadanou hodnotu',
+  await page.evaluate(() => {
+    standardRozpisPrepni();
+    const t = (document.querySelector('.std-panel') || {}).textContent || '';
+    return /max 2000 mm/.test(t) && /2480 mm/.test(t);
+  }));
+test('u atypu nabídne zapnout přirážku, ale sama ji nezapne',
+  await page.evaluate(() => {
+    const t = (document.querySelector('.std-panel') || {}).textContent || '';
+    return /Zapnout ATYP a přirážku/.test(t) && Z.atyp !== true;
+  }));
+/* Ve výchozím zadání jsou v nabídce DVĚ skla (VSG i SKN) — to je „nelze
+ * posoudit", ne standard. Pro zkoušku zelené se jedno vyškrtne ze sloupce
+ * Nabídka, ať zbyde jeden druh zasklení. */
+test('standardní šachta má zelený štítek',
+  await page.evaluate(() => {
+    Z.hloubka = 1.9; Z.priplatkyVynechat = ['skn']; render();
+    const p = document.querySelector('.kalk-lista .std-pill');
+    return !!p && /STANDARD OCK/.test(p.textContent) && p.className.includes('ok');
+  }));
+test('můstek bez rozměrů hlásí „nelze posoudit", ne atyp',
+  await page.evaluate(() => {
+    Z.mustek = true; render();
+    const p = document.querySelector('.kalk-lista .std-pill');
+    return !!p && /NELZE POSOUDIT/.test(p.textContent) && p.className.includes('nejisto');
+  }));
+test('rozměry můstku se v zadání ptají, teprve když můstek je',
+  await page.evaluate(() => {
+    const s = document.getElementById('page-kalk').innerHTML;
+    Z.mustek = false; render();
+    const bez = document.getElementById('page-kalk').innerHTML;
+    return s.includes('Z.mustekHloubkaMm') && !bez.includes('Z.mustekHloubkaMm');
+  }));
+test('štítek je i v technické specifikaci',
+  await page.evaluate(() => {
+    prepniTab('spec'); renderTechspec();
+    return !!document.querySelector('#page-spec .std-pill');
+  }));
+test('do vytištěné specifikace štítek nejde (noprint)',
+  await page.evaluate(() => {
+    const p = document.querySelector('#page-spec .std-pill');
+    return !!p && p.closest('.noprint') !== null;
+  }));
+test('stav nabídky je v tlačítkové liště a je to celá věta',
+  await page.evaluate(() => {
+    prepniTab('kalk'); render();
+    const p = document.querySelector('.kalk-lista .stav-pill');
+    prepniTab('proj'); render();
+    const pp = document.querySelector('#page-proj .kalk-lista .stav-pill');
+    return !!p && /Nabídka aktivní/.test(p.textContent)
+      && !!pp && /Nabídka aktivní/.test(pp.textContent);
+  }));
+await page.evaluate(() => { NAST.standard.zapnuto = false; Z.hloubka = 1.515; render(); });
+
 /* ---------- volitelné položky: co smí obchodník (nález J. V. 20. 8. 2026) ----------
  * Obchodník tu neměl zaškrtávátka a viděl JEN položky, které už zahrnuté
  * byly — nemohl tedy žádnou přidat ani ubrat. Zahrnutí je přitom JEHO volba

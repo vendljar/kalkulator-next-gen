@@ -1,7 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <!-- Favicon aplikace. 12. 8. 2026 byl tmavě modrý ($ #0B2E6B) na průhledném
-       pozadí; 21. 8. 2026 přebarven na SVĚTLE ZELENOU (#86E8AD) — tutéž, jakou
-       má ikona v hlavičce (ikona_hlavicka.svg). Důvod (zadání J. V.): karty
+       pozadí; 21. 8. 2026 přebarven na ZELENOU. Důvod (zadání J. V.): karty
        prohlížeče jsou v tmavém režimu tmavé a tmavě modrý znak na nich splýval,
        takže záložka aplikace nebyla mezi ostatními k nalezení. Zelená „svítí"
        na světlém i tmavém podkladu.
@@ -11,10 +10,12 @@
        tvarově se liší jen v detailu. `text-anchor` a `dominant-baseline`
        drží znak na středu i tam, kde se metriky písma trochu liší.
 
-       Tmavý obrys drží tvar čitelný i na bílém pozadí — samotná světlá zelená
-       by se na bílé kartě ztratila. -->
+       Odstín je TMAVŠÍ zelená (#3FBF7F) než ikona v hlavičce (#86E8AD,
+       21. 8. 2026 na pokyn J. V.): hlavička je tmavě modrá a snese světlou
+       zeleň, karta prohlížeče je ale často bílá a světlá zeleň se na ní
+       ztrácela. Tmavý obrys drží tvar čitelný na obou podkladech. -->
   <text x="32" y="34" text-anchor="middle" dominant-baseline="central"
         font-family="Arial, Helvetica, sans-serif" font-size="56" font-weight="700"
         stroke="#0B2E6B" stroke-width="2.5" paint-order="stroke"
-        fill="#86E8AD">$</text>
+        fill="#3FBF7F">$</text>
 </svg>

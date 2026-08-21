@@ -65,7 +65,16 @@ function zakaznikZeZakazkyUI() {
   prepniTab('zakaznici'); render();
 }
 
-function zakaznikSet(id, v) { if (ZAK_DB.otevreny) { ZAK_DB.otevreny[id] = v; } }
+/* Po změně pole se PŘEKRESLUJE (21. 8. 2026). Bez toho zůstalo tlačítko
+ * „Najít firmu v ARES" zhasnuté i po vyplnění IČO — jeho stav se počítá při
+ * vykreslení a nic ho nepřepočítalo (hlášeno J. V.: „hledání v ARES u nového
+ * zákazníka nefunguje"). `onchange` se spouští až po opuštění pole, takže
+ * překreslení nikomu nebere rozepsaný text. */
+function zakaznikSet(id, v) {
+  if (!ZAK_DB.otevreny) return;
+  ZAK_DB.otevreny[id] = v;
+  render();
+}
 
 function zakaznikUloz() {
   const z = ZAK_DB.otevreny;

@@ -114,10 +114,19 @@
   /* Stav otevřené varianty vedle čísla nabídky (21. 8. 2026). Zelená = dá se
      měnit, červená = odeslaná a zamčená. Tiskne se taky: na papíře je pak
      vidět, jestli šlo o rozpracovanou kalkulaci, nebo o odeslanou nabídku. */
-  .kalk-title .stav-pill { font-size:11px; font-weight:700; padding:1px 9px; border-radius:20px;
-                           margin-right:10px; vertical-align:middle; letter-spacing:.2px; }
-  .kalk-title .stav-pill.aktivni { background:#dcfce7; color:#166534; border:1px solid #86efac; }
-  .kalk-title .stav-pill.zamcena { background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; }
+  .stav-pill { font-size:11.5px; font-weight:700; padding:2px 11px; border-radius:20px;
+               white-space:nowrap; letter-spacing:.2px; }
+  .stav-pill.aktivni { background:#dcfce7; color:#166534; border:1px solid #86efac; }
+  .stav-pill.zamcena { background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; }
+  /* Štítek Standard OCK (21. 8. 2026) — vedle stavu nabídky v téže liště. */
+  .std-pill { font-size:11.5px; font-weight:800; padding:2px 11px; border-radius:20px;
+              white-space:nowrap; letter-spacing:.3px; cursor:pointer; border:1.5px solid; }
+  .std-pill.ok { background:#dcfce7; color:#166534; border-color:#16a34a; }
+  .std-pill.atyp { background:#fee2e2; color:#991b1b; border-color:#dc2626; }
+  .std-pill.nejisto { background:#fff7e6; color:#92400e; border-color:#f59e0b; }
+  .std-panel { border:1px solid var(--line); border-radius:8px; margin:8px 0 0; overflow:hidden; }
+  .std-panel .hd { padding:6px 12px; font-weight:700; font-size:12.5px; }
+  .std-panel table { margin:0; }
   /* ozubené kolo + modální panel Nastavení */
   header .gear { background:transparent; border-color:#3a4761; color:#cdd7e8; font-size:16px; line-height:1; padding:6px 10px; }
   header .gear:hover { background:#2b3850; }

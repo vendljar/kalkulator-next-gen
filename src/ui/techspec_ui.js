@@ -198,7 +198,16 @@ function renderTechspec() {
     <div class="spec-doc">
       ${tsJazykBar()}
       ${tsKontrolaBar()}
-      <h1>Technická specifikace výtahové šachty</h1>
+      <!-- Štítek Standardu OCK (#163, 21. 8. 2026) i tady: specifikace je
+           papír, který jde k zákazníkovi jako příloha smlouvy — je užitečné
+           vidět, jestli popisuje standardní výrobek, ještě než se vytiskne.
+           Do vytištěného dokumentu štítek nejde (noprint): je to naše
+           interní informace, ne údaj pro zákazníka. -->
+      <div class="noprint" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0">
+        <h1 style="margin:0;flex:1">Technická specifikace výtahové šachty</h1>
+        ${typeof standardPill === 'function' ? standardPill() : ''}
+      </div>
+      ${typeof standardRozpis === 'function' ? standardRozpis() : ''}
       <div class="sub">(tato technická specifikace bude použita jako příloha Smlouvy o dílo nebo závazné objednávky)</div>
       <div class="spec-row"><div class="lbl">ČÍSLO NABÍDKY</div><div><input type="text" value="${esc(ZAK.cislo)}" onchange="set('ZAK.cislo', this.value)"></div><div></div></div>
       <div class="spec-row"><div class="lbl">OBJEDNATEL</div><div><input type="text" value="${esc(ZAK.objednatel)}" onchange="set('ZAK.objednatel', this.value)"></div><div></div></div>

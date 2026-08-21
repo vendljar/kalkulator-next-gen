@@ -31,6 +31,21 @@ function renderInputs() {
        * vrací na nulu / ceník — atypové přirážky bez atypu nemají co dělat. */
       `<div class="row"><label>ATYP (nestandardní zakázka)</label>
         <input type="checkbox" ${Z.atyp ? 'checked' : ''} onchange="atypPrepni(this.checked)"><span class="u"></span></div>` +
+      /* Můstek (#163, 21. 8. 2026). Do výpočtu nevstupuje — je to vstup pro
+       * kontrolu standardu a pro technickou specifikaci. Rozměry se ptají,
+       * jen když můstek je; prázdné pole znamená „nevyplněno", ne nulu. */
+      `<div class="row"><label>Můstek mezi budovou a OCK</label>
+        <input type="checkbox" ${Z.mustek ? 'checked' : ''} onchange="set('Z.mustek', this.checked)"><span class="u"></span></div>` +
+      (Z.mustek
+        ? `<div class="row"><label>— hloubka můstku</label>
+             <input type="number" step="10" min="0" style="width:110px" value="${esc(Z.mustekHloubkaMm == null ? '' : Z.mustekHloubkaMm)}"
+               placeholder="mm" title="vzdálenost mezi budovou a OCK; standard max 1 000 mm"
+               onchange="set('Z.mustekHloubkaMm', this.value)"><span class="u">mm</span></div>
+           <div class="row"><label>— šířka můstku</label>
+             <input type="number" step="10" min="0" style="width:110px" value="${esc(Z.mustekSirkaMm == null ? '' : Z.mustekSirkaMm)}"
+               placeholder="mm" title="standard: max na šířku OCK"
+               onchange="set('Z.mustekSirkaMm', this.value)"><span class="u">mm</span></div>`
+        : '') +
       /* Sazba ATYP se 20. 8. 2026 přestěhovala z Nastavení → Obecné SEM
        * (dotaz J. V. „proč to máme v obecném nastavení?"). Je to parametr
        * TÉTO zakázky, ne nastavení aplikace: bydlí v ceníku varianty
@@ -571,8 +586,7 @@ function renderOutputs() {
     ? `<div class="kpi-line"><span class="kl">Obchodní zaokrouhlení</span><span class="kv">${esc(zaokrKc(cn.zaokrKc))}</span></div>`
       + `<div class="kpi-line"><span class="kl">Cena nabídky bez DPH</span><span class="kv">${fmt0(cenaPoSleve)}</span></div>`
     : '';
-  const hlava = `<div class="kalk-title">${ZAK.cislo ? `<span class="kt-cislo">${esc(ZAK.cislo)}</span>` : ''}${
-    typeof variantaStavPill === 'function' ? variantaStavPill() : ''}${esc(ZAK.nazevAkce || 'Bez názvu akce')}</div>
+  const hlava = `<div class="kalk-title">${ZAK.cislo ? `<span class="kt-cislo">${esc(ZAK.cislo)}</span>` : ''}${esc(ZAK.nazevAkce || 'Bez názvu akce')}</div>
   <div class="grand">
     <div class="kpi main"><div class="l">Základní cena bez DPH</div><div class="v">${fmt0(zaklad)}</div></div>
     <div class="kpi kpi-multi">
@@ -685,7 +699,8 @@ function renderOutputs() {
    * cenová kalkulace, vše na plnou šířku jako v kalkulaci PROJ. */
   const elSouhrn = document.getElementById('kalk-souhrn');
   if (elSouhrn) elSouhrn.innerHTML =
-    `<div class="card"><div class="body">${hlava}${marzeLista({ cast: 'ock' })}</div></div>`;
+    (typeof standardRozpis === 'function' ? standardRozpis() : '')
+    + `<div class="card"><div class="body">${hlava}${marzeLista({ cast: 'ock' })}</div></div>`;
   document.getElementById('outputs').innerHTML =
     (elSouhrn ? '' : `<div class="card"><div class="body">${hlava}${marzeLista({ cast: 'ock' })}</div></div>`) +
     card('Cenová kalkulace', kalkulace, false, 'ock-kalkulace') +

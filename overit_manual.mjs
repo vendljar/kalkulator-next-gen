@@ -73,6 +73,9 @@ test('příručka říká, kde se tvoří smlouva o dílo',
   /Krycí list zakázky OCK/.test(html) && /Kde se tvoří dokumenty/.test(html));
 test('příručka popisuje databázi zákazníků',
   /Zákazníci: co vyplníte jednou/.test(html) && /Zakázka je vždycky pán/.test(html));
+test('příručka popisuje Standard OCK a jeho tři stavy',
+  /Standard OCK: pozná se atyp sám/.test(html) && /NELZE POSOUDIT/.test(html)
+  && /Nic to neblokuje/.test(html));
 test('příručka používá pojem zákazník, ne objednatel',
   /v aplikaci se všude říká „zákazník"|Zástupci a kontakty zákazníka/i.test(html));
 test('žádné skutečné ceníkové soubory v textu',

@@ -95,12 +95,32 @@ function aresPrepisPotvrd(kde) {
 function aresRadek(kde, sJednotkou, navic) {
   const hl = aresHlavicka(kde);
   const muze = typeof icoVyplneno === 'function' && icoVyplneno(hl.ico);
-  const tlacitko = `<button class="mini noprint" onclick="aresHledej('${kde}')"
+  /* `margin-left:auto` drží ARES u PRAVÉ hrany řádku, ať jsou vedle něj dvě
+   * tlačítka databáze zákazníků, nebo žádné. Zarovnání pravé hrany s polem
+   * IČO hlídá overit_lista.mjs. */
+  const tlacitko = `<button class="mini noprint" style="margin-left:auto" onclick="aresHledej('${kde}')"
     title="${muze ? 'zeptat se rejstříku ARES, jaká firma pod tímto IČO je'
                   : 'nejdřív vyplňte IČO zákazníka'}"${muze ? '' : ' disabled'}>🔎 Najít firmu v ARES</button>`;
   const panel = (ARES.kde === kde) ? aresPanel(kde) : '';
-  const jednotka = sJednotkou ? '<span class="u"></span>' : '';
-  return `<div class="row"><label></label><div style="display:flex;gap:6px;flex-wrap:wrap">${tlacitko}${navic || ''}</div>${jednotka}</div>${panel}`;
+  /* Prázdný sloupeček „jednotka" se kreslí VŽDY (21. 8. 2026): řádky
+   * s poli ho mají taky, a bez něj by tlačítková řada končila o 42 px dál
+   * než pole nad ní. Právě tohle zarovnání hlídá overit_lista.mjs. */
+  const jednotka = '<span class="u"></span>';
+  void sJednotkou;
+  /* Pořadí (21. 8. 2026, zadání J. V.): nejdřív databáze zákazníků, pak
+   * uložení, ARES až nakonec — u známého zákazníka je databáze rychlejší
+   * cesta než rejstřík. Řádek se roztahuje přes popisek i pole, takže levá
+   * hrana lícuje s textem „IČO zákazníka" a pravá s koncem pole. */
+  /* `space-between` roztáhne trojici přes celou šířku řádku: první tlačítko
+   * lícuje zleva s popiskem „IČO zákazníka", poslední zprava s koncem pole
+   * IČO (zadání J. V. 21. 8. 2026). Zarovnání pravé hrany hlídá
+   * overit_lista.mjs — proto je ARES schválně poslední. */
+  /* Řádek si NEPŘENASTAVUJE gap: `.row` má 8 px a podle nich se počítá, kde
+   * končí sloupec s poli. Vlastních 6 px posunulo pravou hranu o dva pixely
+   * a zarovnání se rozešlo (nález ze zkoušky 21. 8. 2026). */
+  return `<div class="row noprint">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;flex:1">${navic || ''}${tlacitko}</div>
+      ${jednotka}</div>${panel}`;
 }
 
 function aresPanel(kde) {

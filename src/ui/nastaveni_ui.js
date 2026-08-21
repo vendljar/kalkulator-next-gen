@@ -31,6 +31,7 @@ const NAST_PANELY = [
   { id: 'uzivatele', nazev: 'Uživatelé', klic: 'nastaveni.uzivatele', telo: () => nastUzivatele() },
   { id: 'slevy', nazev: 'Slevy', klic: 'nastaveni.slevy', telo: () => nastSlevy() },
   { id: 'sablony', nazev: 'Smlouvy / Šablony', klic: 'nastaveni.sablony', telo: () => nastSablony() },
+  { id: 'standard', nazev: 'Standard OCK', klic: 'nastaveni.standard', telo: () => nastStandard() },
   { id: 'zobrazeni', nazev: 'Zobrazení', klic: 'nastaveni.zobrazeni', telo: () => nastZobrazeni() },
   { id: 'konfigurace', nazev: 'Konfigurace', klic: 'nastaveni.konfigurace', telo: () => nastKonfigurace() },
   { id: 'slovnik', nazev: 'Slovník', klic: 'nastaveni.slovnik', telo: () => nastSlovnik() },
@@ -147,6 +148,141 @@ function nastSetAtyp(v) {
   if (proc > 300) proc = 300;          // pojistka proti překlepu (3000 místo 30)
   C.atypPrirazka = proc / 100;
   nastRefresh();
+}
+
+/* ---------- vnitřní záložka: Standard OCK (#163, 21. 8. 2026) ----------
+ * Tabulka limitů, podle které kalkulace i technická specifikace rozhodují,
+ * jestli je šachta standardní, nebo atyp. Vědomě je v Nastavení, ne v kódu:
+ * standard se mění a měnit ho musí jít bez nové dávky.
+ * Měnit ho smí administrátor a vedoucí (rozhodnutí J. V. 21. 8. 2026) —
+ * proto vlastní právo `nastaveni.standard` v matici zobrazení. */
+function stdData() {
+  if (!NAST.standard || typeof NAST.standard !== 'object')
+    NAST.standard = (typeof STANDARD_VYCHOZI !== 'undefined')
+      ? JSON.parse(JSON.stringify(STANDARD_VYCHOZI)) : {};
+  return NAST.standard;
+}
+
+function stdPrepniKontrolu() {
+  const s = stdData();
+  s.zapnuto = !s.zapnuto;
+  nastRefresh();
+}
+
+function stdSet(cesta, hodnota) {
+  const s = stdData();
+  const ks = cesta.split('.'); const last = ks.pop();
+  const cil = ks.reduce((o, k) => (o[k] = o[k] || {}), s);
+  cil[last] = hodnota;
+  nastRefresh();
+}
+
+function stdProfilySet(kde, text) {
+  stdSet(kde + '.profily', String(text || '').split(',').map(x => x.trim()).filter(Boolean));
+}
+
+function stdRadaSet(i, klic, hodnota) {
+  const s = stdData();
+  if (!s.interier || !Array.isArray(s.interier.profily)) return;
+  s.interier.profily[i][klic] = klic === 'profil' ? String(hodnota).trim() : (+hodnota || 0);
+  nastRefresh();
+}
+
+function stdRadaPridej() {
+  const s = stdData();
+  s.interier.profily.push({ profil: '', vyskaMaxM: 25, sirkaMaxMm: 1800, hloubkaMaxMm: 1800 });
+  nastRefresh();
+}
+
+function stdRadaSmaz(i) {
+  const s = stdData();
+  s.interier.profily.splice(i, 1);
+  nastRefresh();
+}
+
+function stdObnovVychozi() {
+  if (!confirm('Vrátit celý standard na výchozí znění z 21. 8. 2026?')) return;
+  NAST.standard = JSON.parse(JSON.stringify(STANDARD_VYCHOZI));
+  nastRefresh();
+}
+
+function nastStandard() {
+  if (!smiZobrazit('nastaveni.standard'))
+    return `<div class="note">Firemní standard OCK smí měnit <b>administrátor a vedoucí</b>.</div>`;
+  const s = standardOciste(stdData());
+  NAST.standard = s;
+  const zap = s.zapnuto;
+
+  const radaHtml = (r, i) => `<tr>
+    <td><input type="text" style="width:100px" value="${esc(r.profil)}" onchange="stdRadaSet(${i}, 'profil', this.value)"></td>
+    <td><input type="number" step="0.5" style="width:78px" value="${esc(r.vyskaMaxM)}" onchange="stdRadaSet(${i}, 'vyskaMaxM', this.value)"> m</td>
+    <td><input type="number" step="10" style="width:90px" value="${esc(r.sirkaMaxMm)}" onchange="stdRadaSet(${i}, 'sirkaMaxMm', this.value)"> mm</td>
+    <td><input type="number" step="10" style="width:90px" value="${esc(r.hloubkaMaxMm)}" onchange="stdRadaSet(${i}, 'hloubkaMaxMm', this.value)"> mm</td>
+    <td><button class="mini" onclick="stdRadaSmaz(${i})" title="odebrat řádek">✕</button></td></tr>`;
+
+  return `<div class="note" style="margin-top:0">Podle téhle tabulky se v <b>Kalkulaci OCK</b>
+      i v <b>Technické specifikaci</b> rozhoduje, jestli je šachta <b>standardní</b>, nebo <b>atyp</b>.
+      Kontrola <b>nikdy nic neblokuje a nemění cenu</b> — jen ukazuje štítek a seznam nálezů;
+      přirážku ATYP zapíná vždycky člověk. Rozměry se posuzují jako <b>vnitřní</b>,
+      výška jako <b>celková výška konstrukce</b> (zdvih + horní přejezd + prohlubeň)
+      a o typu konstrukce rozhoduje <b>profil sloupku</b>.</div>
+
+    <div class="sec-title">Kontrola standardu</div>
+    <div class="btns">
+      <button class="${zap ? 'primary' : ''}" onclick="stdPrepniKontrolu()">
+        Kontrola STD: ${zap ? 'Aktivní' : 'Neaktivní'}</button>
+      <span class="note" style="margin-left:8px">${zap
+        ? 'Štítek STANDARD OCK / ATYP OCK svítí v liště kalkulace i ve specifikaci.'
+        : 'Vypnuto — nikde se nic nekreslí. Zapněte, až bude tabulka odladěná.'}</span>
+    </div>
+
+    <div class="sec-title">Exteriér (venkovní šachta)</div>
+    <div class="row"><label>Povolené profily sloupku <span class="note">(oddělte čárkou)</span></label>
+      <input type="text" value="${esc((s.exterier.profily || []).join(', '))}"
+        onchange="stdProfilySet('exterier', this.value)"><span class="u"></span></div>
+    <div class="row"><label>Výška konstrukce max</label>
+      <input type="number" step="0.5" style="width:100px" value="${esc(s.exterier.vyskaMaxM)}"
+        onchange="stdSet('exterier.vyskaMaxM', +this.value)"><span class="u">m</span></div>
+    <div class="row"><label>Vnitřní šířka max</label>
+      <input type="number" step="10" style="width:100px" value="${esc(s.exterier.sirkaMaxMm)}"
+        onchange="stdSet('exterier.sirkaMaxMm', +this.value)"><span class="u">mm</span></div>
+    <div class="row"><label>Vnitřní hloubka max</label>
+      <input type="number" step="10" style="width:100px" value="${esc(s.exterier.hloubkaMaxMm)}"
+        onchange="stdSet('exterier.hloubkaMaxMm', +this.value)"><span class="u">mm</span></div>
+    <div class="row"><label>Opláštění <span class="note">(popis do nálezu)</span></label>
+      <input type="text" value="${esc(s.exterier.zaskleni)}"
+        onchange="stdSet('exterier.zaskleni', this.value)"><span class="u"></span></div>
+
+    <div class="sec-title">Interiér (vnitřní šachta) — limity podle profilu</div>
+    <table class="sd-tbl"><thead><tr><th>Profil sloupku</th><th>Výška max</th>
+      <th>Vnitřní šířka max</th><th>Vnitřní hloubka max</th><th></th></tr></thead>
+      <tbody>${(s.interier.profily || []).map(radaHtml).join('')}</tbody></table>
+    <div class="btns"><button class="mini" onclick="stdRadaPridej()">+ přidat profil</button></div>
+    <div class="row"><label>Opláštění <span class="note">(standard: terče na profily)</span></label>
+      <input type="text" value="${esc(s.interier.zaskleni)}"
+        onchange="stdSet('interier.zaskleni', this.value)"><span class="u"></span></div>
+
+    <div class="sec-title">Můstek</div>
+    <div class="row"><label>Hloubka max <span class="note">(mezi budovou a OCK)</span></label>
+      <input type="number" step="10" style="width:100px" value="${esc(s.mustek.hloubkaMaxMm)}"
+        onchange="stdSet('mustek.hloubkaMaxMm', +this.value)"><span class="u">mm</span></div>
+    <div class="row"><label>Šířka max <span class="note">(strop, i když je „na šířku OCK")</span></label>
+      <input type="number" step="10" style="width:100px" value="${esc(s.mustek.sirkaMaxMm)}"
+        onchange="stdSet('mustek.sirkaMaxMm', +this.value)"><span class="u">mm</span></div>
+    <label style="display:flex;align-items:center;gap:8px;margin:6px 0">
+      <input type="checkbox" ${s.mustek.sirkaJakoOck ? 'checked' : ''}
+        onchange="stdSet('mustek.sirkaJakoOck', this.checked)"> Šířka můstku nesmí přesáhnout šířku OCK</label>
+    <label style="display:flex;align-items:center;gap:8px;margin:6px 0">
+      <input type="checkbox" ${s.jedenTypZaskleni ? 'checked' : ''}
+        onchange="stdSet('jedenTypZaskleni', this.checked)"> Standard je <b>jeden typ zasklení</b> — míchání druhů skel je atyp</label>
+
+    <div class="btns" style="margin-top:12px">
+      <button class="mini" onclick="stdObnovVychozi()">↺ Vrátit výchozí znění</button>
+    </div>
+    <div class="note" style="margin-top:6px">Standard se ukládá do konfigurace aplikace stejně jako
+      firemní údaje. Zakázka si při uložení pamatuje jen svoje zadání — vyhodnocení se počítá
+      vždy podle <b>aktuálního</b> znění standardu, takže po jeho změně se štítky u starších
+      nabídek přepočítají.</div>`;
 }
 
 /* ---------- vnitřní záložka: Obecné ---------- */

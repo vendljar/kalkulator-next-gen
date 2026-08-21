@@ -350,6 +350,17 @@ const ZOBRAZENI_PRVKY = [
         + 'nestandardní o tolik". Vedoucí to u složité šachty posoudí líp než ceník.',
   },
   {
+    klic: 'nastaveni.standard', skupina: 'nastaveni', nazev: 'Nastavení → Standard OCK',
+    kde: 'Nastavení (ozubené kolo) → Standard OCK',
+    popis: 'Tabulka limitů firemního standardu OCK: povolené profily, výšky, šířky, hloubky, '
+         + 'opláštění a rozměry můstku — a vypínač celé kontroly.',
+    vychozi: { 'Obchodník': false, 'Vedoucí': true },
+    navrh: { 'Obchodník': false, 'Vedoucí': true },
+    proc: 'Standard je obchodní i technické rozhodnutí firmy, ne věc jedné zakázky '
+        + '(zadání J. V. 21. 8. 2026: měnit ho smí administrátor a vedoucí). Obchodník '
+        + 'výsledek vidí jako štítek v kalkulaci, ale limity nenastavuje.',
+  },
+  {
     klic: 'nastaveni.zobrazeni', skupina: 'nastaveni', nazev: 'Nastavení → Zobrazení (tato matice)',
     kde: 'Nastavení, vnitřní záložka Zobrazení',
     popis: 'Sama tato tabulka práv — tedy rozhodnutí o tom, co která role v aplikaci vidí.',
