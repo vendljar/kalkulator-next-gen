@@ -106,6 +106,80 @@ const ZOBRAZENI_PRVKY = [
   },
 
   /* ---------- náklady a marže ---------- */
+  /* Zbývající záložky (20. 8. 2026, nález J. V.: „nastavení → zobrazení
+   * nereflektuje aktuální stav aplikace — nemůžu ovládat zhasínání
+   * schvalování slev"). Do 20. 8. měla matice jen čtyři záložky a zbytek se
+   * dal skrýt výhradně globálním přepínačem v Nastavení → Obecné, který
+   * ale platil VŠEM včetně administrátora. Teď má každá záložka svůj klíč.
+   * Výchozí hodnoty jsou nastavené tak, aby se dnešní chování nezměnilo:
+   * co dnes vidí všichni, zůstává zapnuté. Kalkulace OCK klíč nemá
+   * schválně — je to domovská záložka a náhrada za každou skrytou; kdyby
+   * se dala skrýt, neměl by se uživatel kam vrátit. */
+  {
+    klic: 'tab.spec', skupina: 'zalozky', nazev: 'Záložka Technická specifikace OCK',
+    kde: 'horní lišta záložek',
+    popis: 'Technický popis šachty a na jejím konci tisk cenové nabídky OCK.',
+    vychozi: { 'Obchodník': true, 'Vedoucí': true },
+    navrh: { 'Obchodník': true, 'Vedoucí': true },
+    proc: 'Obchodník bez ní neudělá nabídku — tisk nabídky OCK je na jejím konci. '
+        + 'Skrývat ji dává smysl leda někomu, kdo dělá výhradně projekci.',
+  },
+  {
+    klic: 'tab.kryci', skupina: 'zalozky', nazev: 'Záložka Krycí list zakázky OCK',
+    kde: 'horní lišta záložek',
+    popis: 'Podklad pro objednávku a smlouvu o dílo OCK; na konci vzniká smlouva.',
+    vychozi: { 'Obchodník': true, 'Vedoucí': true },
+    navrh: { 'Obchodník': true, 'Vedoucí': true },
+    proc: 'Krycí list vyplňuje obchodník. Bez něj nemá kde zadat platební podmínky '
+        + 'ani zástupce zákazníka, které pak jdou do smlouvy.',
+  },
+  {
+    klic: 'tab.proj', skupina: 'zalozky', nazev: 'Záložka Kalkulace PROJ',
+    kde: 'horní lišta záložek',
+    popis: 'Celá kalkulace projekčních prací a tisk nabídky PROJ.',
+    vychozi: { 'Obchodník': true, 'Vedoucí': true },
+    navrh: { 'Obchodník': true, 'Vedoucí': true },
+    proc: 'Kdo prodává jen ocelovou konstrukci, projekci nepotřebuje — a naopak. '
+        + 'Skrytí je tu proto, aby šlo rozhraní zúžit podle toho, co kdo dělá.',
+  },
+  {
+    klic: 'tab.detailproj', skupina: 'zalozky', nazev: 'Záložka Detail výpočtu PROJ',
+    kde: 'horní lišta záložek',
+    popis: 'Rozpad ceny projekčních prací po sekcích a hodinách.',
+    vychozi: { 'Obchodník': false, 'Vedoucí': false },
+    navrh: { 'Obchodník': false, 'Vedoucí': true },
+    proc: 'Do 20. 8. 2026 se řídil týmž právem jako Detail výpočtu OCK. Dostal vlastní '
+        + 'klíč, protože se ty dvě věci reálně přidělují zvlášť: projekční detail ukazuje '
+        + 'hodinové sazby, konstrukční nikoli.',
+  },
+  {
+    klic: 'tab.kryciproj', skupina: 'zalozky', nazev: 'Záložka Krycí list zakázky PROJ',
+    kde: 'horní lišta záložek',
+    popis: 'Podklad pro smlouvu o dílo na projekci a plnou moc.',
+    vychozi: { 'Obchodník': true, 'Vedoucí': true },
+    navrh: { 'Obchodník': true, 'Vedoucí': true },
+    proc: 'Stejný důvod jako u krycího listu OCK: vyplňuje ho obchodník a bez něj '
+        + 'nemá kde zadat podmínky, které pak jdou do smlouvy o dílo na projekci.',
+  },
+  {
+    klic: 'tab.zakazka', skupina: 'zalozky', nazev: 'Záložka Přehled cenových nabídek',
+    kde: 'horní lišta záložek',
+    popis: 'Seznam uložených zakázek a variant, načítání, klonování, porovnání.',
+    vychozi: { 'Obchodník': true, 'Vedoucí': true },
+    navrh: { 'Obchodník': true, 'Vedoucí': true },
+    proc: 'Bez ní se obchodník nedostane ke svým dřívějším nabídkám. Skrývat ji '
+        + 'nedoporučuji — spíš omezit, co v ní kdo smí (mazání, odemykání).',
+  },
+  {
+    klic: 'tab.schvalovani', skupina: 'zalozky', nazev: 'Záložka Schvalování slev',
+    kde: 'horní lišta záložek',
+    popis: 'Fronta žádostí o slevu nad strop role a rozhodování o nich.',
+    vychozi: { 'Obchodník': true, 'Vedoucí': true },
+    navrh: { 'Obchodník': true, 'Vedoucí': true },
+    proc: 'Obchodník tu vidí, jak dopadla jeho žádost, vedoucí tu rozhoduje. '
+        + 'Samotné právo rozhodnout drží zvlášť „Schvalování slevy nad strop role" — '
+        + 'skrytí záložky tedy nikomu právo nebere, jen mu ji vezme z očí.',
+  },
   {
     klic: 'sloupce.naklad', skupina: 'cisla', nazev: 'Sloupce Náklad a Přirážka v kalkulaci',
     kde: 'Kalkulace OCK i PROJ – tabulka cenové kalkulace',

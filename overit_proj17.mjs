@@ -45,8 +45,12 @@ test('rozpis se vykreslil a nese kroky výpočtu',
     && /Koncová cena/.test(document.getElementById('page-detailproj').innerHTML)));
 test('rozpis zná vzorec dopravy mimo Prahu',
   await p.evaluate(() => /km \/ 60 × 1 000/.test(document.getElementById('page-detailproj').innerHTML)));
-test('záložka se řídí týmž právem jako detail OCK (tab.detail)',
-  await p.evaluate(() => TAB_ZOBRAZENI_KLIC.detailproj === 'tab.detail'));
+/* 20. 8. 2026: Detail výpočtu PROJ dostal VLASTNÍ klíč v matici. Do té doby
+ * sdílel právo s detailem OCK, takže je nešlo přidělit zvlášť — a projekční
+ * detail přitom ukazuje hodinové sazby, konstrukční nikoli. */
+test('záložka má vlastní klíč v matici zobrazení (tab.detailproj)',
+  await p.evaluate(() => TAB_ZOBRAZENI_KLIC.detailproj === 'tab.detailproj'
+    && !!zobrazeniPrvek('tab.detailproj')));
 
 /* ---------- 2) doprava mimo Prahu ---------- */
 console.log('\ndoprava mimo Prahu (km / 60 × 1000)');

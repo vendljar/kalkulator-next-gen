@@ -93,8 +93,23 @@ const poVypnuti = await page.evaluate(() => {
   return { klic: NAST.tabViditelnost.schvalovani,
     display: getComputedStyle(document.getElementById('tab-schvalovani')).display };
 });
-test('vědomě vypnutá záložka zůstane vypnutá', poVypnuti.klic === false, JSON.stringify(poVypnuti));
-test('vypnutá záložka se nezobrazuje', poVypnuti.display === 'none', poVypnuti.display);
+test('vědomě vypnutá záložka zůstane v importovaném nastavení vypnutá',
+  poVypnuti.klic === false, JSON.stringify(poVypnuti));
+/* 20. 8. 2026: `tabViditelnost` je MRTVÉ POLE — viditelnost záložek řídí
+ * matice zobrazení (Nastavení → Zobrazení), která platí po rolích a bydlí
+ * na serveru. Import starého souboru ho tedy smí donést, ale na obrazovku
+ * už nemá vliv; kontrola se proto ptá na matici. */
+test('na obrazovku má vliv jen matice zobrazení, ne staré pole',
+  poVypnuti.display !== 'none', poVypnuti.display);
+test('a maticí se záložka schvalování vypnout DÁ',
+  await page.evaluate(() => {
+    NAST.zobrazeni['tab.schvalovani'] = { 'Obchodník': false, 'Vedoucí': false };
+    NAST.jeAdmin = false; NAST.nahledRole = 'Obchodník'; render();
+    const skryta = getComputedStyle(document.getElementById('tab-schvalovani')).display === 'none';
+    NAST.jeAdmin = true; NAST.nahledRole = '';
+    NAST.zobrazeni['tab.schvalovani'] = { 'Obchodník': true, 'Vedoucí': true }; render();
+    return skryta;
+  }));
 
 /* ---------- B) cesta k přihlášení přežije chybu překreslení ---------- */
 

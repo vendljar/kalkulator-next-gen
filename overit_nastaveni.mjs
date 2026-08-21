@@ -113,11 +113,13 @@ zkus('shodné nastavení se znovu nezapíše', zbytecne.v === false && zbytecne.
 // 5. změna přes běžný setter se uloží sama (jen se zpožděním)
 const setter = await stranka.evaluate(async () => {
   const pred = window.ZAPISY;
-  nastToggleTab('proj', false);
+  nastSetNaklady(false);
   const hnedPo = window.ZAPISY;
   await new Promise(r => setTimeout(r, NASTDB_PRODLEVA + 400));
   const d = JSON.parse(window.SLOZKA.get(NASTDB_SOUBOR));
-  return { pred, hnedPo, po: window.ZAPISY, ulozeno: d.nastaveni.tabViditelnost.proj };
+  /* 20. 8. 2026: `nastToggleTab` zanikl s duplicitním seznamem záložek
+   * v Obecném — zkouška odkládaného zápisu jede přes jiný běžný setter. */
+  return { pred, hnedPo, po: window.ZAPISY, ulozeno: d.nastaveni.zobrazitNaklady };
 });
 zkus('změna se nezapisuje okamžitě', setter.hnedPo === setter.pred);
 zkus('ale po chvíli klidu ano', setter.po === setter.pred + 1, setter.pred + ' → ' + setter.po);
@@ -149,17 +151,19 @@ const restart = await stranka.evaluate(async () => {
   const zaloha = window.SLOZKA.get(NASTDB_SOUBOR);
   // simulace nového spuštění: paměť zpátky na výchozí, složka zůstane
   NAST.firma.nazev = 'něco úplně jiného';
-  NAST.tabViditelnost.proj = true;
+  NAST.zobrazitNaklady = true;
   NASTDB_STAV.razitko = ''; NASTDB_STAV.otisk = ''; NASTDB_STAV.nacteno = false;
   const puvodniFirma = NAST.firma, puvodniTs = TS_C[Object.keys(TS_C)[0]];
   const v = await nastdbNactiZeSlozky();
-  return { v, zaloha, nazev: NAST.firma.nazev, proj: NAST.tabViditelnost.proj,
+  return { v, zaloha, nazev: NAST.firma.nazev, proj: NAST.zobrazitNaklady,
            stejnaReference: NAST.firma === puvodniFirma && TS_C[Object.keys(TS_C)[0]] === puvodniTs,
            hlaska: NASTDB_STAV.hlaska };
 });
 zkus('po spuštění se nastavení načte ze složky', restart.v === true);
 zkus('firemní údaje jsou zpátky', restart.nazev === 'ABCD', String(restart.nazev));
-zkus('i viditelnost záložek', restart.proj === false);
+/* 20. 8. 2026: zkouška jede přes `zobrazitNaklady` — `tabViditelnost` je
+ * mrtvé pole (viditelnost záložek přešla do matice zobrazení). */
+zkus('i ostatní nastavení kalkulace', restart.proj === false);
 zkus('objekty se mění na místě, otevřené formuláře drží', restart.stejnaReference === true);
 zkus('obsluha vidí, co se načetlo', /ABCD/.test(restart.hlaska), restart.hlaska);
 

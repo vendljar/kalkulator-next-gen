@@ -316,6 +316,59 @@ test('telefon a e-mail mají všude vlastní pole (žádný slepenec „tel / ma
       && h.includes('ZAK.zastupci.smluvniPozice');
   }));
 
+/* ---------- volitelné položky: co smí obchodník (nález J. V. 20. 8. 2026) ----------
+ * Obchodník tu neměl zaškrtávátka a viděl JEN položky, které už zahrnuté
+ * byly — nemohl tedy žádnou přidat ani ubrat. Zahrnutí je přitom JEHO volba
+ * (levé zaškrtávátko); co vůbec smí vidět, řídí sloupec Viditelné vpravo. */
+test('obchodník vidí všechny NESKRYTÉ volitelné položky, ne jen zahrnuté',
+  await page.evaluate(() => {
+    NAST.jeAdmin = true; NAST.nahledRole = ''; prepniTab('kalk'); render();
+    const vsech = document.querySelectorAll('#page-kalk tr').length;
+    const r = vypocet(Z, C, JEKLY, OCK.fixes);
+    const pocetKatalogu = r.volitelneKatalog.filter(x => !x.vlastni).length;
+    const zahrnutych = r.volitelneKatalog.filter(x => x.zahrnuto).length;
+    NAST.jeAdmin = false; NAST.nahledRole = 'Obchodník'; render();
+    const html = document.getElementById('page-kalk').innerHTML;
+    const sekce = html.slice(html.indexOf('ock-sek-volitelne'), html.indexOf('VOLITELNÉ CELKEM'));
+    const chk = (sekce.match(/volitelneToggle/g) || []).length;
+    NAST.jeAdmin = true; NAST.nahledRole = ''; render();
+    return vsech > 0 && zahrnutych < pocetKatalogu && chk === pocetKatalogu;
+  }));
+test('a sloupce Viditelné / Výchozí u nich obchodník nemá',
+  await page.evaluate(() => {
+    NAST.jeAdmin = false; NAST.nahledRole = 'Obchodník'; render();
+    const html = document.getElementById('page-kalk').innerHTML;
+    const ma = html.includes('viditelnostSet') || html.includes('vychoziPolozkaSet');
+    NAST.jeAdmin = true; NAST.nahledRole = ''; render();
+    return !ma;
+  }));
+test('skrytá položka obchodníkovi zmizí i tak (sloupec Viditelné pořád platí)',
+  await page.evaluate(() => {
+    const r = vypocet(Z, C, JEKLY, OCK.fixes);
+    const prvni = r.volitelneKatalog.find(x => !x.vlastni);
+    viditelnostSet(prvni.key, false);
+    NAST.jeAdmin = false; NAST.nahledRole = 'Obchodník'; render();
+    const html = document.getElementById('page-kalk').innerHTML;
+    const sekce = html.slice(html.indexOf('ock-sek-volitelne'), html.indexOf('VOLITELNÉ CELKEM'));
+    const chk = (sekce.match(/volitelneToggle/g) || []).length;
+    NAST.jeAdmin = true; NAST.nahledRole = '';
+    viditelnostSet(prvni.key, true); render();
+    return chk === r.volitelneKatalog.filter(x => !x.vlastni).length - 1;
+  }));
+
+/* ---------- záložky v matici (nález J. V. 20. 8. 2026) ---------- */
+test('každá záložka lišty (kromě domovské) se dá řídit maticí',
+  await page.evaluate(() => TABY.filter(x => x !== 'kalk')
+    .every(x => !!TAB_ZOBRAZENI_KLIC[x] && !!zobrazeniPrvek(TAB_ZOBRAZENI_KLIC[x])),
+    ));
+test('v Nastavení → Obecné už druhý seznam záložek není',
+  await page.evaluate(() => {
+    otevriNastaveni(); nastPanel('obecne');
+    const h = document.getElementById('nastaveni-panel').innerHTML;
+    zavriNastaveni();
+    return !h.includes('nastToggleTab') && h.includes('Přesunuto do záložky');
+  }));
+
 /* ---------- úpravy krycích listů z 20. 8. 2026 odpoledne ---------- */
 test('„Kontakt stavba" v krycích listech není (je to týž člověk jako technický zástupce)',
   await page.evaluate(() => {

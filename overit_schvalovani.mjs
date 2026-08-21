@@ -118,9 +118,22 @@ test('v liště je tlačítko záložky „Schvalování slev"',
 test('stránka záložky je v šabloně', await page.locator('#page-schvalovani').count() === 1);
 test('záložka je v seznamu TABY',
   await page.evaluate(() => TABY.includes('schvalovani')));
-test('viditelnost záložky jde vypnout v Nastavení',
-  await page.evaluate(() => NAST_TAB_LABELS.schvalovani === 'Schvalování slev'
-    && NAST.tabViditelnost.schvalovani === true));
+/* 20. 8. 2026 (nález J. V. „nemůžu ovládat zhasínání schvalování slev"):
+ * viditelnost záložky se řídí MATICÍ ZOBRAZENÍ, ne bývalým globálním
+ * přepínačem v Nastavení → Obecné. */
+test('viditelnost záložky se řídí maticí zobrazení (klíč tab.schvalovani)',
+  await page.evaluate(() => {
+    const p = zobrazeniPrvek('tab.schvalovani');
+    if (!p) return false;
+    const bylo = tabViditelny('schvalovani');
+    NAST.zobrazeni['tab.schvalovani'] = { 'Obchodník': false, 'Vedoucí': false };
+    NAST.jeAdmin = false; NAST.nahledRole = 'Obchodník';
+    const poVypnuti = tabViditelny('schvalovani');
+    NAST.jeAdmin = true; NAST.nahledRole = '';
+    const admin = tabViditelny('schvalovani');
+    NAST.zobrazeni['tab.schvalovani'] = { 'Obchodník': true, 'Vedoucí': true };
+    return bylo === true && poVypnuti === false && admin === true;
+  }));
 test('render() záložku vykresluje',
   await page.evaluate(() => document.getElementById('page-schvalovani').innerHTML.length > 0));
 

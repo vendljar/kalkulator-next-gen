@@ -67,7 +67,9 @@ function nastSetAdmin(v) {
   }
   NAST.jeAdmin = !!v; nastRefresh();
 }
-function nastToggleTab(t, v) { NAST.tabViditelnost[t] = !!v; nastRefresh(); }
+/* `nastToggleTab` zanikla 20. 8. 2026 spolu s duplicitním seznamem záložek
+ * v Nastavení → Obecné. Viditelnost záložek řídí výhradně matice zobrazení
+ * (Nastavení → Zobrazení), která platí po rolích a bydlí na serveru. */
 function nastSetNaklady(v) { NAST.zobrazitNaklady = !!v; nastRefresh(); }
 
 /* ---- Uživatelé ---- */
@@ -150,13 +152,6 @@ function nastSetAtyp(v) {
 /* ---------- vnitřní záložka: Obecné ---------- */
 function nastObecne() {
   const chk = (checked, on) => `<input type="checkbox" ${checked ? 'checked' : ''} onchange="${on}">`;
-  const tabRows = Object.keys(NAST_TAB_LABELS).map(t => {
-    const skrytoRoli = !NAST.jeAdmin && (t === 'cenik' || t === 'cenikproj' || t === 'detail' || t === 'specdata');
-    return `<label style="display:flex;align-items:center;gap:8px;margin:5px 0">
-      ${chk(NAST.tabViditelnost[t], `nastToggleTab('${t}', this.checked)`)} ${NAST_TAB_LABELS[t]}
-      ${skrytoRoli ? '<span class="pill mut" style="font-size:10px">skryto rolí</span>' : ''}</label>`;
-  }).join('');
-
   const adminFeatures = [
     'Ceník nákladů OCK a Ceník nákladů PROJ (celé záložky)',
     'Editace jednotkových cen přímo v kalkulaci (obousměrně s ceníkem)',
@@ -191,7 +186,10 @@ function nastObecne() {
       data specifikace a sloupce Náklad/Přirážka. Náhled konkrétní role (obchodník / vedoucí) je také tam.</div>
 
     <div class="sec-title">Viditelnost záložek</div>
-    ${tabRows}
+    <div class="note">Přesunuto do záložky <b>Zobrazení</b> (20. 8. 2026). Býval tu druhý seznam
+      zaškrtávátek, který dělal totéž — jenže platil <b>všem včetně administrátora</b>, žil jen
+      v paměti prohlížeče a po odhlášení se ztratil. Matice v Zobrazení má každou záložku po
+      rolích a ukládá se na server, takže platí všem a přežije obnovení stránky.</div>
 
     <div class="sec-title">Zobrazení kalkulace (admin)</div>
     <label style="display:flex;align-items:center;gap:8px">${chk(NAST.zobrazitNaklady, 'nastSetNaklady(this.checked)')} Zobrazovat sloupce <b>Náklad</b> a <b>Přirážka</b> v kalkulaci</label>
@@ -468,14 +466,32 @@ function sablonyRezimUI(rezim) {
 function nastSmluvniStandardy() {
   const f = NAST.firma || (NAST.firma = firmaDefault());
   const pole = FIRMA_POLE.filter(p => p.sekce === 'Smluvní standardy');
-  const radek = p => `<div class="row"><label>${esc(p.label)}</label>
-    <input type="text" value="${esc(f[p.id] == null ? '' : f[p.id])}"
-      onchange="firmaSet('${p.id}', this.value)">
-    <span class="note" style="flex:none;width:210px;font-size:11.5px"><code>{{${p.symbol}}}</code></span></div>`;
+  /* Prázdné pole neznamená „nic" — krycí list má pro ten případ záložní větu
+   * napsanou v kódu. Do 20. 8. 2026 to nebylo nikde vidět, takže formulář
+   * vypadal jako nevyplněný duplikát krycího listu (dotaz J. V.). Teď se
+   * záložní věta ukazuje jako nápověda v poli i pod ním. */
+  const ZALOHA = {
+    platnostNabidky: '2 měsíce',
+    zpusobFakturaceOck: 'Náš standard / měsíční',
+    zpusobFakturaceProj: 'po dokončení jednotlivých stupňů dokumentace',
+    rozsahDefinice: 'je definován přílohou ke smlouvě (specifikace)',
+  };
+  const radek = p => {
+    const prazdne = !String(f[p.id] || '').trim();
+    return `<div class="row"><label>${esc(p.label)}</label>
+      <input type="text" value="${esc(f[p.id] == null ? '' : f[p.id])}"
+        placeholder="${esc(ZALOHA[p.id] || '')}"
+        onchange="firmaSet('${p.id}', this.value)">
+      <span class="note" style="flex:none;width:210px;font-size:11.5px"><code>{{${p.symbol}}}</code>${
+        prazdne ? ' <span class="pill mut">platí záložní věta</span>' : ''}</span></div>`;
+  };
   return `<div class="sec-title">Smluvní standardy</div>
     <div class="note" style="margin-top:0">Věty, které platí pro celou firmu a propisují se do
       <b>každé</b> nabídky, smlouvy i krycího listu. Mění se jednou za čas a pro všechny naráz —
-      proto tady, a ne v každé zakázce zvlášť.</div>
+      proto tady, a ne v každé zakázce zvlášť. <b>Nejsou to duplicitní pole ke krycímu listu:</b>
+      tohle je jejich <b>zdroj</b>, krycí list je jen předvyplní a v konkrétní zakázce jdou
+      přepsat (↺ vrátí hodnotu odsud). Necháte-li pole prázdné, použije se
+      <b>záložní věta napsaná v kódu</b> — je vidět jako šedá nápověda v poli.</div>
     ${pole.map(radek).join('')}
 
     <div class="sec-title">Logo firmy</div>

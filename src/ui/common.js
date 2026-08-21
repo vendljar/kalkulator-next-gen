@@ -43,6 +43,11 @@ syncVarianta();
 /* ---------- nastavení aplikace (ozubené kolo, jen admin) ---------- */
 const NAST = {
   jeAdmin: true,               // dnes je vše admin; přepínač role je v Nastavení
+  /* `tabViditelnost` je od 20. 8. 2026 MRTVÉ POLE. Býval to druhý, globální
+   * vypínač záložek v Nastavení → Obecné: platil všem včetně administrátora,
+   * žil jen v paměti prohlížeče a dělal totéž co matice zobrazení — jen hůř.
+   * Pole zůstává kvůli uloženým konfiguracím (nic se nemaže bez dotazu),
+   * ale `tabViditelny()` ho už nečte. */
   tabViditelnost: { kalk: true, detail: true, spec: true, specdata: true, kryci: true, proj: true, detailproj: true, kryciproj: true, cenik: true, cenikproj: true, zakazka: true, schvalovani: true },
   zobrazitNaklady: true,       // sloupce Náklad/Přirážka v tabulce kalkulace (jen admin)
   kpiViditelne: { naklad: false, hrubyZisk: false, sleva: false, marze: false }, // KPI v hlavičce viditelné i běžnému uživateli
@@ -431,17 +436,21 @@ function sablonaProTisk(typ, lang) {
 /* je záložka viditelná? (skryté ceníky/detaily pro běžného uživatele) */
 /* Detail výpočtu PROJ (17. 8. 2026) se řídí TÝMŽ právem jako detail OCK —
  * oba rozepisují nákladové sazby a rozdávat je zvlášť by jen mátlo. */
-const TAB_ZOBRAZENI_KLIC = { cenik: 'tab.cenik', cenikproj: 'tab.cenikproj', detail: 'tab.detail', detailproj: 'tab.detail', specdata: 'tab.specdata' };
+/* Každá záložka má od 20. 8. 2026 svůj klíč v matici zobrazení (nález J. V.:
+ * „nastavení → zobrazení nereflektuje aktuální stav aplikace"). Do té doby
+ * měly klíč jen čtyři a zbytek se dal zhasnout výhradně přepínačem
+ * v Nastavení → Obecné — jenže ten platil VŠEM VČETNĚ ADMINISTRÁTORA a byl
+ * jen v paměti prohlížeče. Tenhle druhý mechanismus je proto pryč
+ * (viz `NAST.tabViditelnost`); rozhoduje výhradně matice, která se
+ * zveřejňuje na server a jde nastavit po rolích.
+ * `kalk` klíč nemá schválně: je domovská a náhrada za každou skrytou. */
+const TAB_ZOBRAZENI_KLIC = {
+  cenik: 'tab.cenik', cenikproj: 'tab.cenikproj', detail: 'tab.detail',
+  detailproj: 'tab.detailproj', specdata: 'tab.specdata', spec: 'tab.spec',
+  kryci: 'tab.kryci', proj: 'tab.proj', kryciproj: 'tab.kryciproj',
+  zakazka: 'tab.zakazka', schvalovani: 'tab.schvalovani',
+};
 function tabViditelny(t) {
-  /* Nová záložka Detail výpočtu PROJ (17. 8. 2026): starší uložená nastavení
-   * ji neznají — zdědí proto viditelnost Detailu výpočtu OCK, ať nikomu,
-   * kdo detail vidí, nová záložka tiše nechybí. */
-  if (NAST.tabViditelnost.detailproj === undefined)
-    NAST.tabViditelnost.detailproj = NAST.tabViditelnost.detail !== false;
-  if (!NAST.tabViditelnost[t]) return false;
-  /* Dřív tu stálo `!NAST.jeAdmin && (cenik|cenikproj|detail|specdata)`.
-   * Matice #136 se ve výchozím stavu chová stejně, jen jde po jednotlivých
-   * záložkách — vedoucí tak může dostat Detail výpočtu, aniž by dostal ceník. */
   const k = TAB_ZOBRAZENI_KLIC[t];
   if (k && !smiZobrazit(k)) return false;
   return true;

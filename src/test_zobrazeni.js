@@ -117,10 +117,24 @@ test('neúplná matice se u chybějícího prvku vrátí k dnešku',
 const dnesViditelne = Z.ZOBRAZENI_PRVKY.filter(p => ROLE.some(r => p.vychozi[r])).map(p => p.klic);
 /* kalk.pridatPolozku je od 19. 8. 2026 ZÁMĚRNĚ výchozí pro obchodníka
  * i vedoucího (zadání J. V.: „umožni obchodníkům a vedoucím přidávat
- * položku do sekcí") — není to nedopatření, patří do výjimek. */
+ * položku do sekcí") — není to nedopatření, patří do výjimek.
+ *
+ * 20. 8. 2026 přibyly do matice ZBÝVAJÍCÍ ZÁLOŽKY (spec, kryci, proj,
+ * detailproj, kryciproj, zakazka, schvalovani). Ty, které dnes vidí každý,
+ * musí zůstat výchozí ZAPNUTÉ — jinak by matice sama zhasla půlku aplikace
+ * všem, kdo nejsou administrátoři. Proto jsou tady jako výjimky. */
+const VYCHOZI_ZAPNUTE = ['nastaveni.slevy', 'nastaveni.sablony', 'kalk.pridatPolozku',
+  'tab.spec', 'tab.kryci', 'tab.proj', 'tab.kryciproj', 'tab.zakazka', 'tab.schvalovani'];
 test('dnes je pro běžné role viditelné jen to, co je zdokumentované jako výjimka',
-  dnesViditelne.every(k => k === 'nastaveni.slevy' || k === 'nastaveni.sablony'
-    || k === 'kalk.pridatPolozku'), dnesViditelne);
+  dnesViditelne.every(k => VYCHOZI_ZAPNUTE.includes(k)), dnesViditelne);
+/* Každá záložka z lišty musí mít v matici svůj klíč — jinak se nedá řídit
+ * a nastavení „nereflektuje aktuální stav aplikace" (nález J. V. 20. 8.).
+ * Výjimkou je jen Kalkulace OCK: je domovská a náhrada za každou skrytou. */
+const KLICE_ZALOZEK = Z.ZOBRAZENI_PRVKY.filter(p => p.skupina === 'zalozky').map(p => p.klic);
+test('každá záložka aplikace (kromě domovské) má v matici svůj klíč',
+  ['tab.detail', 'tab.spec', 'tab.specdata', 'tab.kryci', 'tab.proj', 'tab.detailproj',
+   'tab.kryciproj', 'tab.cenik', 'tab.cenikproj', 'tab.zakazka', 'tab.schvalovani']
+    .every(k => KLICE_ZALOZEK.includes(k)), KLICE_ZALOZEK.join(', '));
 test('vedoucí dnes nemá proti obchodníkovi v zobrazení žádnou výhodu',
   Z.ZOBRAZENI_PRVKY.every(p => p.vychozi['Vedoucí'] === p.vychozi['Obchodník']));
 

@@ -391,9 +391,17 @@ function tblVolitelne(katalog, sum) {
   const vpravoV = admin ? sekceRezimSelect('ock', 'volitelne')
     : (rezimV === 'srolovat' ? sekceRozbalBtn('ock', 'volitelne') : '');
   let rows = serazSekci(katalog, 'volitelne');
-  if (!admin) rows = rows.filter(r => r.zahrnuto && !jeSkryta(radekKey(r)));   // uživatel: jen zahrnuté a viditelné
+  /* NÁLEZ 20. 8. 2026 (J. V.): obchodník tu neměl zaškrtávátka a viděl JEN
+   * položky, které už zahrnuté byly — nemohl tedy žádnou přidat ani ubrat,
+   * a v seznamu mu chyběly i položky, které měl podle sloupce Viditelné
+   * vidět. Filtr `r.zahrnuto` byl chybný: zahrnutí je VOLBA OBCHODNÍKA
+   * (levé zaškrtávátko), kdežto co vůbec smí vidět, řídí výhradně sloupec
+   * Viditelné (jeSkryta) — ten nastavuje vedoucí nebo admin vpravo.
+   * Teď tedy: uživatel vidí všechny NESKRYTÉ položky a každou si může
+   * zaškrtnout; sloupce Viditelné a Výchozí zůstávají jen adminovi. */
+  if (!admin) rows = rows.filter(r => !jeSkryta(radekKey(r)));
   if (sbalenoV) rows = [];
-  return `<tr class="sechd" id="ock-sek-volitelne"><td colspan="${NC}"><div style="display:flex;align-items:center;gap:12px"><span style="flex:1">VOLITELNÉ POLOŽKY DO ZÁKLADNÍ CENY ${admin ? '<span class="note" style="font-weight:400">(zaškrtnuté se počítají do základní ceny)</span>' : ''}</span>${vpravoV}</div></td></tr>` +
+  return `<tr class="sechd" id="ock-sek-volitelne"><td colspan="${NC}"><div style="display:flex;align-items:center;gap:12px"><span style="flex:1">VOLITELNÉ POLOŽKY DO ZÁKLADNÍ CENY <span class="note" style="font-weight:400">(zaškrtnuté se počítají do základní ceny)</span></span>${vpravoV}</div></td></tr>` +
     rows.map(r => {
       const key = radekKey(r);
       const dz = admin ? ` ondragover="dragOver(event)" ondrop="dragDrop(event,'volitelne','${keyAttr(key)}')"` : '';
@@ -408,13 +416,18 @@ function tblVolitelne(katalog, sum) {
          * (19. 8. 2026, právo kalk.pridatPolozku) — stejné pravidlo jako
          * v ostatních sekcích (radekKalk). Trvalé (kid) upravuje jen admin. */
         const vlEdV = r.vlastni && !r.kid && smiZobrazit('kalk.pridatPolozku');
+        /* Zaškrtávátko „počítat do základní ceny" má i obchodník (20. 8. 2026).
+         * Vlastní řádek zakázky se nezaškrtává — ten se počítá vždycky,
+         * proto jen mezera, aby text řádků lícoval. */
+        const chkU = r.vlastni ? '<span class="vol-spacer"></span>'
+          : `<input type="checkbox" ${r.zahrnuto ? 'checked' : ''} onchange="volitelneToggle('${escJs(r.key)}', this.checked)" title="zahrnout do základní ceny"> `;
         c = vlEdV
-          ? `<td style="white-space:normal"><input type="text" class="nazev-ed" style="width:55%" value="${esc(r.nazev)}" onchange="vlastniSet('volitelne', ${r.idx}, 'nazev', this.value)">
+          ? `<td style="white-space:normal">${chkU}<input type="text" class="nazev-ed" style="width:55%" value="${esc(r.nazev)}" onchange="vlastniSet('volitelne', ${r.idx}, 'nazev', this.value)">
                à <input type="number" step="any" style="width:96px" value="${+(+r.cena).toFixed(2)}" title="jednotková cena této položky (jen pro tuto zakázku)"
                  onchange="vlastniSet('volitelne', ${r.idx}, 'cena', this.value)"> Kč
                <button class="mini noprint" title="odebrat vlastní položku" onclick="vlastniDel('volitelne', ${r.idx})">✕</button></td>
              <td style="white-space:nowrap"><input type="number" step="any" style="width:86px" value="${+(+r.mnozstvi).toFixed(3)}" onchange="vlastniSet('volitelne', ${r.idx}, 'mnozstvi', this.value)"></td>`
-          : `<td style="white-space:normal">${esc(r.nazev) + poznHtml(r)}</td><td style="white-space:nowrap">${num(r.mnozstvi, 3)}</td>`;
+          : `<td style="white-space:normal">${chkU}${esc(r.nazev) + poznHtml(r)}</td><td style="white-space:nowrap">${num(r.mnozstvi, 3)}</td>`;
       }
       if (showCost) c += `<td>${fmt(r.naklad)}</td><td>${fmt(r.marze)}</td>`;
       c += `<td>${fmt(r.sMarzi)}</td>`;
