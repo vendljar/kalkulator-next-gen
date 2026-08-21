@@ -530,6 +530,27 @@ function card(title, inner, closed = false, id = '') {
   return `<div class="card ${closed ? 'closed' : ''}"${id ? ` id="${id}"` : ''}><h2 onclick="this.parentElement.classList.toggle('closed')">${title}</h2><div class="body">${inner}</div></div>`;
 }
 
+/* Štítek stavu otevřené varianty vedle čísla nabídky (21. 8. 2026, zadání
+ * J. V.: „vždy zobrazuj, zda je nabídka aktivní nebo uzamčená").
+ *
+ * Zámek se dosud poznal jen podle lišty nad kalkulací, která se dá přerolovat
+ * — a rozdíl mezi „tuhle nabídku ještě můžu měnit" a „tahle už odešla
+ * zákazníkovi" je to nejdůležitější, co o otevřené variantě potřebujete
+ * vědět. Štítek je proto přímo v nadpisu, v OCK i v PROJ. */
+function variantaStavPill() {
+  const v = (typeof aktivniVarianta === 'function') ? aktivniVarianta(ZAK) : null;
+  if (!v) return '';
+  const z = (typeof zamekInfo === 'function') ? zamekInfo(v) : null;
+  if (z) {
+    const kdy = String(z.kdy || '').slice(0, 10);
+    return `<span class="stav-pill zamcena" title="Odeslaná nabídka se zpětně needituje.${
+      z.popis ? ' ' + esc(z.popis) : ''}${kdy ? ' (' + esc(kdy) + ')' : ''} Pokračujte klonem varianty."
+      >🔒 uzamčená</span>`;
+  }
+  return `<span class="stav-pill aktivni" title="Rozpracovaná varianta — dá se měnit a počítá se z ní nabídka."
+    >● aktivní</span>`;
+}
+
 /* Karta s režimem sekce (20. 8. 2026, zadání J. V.).
  *
  * Volba zobrazit / skrýt / srolovat byla do 20. 8. jen u sekcí UVNITŘ tabulky
@@ -628,22 +649,26 @@ function zakazkaHlavicka(ock) {
     /* Pod polem stojí dotaz do rejstříku (#10). Je to nabídka, ne krok
      * v postupu – hlavička se dá vyplnit ručně a nabídka odejde i tak. */
     const kde = kdeAres || (path.indexOf('projHlavicka') >= 0 ? 'proj' : 'ock');
-    const ares = (typeof aresRadek === 'function') ? aresRadek(kde) : '';
     /* Vedle ARES stojí od 20. 8. 2026 cesta do databáze zákazníků (#162):
      * u zákazníka, kterého už jednou někdo vyplnil, se všechno přenese
      * jedním kliknutím. Je to nabídka, ne krok v postupu — hlavička se dá
      * pořád vyplnit ručně. */
-    const zakDb = (typeof zakazniciMozne === 'function' && zakazniciMozne() && kde === 'ock')
-      ? `<div class="row"><label></label><button class="mini noprint" onclick="prepniTab('zakaznici')"
+    /* Tlačítka databáze zákazníků stojí od 21. 8. 2026 v TÉMŽE řádku jako
+     * „Najít firmu v ARES" (zadání J. V.) — jsou to tři varianty jedné věci:
+     * odkud vzít údaje o firmě. Na vlastním řádku pod ARES vypadala jako
+     * něco jiného a odsouvala datum o kus níž. */
+    const zakDbBtns = (typeof zakazniciMozne === 'function' && zakazniciMozne() && kde === 'ock')
+      ? `<button class="mini noprint" onclick="prepniTab('zakaznici')"
            title="vybrat zákazníka z databáze — přenese hlavičku i kontakty do krycích listů"
            >👤 Vybrat z databáze zákazníků…</button>
          <button class="mini noprint" onclick="zakaznikZeZakazkyUI()"
-           title="uložit údaje z téhle hlavičky jako novou kartu zákazníka">Uložit jako zákazníka</button></div>`
+           title="uložit údaje z téhle hlavičky jako novou kartu zákazníka">Uložit jako zákazníka</button>`
       : '';
+    const aresBtns = (typeof aresRadek === 'function') ? aresRadek(kde, false, zakDbBtns) : zakDbBtns;
     return `<div class="row"><label>IČO zákazníka${pill}</label>
       <input type="text" value="${esc(h)}" placeholder="8 číslic"
         title="IČO zákazníka; přebírá ho krycí list. Prázdné pole se nikde nehlásí."
-        onchange="set('${path}', this.value)"></div>${ares}${zakDb}`;
+        onchange="set('${path}', this.value)"></div>${aresBtns}`;
   };
 
   // indikátor řídící varianty přímo za popiskem „Otevřená varianta" (odsazený)

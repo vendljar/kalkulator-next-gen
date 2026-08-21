@@ -14,11 +14,13 @@
  * si čistí prohlížeč. Server nikdy neuloží, co mu kdo pošle.
  */
 import { uloziste, vyzadujRoli, json } from '../lib/sdilene.mjs';
-import { jadro, jadroChyba } from '../lib/jadro.mjs';
+/* SCHVÁLNĚ ne `jadro()`: to natáhne celé jádro (engine, preklad, docxgen…)
+ * a při studeném startu se na prázdný seznam čekaly vteřiny (nález J. V.
+ * 21. 8. 2026). Tady stačí jeden malý modul bez závislostí — proč jde přes
+ * .cjs obal a ne přes createRequire, vysvětluje hlavička toho souboru. */
+import g from '../lib/zakaznici_modul.cjs';
 
 export default async (req) => {
-  try { await jadro(); } catch (e) { return jadroChyba(e); }
-  const g = globalThis;
 
   const { chyba, relace } = await vyzadujRoli(req);
   if (chyba) return chyba;

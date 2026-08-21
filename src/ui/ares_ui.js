@@ -21,7 +21,12 @@ const ARES_CEKANI = 12000;   // rejstřík odpovídá do vteřiny; delší ticho
  * 'proj' je oddělená hlavička projekce (ZAK.projHlavicka). */
 function aresHlavicka(kde) {
   /* Od 19. 8. 2026 je hlavička jedna společná — ARES z obou kalkulací
-   * píše do týchž polí ZAK.*; `kde` dál rozlišuje jen otevřený panel. */
+   * píše do týchž polí ZAK.*; `kde` dál rozlišuje jen otevřený panel.
+   * Od 21. 8. 2026 umí ARES plnit i KARTU ZÁKAZNÍKA (`kde === 'zakaznik'`):
+   * ta má jiná jména polí, takže si `zakaznici_ui.js` podává průhledný
+   * převodník — ARES o něm nemusí vědět nic navíc. */
+  if (kde === 'zakaznik' && typeof zakaznikAresHlavicka === 'function')
+    return zakaznikAresHlavicka();
   return ZAK;
 }
 
@@ -83,7 +88,11 @@ function aresPrepisPotvrd(kde) {
  * na kartě „Zakázka – hlavička" trčelo o 42 px doprava mimo řadu ostatních
  * buněk. V liště nad kalkulací se jednotky nepoužívají – tam se volá bez
  * parametru a řádek zůstává, jak byl. */
-function aresRadek(kde, sJednotkou) {
+/* `navic` (21. 8. 2026) = další tlačítka do TÉHOŽ řádku. Používá ho hlavička
+ * zakázky pro databázi zákazníků: „najít v ARES" a „vybrat z databáze" jsou
+ * dvě odpovědi na jednu otázku (odkud vzít údaje o firmě), takže patří vedle
+ * sebe, ne pod sebe. */
+function aresRadek(kde, sJednotkou, navic) {
   const hl = aresHlavicka(kde);
   const muze = typeof icoVyplneno === 'function' && icoVyplneno(hl.ico);
   const tlacitko = `<button class="mini noprint" onclick="aresHledej('${kde}')"
@@ -91,7 +100,7 @@ function aresRadek(kde, sJednotkou) {
                   : 'nejdřív vyplňte IČO zákazníka'}"${muze ? '' : ' disabled'}>🔎 Najít firmu v ARES</button>`;
   const panel = (ARES.kde === kde) ? aresPanel(kde) : '';
   const jednotka = sJednotkou ? '<span class="u"></span>' : '';
-  return `<div class="row"><label></label><div>${tlacitko}</div>${jednotka}</div>${panel}`;
+  return `<div class="row"><label></label><div style="display:flex;gap:6px;flex-wrap:wrap">${tlacitko}${navic || ''}</div>${jednotka}</div>${panel}`;
 }
 
 function aresPanel(kde) {

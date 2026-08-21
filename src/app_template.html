@@ -111,6 +111,13 @@
   /* titulek nad cenovou kalkulací (název akce) */
   .kalk-title { font-size:15px; font-weight:700; color:var(--ink); margin:0 0 10px; }
   .kalk-title .kt-cislo { color:var(--mut); font-weight:600; font-size:12.5px; margin-right:8px; }
+  /* Stav otevřené varianty vedle čísla nabídky (21. 8. 2026). Zelená = dá se
+     měnit, červená = odeslaná a zamčená. Tiskne se taky: na papíře je pak
+     vidět, jestli šlo o rozpracovanou kalkulaci, nebo o odeslanou nabídku. */
+  .kalk-title .stav-pill { font-size:11px; font-weight:700; padding:1px 9px; border-radius:20px;
+                           margin-right:10px; vertical-align:middle; letter-spacing:.2px; }
+  .kalk-title .stav-pill.aktivni { background:#dcfce7; color:#166534; border:1px solid #86efac; }
+  .kalk-title .stav-pill.zamcena { background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; }
   /* ozubené kolo + modální panel Nastavení */
   header .gear { background:transparent; border-color:#3a4761; color:#cdd7e8; font-size:16px; line-height:1; padding:6px 10px; }
   header .gear:hover { background:#2b3850; }

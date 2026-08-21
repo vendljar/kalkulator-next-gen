@@ -143,6 +143,23 @@ function zakaznikNabidniAktualizaci() {
     .catch(() => false);
 }
 
+/* Převodník pro dotažení z ARES (21. 8. 2026). Karta má jiná jména polí než
+ * hlavička zakázky (`nazev` × `objednatel`, `sidlo` × `adresaObjednatele`),
+ * ale ARES umí pracovat s čímkoli, co ta čtyři pole má. Vrací proto objekt,
+ * který do karty jen ukazuje: čtení i zápis jdou rovnou do ZAK_DB.otevreny,
+ * takže se nikde nedrží druhá kopie, která by se mohla rozejít. */
+function zakaznikAresHlavicka() {
+  const z = ZAK_DB.otevreny || (ZAK_DB.otevreny = zakaznikNovy());
+  const mapa = { objednatel: 'nazev', adresaObjednatele: 'sidlo', ico: 'ico', dic: 'dic' };
+  const o = {};
+  Object.keys(mapa).forEach(k => Object.defineProperty(o, k, {
+    enumerable: true,
+    get() { return z[mapa[k]]; },
+    set(v) { z[mapa[k]] = v; },
+  }));
+  return o;
+}
+
 /* ---------- vykreslení ---------- */
 
 function renderZakaznici() {
@@ -181,13 +198,13 @@ function zakazniciSeznamHtml() {
       nemusíte je psát znovu a nemůžou se rozejít. <b>Zakázka je vždycky pán:</b> karta jen
       předvyplňuje a co v zakázce přepíšete, se sem samo nevrátí.</div>
     ${ZAK_DB.hlaska ? `<div class="note" style="color:var(--acc)">${esc(ZAK_DB.hlaska)}</div>` : ''}
-    <div class="row" style="margin-top:8px">
-      <label>Hledat</label>
-      <input type="text" value="${esc(ZAK_DB.hledat)}" placeholder="název, IČO nebo město…"
+    <!-- Hledání stojí od 21. 8. 2026 VLEVO u tlačítek (zadání J. V.).
+         Mřížka řádku ho tlačila k pravému okraji obrazovky, kde ho nikdo
+         nehledal — přitom je to první věc, kterou tu člověk dělá. -->
+    <div class="btns" style="margin-top:8px;align-items:center">
+      <input type="text" style="width:280px" value="${esc(ZAK_DB.hledat)}"
+        placeholder="🔎 hledat: název, IČO nebo město…"
         oninput="ZAK_DB.hledat=this.value" onchange="zakazniciHledani(this.value)">
-      <span class="u"></span>
-    </div>
-    <div class="btns" style="margin-top:8px">
       <button onclick="zakaznikNovyUI()">+ Nový zákazník</button>
       <button class="mini" onclick="zakaznikZeZakazkyUI()">Založit z otevřené zakázky</button>
       <button class="mini" onclick="ZAK_DB.nacteno=false;renderZakaznici()">↻ Načíst znovu</button>
@@ -228,8 +245,11 @@ function zakaznikKartaHtml() {
     ${ZAK_DB.hlaska ? `<div class="note" style="color:var(--acc)">${esc(ZAK_DB.hlaska)}</div>` : ''}
     <div class="btns noprint" style="margin-bottom:10px">
       <button class="mini" onclick="zakaznikZavri()">← Zpět na seznam</button>
-      ${typeof aresPanelZakaznik === 'function' ? aresPanelZakaznik() : ''}
     </div>
+    <!-- Dotažení z ARES i tady (21. 8. 2026): vyplní název, sídlo a DIČ podle
+         IČO. Nic nepřepíše bez potvrzení — panel ukáže „takhle to je / takhle
+         to bude" úplně stejně jako v hlavičce zakázky. -->
+    ${typeof aresRadek === 'function' ? aresRadek('zakaznik') : ''}
     ${skupina('Identifikace', ['nazev', 'sidlo', 'ico', 'dic', 'kontaktOsoba', 'zapis', 'banka', 'ucet'])}
     ${skupina('Zástupci a kontakty', ['smluvniJmeno', 'smluvniPozice', 'smluvniTel', 'smluvniEmail',
       'obchodniJmeno', 'obchodniTel', 'obchodniEmail',

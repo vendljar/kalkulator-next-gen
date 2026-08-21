@@ -90,6 +90,14 @@ test('odstraňovač komentářů nechává kód být',
 test('jádro pro server je na jednom místě (lib/jadro_moduly.cjs)',
   existsSync(resolve(KOREN, 'lib/jadro_moduly.cjs')));
 
+/* Studený start (21. 8. 2026): funkce, která z jádra potřebuje jeden malý
+ * modul, si nesmí tahat celé jádro. `jadro_moduly.cjs` natáhne engine,
+ * preklad (110 kB), docxgen a dalších třicet souborů — u /api/zakaznici to
+ * znamenalo vteřiny čekání na prázdný seznam. */
+test('/api/zakaznici si netahá celé jádro (studený start)',
+  !/jadro\.mjs/.test(kodSouboru.get('functions/zakaznici.mjs') || '')
+  && /zakaznici_modul\.cjs/.test(kodSouboru.get('functions/zakaznici.mjs') || ''));
+
 /* Všechny relativní cesty, na které serverový kód sahá – ať už importem
  * nebo requirem – musí existovat. Překlep v cestě se jinak pozná až
  * v nasazení, a zase jako 502 bez vysvětlení. */
