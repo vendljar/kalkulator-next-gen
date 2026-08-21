@@ -55,6 +55,7 @@ Object.assign(globalThis, require('../../src/analytika.js'));
 Object.assign(globalThis, require('../../src/program.js'));
 Object.assign(globalThis, require('../../src/ukazkove.js'));
 Object.assign(globalThis, require('../../src/zobrazeni.js'));
+Object.assign(globalThis, require('../../src/zakaznici.js'));
 Object.assign(globalThis, require('../../src/sluzba.js'));   // jen server (služba K2)
 
 /* Pojmenované držáky pro moduly, které se v kódu funkcí volají přes tečku

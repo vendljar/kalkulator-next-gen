@@ -49,6 +49,7 @@ import zalohaNocni from './functions/zaloha_nocni.mjs';
 import zalohaVynuceno from './functions/zaloha_vynuceno.mjs';
 import zdravi from './functions/zdravi.mjs';
 import zobrazeni from './functions/zobrazeni.mjs';
+import zakazniciFn from './functions/zakaznici.mjs';
 import schvalovaniFn from './functions/schvalovani.mjs';
 import sablonyFn from './functions/sablony.mjs';
 import analytikaFn from './functions/analytika.mjs';
@@ -285,6 +286,26 @@ const MATICE = [
    * a kdyby ji nedostal, viděl by výchozí (nejpřísnější) stav a administrátor
    * by mu nic nepřidělil. Zapisovat ji smí jen administrátor: je to rozhodnutí
    * za celou firmu, ne osobní předvolba. */
+  /* Seznam zákazníků (#162, 20. 8. 2026). Kartu vyplňuje obchodník přímo
+   * u zákazníka, takže číst i zapisovat smí každý přihlášený; MAZAT jen
+   * administrátor — se smazanou kartou zmizí i všechno, co si u toho
+   * zákazníka někdo jednou dohledal. */
+  { fn: zakazniciFn, soubor: 'zakaznici.mjs', nazev: 'zákazníci — seznam (GET /api/zakaznici)', metoda: 'GET',
+    url: 'http://x/api/zakaznici',
+    proc: 'kontakty a zástupci zákazníků jsou interní údaj, ale potřebuje je každý, kdo dělá nabídku',
+    prava: PRIHLASENY_OK },
+
+  { fn: zakazniciFn, nazev: 'zákazníci — uložení karty (POST /api/zakaznici)', metoda: 'POST',
+    url: 'http://x/api/zakaznici',
+    telo: () => ({ zakaznik: { nazev: 'Zkušební zákazník', ico: '12345679' } }),
+    proc: 'kartu zakládá a doplňuje obchodník u zákazníka — kdyby na to potřeboval admina, nevznikla by',
+    prava: PRIHLASENY_OK },
+
+  { fn: zakazniciFn, nazev: 'zákazníci — smazání karty (DELETE /api/zakaznici)', metoda: 'DELETE',
+    url: 'http://x/api/zakaznici?klic=12345679',
+    proc: 'smazaná karta bere s sebou i dohledané údaje — nevratné, proto jen administrátor',
+    prava: JEN_ADMIN },
+
   { fn: zobrazeni, soubor: 'zobrazeni.mjs', nazev: 'zobrazení — čtení matice (GET /api/zobrazeni)', metoda: 'GET',
     url: 'http://x/api/zobrazeni',
     proc: 'podle matice si rozhraní skládá sám prohlížeč — potřebuje ji každý přihlášený',
@@ -413,9 +434,14 @@ console.log('\n===== KŘÍŽOVÁ MATICE: cesta × role =====\n');
 for (const radek of MATICE) {
   for (const role of R) {
     const c = cookieRole(role);
+    /* 20. 8. 2026: matice zná i DELETE (mazání karty zákazníka). Dřív uměla
+     * jen GET a POST a všechno ostatní posílala jako POST — nová cesta by
+     * se tak „ověřila" úplně jinou metodou, než jakou se volá. */
     const odpoved = radek.metoda === 'GET'
       ? await get(radek.fn, radek.url, c)
-      : await post(radek.fn, radek.url, radek.telo ? radek.telo(role) : {}, c);
+      : radek.metoda === 'DELETE'
+        ? await radek.fn(new Request(radek.url, { method: 'DELETE', headers: c ? { cookie: c } : {} }))
+        : await post(radek.fn, radek.url, radek.telo ? radek.telo(role) : {}, c);
     const cekano = radek.prava[role];
     const stav = odpoved.status;
     let sedi, popis;

@@ -38,6 +38,7 @@ import zakazky from './netlify/functions/zakazky.mjs';
 import zaloha from './netlify/functions/zaloha.mjs';
 import firma from './netlify/functions/firma.mjs';
 import zobrazeni from './netlify/functions/zobrazeni.mjs';
+import zakazniciFn from './netlify/functions/zakaznici.mjs';
 import zalohaVynuceno from './netlify/functions/zaloha_vynuceno.mjs';
 import sablonyFn from './netlify/functions/sablony.mjs';
 import analytikaFn from './netlify/functions/analytika.mjs';
@@ -60,6 +61,7 @@ const FUNKCE = {
   /* Matice zobrazení (#136) — aplikace ji načítá hned po přihlášení, takže
    * bez ní by v každém průchodu svítilo 404 v konzoli. */
   '/api/zobrazeni': zobrazeni,
+  '/api/zakaznici': zakazniciFn,
   /* Vynucená (a ověřitelná) záloha databáze – 4. 8. 2026. Kdyby tu funkce
    * chyběla, volání z prohlížeče by skončilo na 404 a test by mlčel
    * o tom, že „vynucené zálohování" pořád nikam nevede. */
@@ -543,6 +545,64 @@ test('staré heslo už neplatí', (await gate()).includes('Nesprávný e-mail ne
 await prihlas('obchodnik@engineers-cz.cz', 'ObchodniHeslo2');
 await page.waitForFunction(() => { try { return !!ONLINE_STAV.ja; } catch (e) { return false; } });
 test('novým heslem se obchodník přihlásí', !(await gateViditelna()));
+
+/* ---- 10b) seznam zákazníků (#162, 20. 8. 2026) ----
+ * Databáze má jediný smysl: nepsat totéž podruhé. Sada projde celou cestu —
+ * z hlavičky zakázky vznikne karta, karta se přenese do nové zakázky a rozdíl
+ * se NABÍDNE, nikdy nezapíše potichu. */
+/* Jede se pod účtem, který je zrovna přihlášený (obchodník) — schválně:
+ * kartu zákazníka má zakládat obchodník u zákazníka, ne administrátor. */
+console.log('\nseznam zákazníků');
+await page.evaluate(() => {
+  ZAK.objednatel = 'Zkušební ocelárna s.r.o.'; ZAK.ico = '12345679';
+  ZAK.adresaObjednatele = 'Sídlištní 2, Zkušebín';
+  ZAK.zastupci.smluvniJmeno = 'Ing. Petr Sedlák';
+  ZAK.zastupci.smluvniPozice = 'jednatel';
+  ZAK.zastupci.technickyEmail = 'technik@zkusebni.cz';
+  zakaznikZeZakazkyUI();
+});
+test('karta se předvyplní z otevřené zakázky',
+  await page.evaluate(() => !!ZAK_DB.otevreny && ZAK_DB.otevreny.nazev === 'Zkušební ocelárna s.r.o.'
+    && ZAK_DB.otevreny.smluvniPozice === 'jednatel'));
+await page.evaluate(() => zakaznikUloz());
+await page.waitForFunction(() => { try { return ZAK_DB.seznam.length === 1; } catch (e) { return false; } },
+  null, { timeout: 15000 });
+test('karta se uložila na server a je v seznamu',
+  await page.evaluate(() => ZAK_DB.seznam[0].nazev === 'Zkušební ocelárna s.r.o.'
+    && ZAK_DB.seznam[0].ico === '12345679'));
+test('server doplnil autora a čas úpravy',
+  await page.evaluate(() => !!ZAK_DB.seznam[0].autor && !!ZAK_DB.seznam[0].upraven));
+test('nová zakázka si kartu vyzvedne jedním kliknutím',
+  await page.evaluate(() => {
+    ZAK = novaZakazka(); syncVarianta();
+    zakaznikDoZakazkyUI('12345679');
+    return ZAK.objednatel === 'Zkušební ocelárna s.r.o.'
+      && ZAK.zastupci.technickyEmail === 'technik@zkusebni.cz'
+      && ZAK.zakaznikId === '12345679';
+  }));
+test('a co obchodník v zakázce přepíše, se do karty samo nevrátí',
+  await page.evaluate(() => {
+    ZAK.zastupci.technickyEmail = 'jiny@zkusebni.cz';
+    return ZAK_DB.seznam[0].technickyEmail === 'technik@zkusebni.cz';
+  }));
+test('rozdíl se najde a NABÍDNE (potvrzuje ho člověk)',
+  await page.evaluate(async () => {
+    let dotaz = '';
+    const puvodni = window.confirm; window.confirm = (t) => { dotaz = t; return false; };
+    await zakaznikNabidniAktualizaci();
+    window.confirm = puvodni;
+    return /jiny@zkusebni/.test(dotaz) && ZAK_DB.seznam[0].technickyEmail === 'technik@zkusebni.cz';
+  }));
+test('po potvrzení se karta doplní',
+  await page.evaluate(async () => {
+    const puvodni = window.confirm; window.confirm = () => true;
+    await zakaznikNabidniAktualizaci();
+    window.confirm = puvodni;
+    return ZAK_DB.seznam[0].technickyEmail === 'jiny@zkusebni.cz';
+  }));
+test('hledání najde zákazníka podle IČO i názvu',
+  await page.evaluate(() => zakazniciHledej(ZAK_DB.seznam, '1234567').length === 1
+    && zakazniciHledej(ZAK_DB.seznam, 'ocelarna').length === 1));
 
 /* ---- 11) čistá konzole ---- */
 test('za celý průchod nevznikla nečekaná chyba v konzoli', chyby.length === 0, chyby);

@@ -71,6 +71,8 @@ test('příručka popisuje skryté a srolované sekce',
   /srolovat/i.test(html) && /skrytá sekce <b>se dál počítá<\/b>|se dál počítá/i.test(html));
 test('příručka říká, kde se tvoří smlouva o dílo',
   /Krycí list zakázky OCK/.test(html) && /Kde se tvoří dokumenty/.test(html));
+test('příručka popisuje databázi zákazníků',
+  /Zákazníci: co vyplníte jednou/.test(html) && /Zakázka je vždycky pán/.test(html));
 test('příručka používá pojem zákazník, ne objednatel',
   /v aplikaci se všude říká „zákazník"|Zástupci a kontakty zákazníka/i.test(html));
 test('žádné skutečné ceníkové soubory v textu',

@@ -107,13 +107,17 @@ function jeAdminOnline() {
 
 /* Jedno místo pro všechna volání /api. Vypršelá relace (401) se pozná tady:
  * stav přihlášení se shodí, aby karta nelhala, a chyba se předá dál. */
-function onlineApi(cesta, telo) {
+/* `metoda` (20. 8. 2026) je nepovinná — potřebuje ji jen mazání karty
+ * zákazníka (DELETE). Bez ní se chová přesně jako dosud: bez těla GET,
+ * s tělem POST. */
+function onlineApi(cesta, telo, metoda) {
   const o = { credentials: 'same-origin' };
-  if (telo !== undefined) {
+  if (telo !== undefined && telo !== null) {
     o.method = 'POST';
     o.headers = { 'Content-Type': 'application/json' };
     o.body = JSON.stringify(telo);
   }
+  if (metoda) o.method = metoda;
   return fetch(cesta, o).then(r => r.json().catch(() => ({})).then(d => {
     if (r.status === 401 && ONLINE_STAV.ja) {
       ONLINE_STAV.ja = null; ONLINE_STAV.db = null; ONLINE_STAV.cenikPouzit = false;
@@ -579,6 +583,12 @@ function onlineUloz(opts) {
      * Kdyby se nechala ležet, ptá se na ni aplikace při každém dalším spuštění
      * i za měsíc („V prohlížeči je rozpracovaná kalkulace…"). */
     if (typeof historieZalohaHotovo === 'function') historieZalohaHotovo();
+    /* Liší-li se hlavička od karty zákazníka, aplikace to NABÍDNE (#162,
+     * 20. 8. 2026) — nikdy nezapíše potichu. Selhání nabídky nesmí shodit
+     * uložení zakázky, proto .catch(() => {}). */
+    if (typeof zakaznikNabidniAktualizaci === 'function') {
+      try { Promise.resolve(zakaznikNabidniAktualizaci()).catch(() => {}); } catch (e) { /* nevadí */ }
+    }
     return onlineNactiRejstrik().then(() => true);
   }).catch(e => {
     /* Server odmítá i pokus přepsat odeslanou (uzamčenou) nabídku – jeho

@@ -31,13 +31,24 @@ function renderInputs() {
        * vrací na nulu / ceník — atypové přirážky bez atypu nemají co dělat. */
       `<div class="row"><label>ATYP (nestandardní zakázka)</label>
         <input type="checkbox" ${Z.atyp ? 'checked' : ''} onchange="atypPrepni(this.checked)"><span class="u"></span></div>` +
-      // ATYP není jen štítek – od #22 přidává přirážku do Režie. Sazbu ukazujeme
-      // rovnou tady, aby obchodník viděl dopad zaškrtnutí ještě před přepočtem.
-      `<div class="note" style="margin-top:2px">Přidá do sekce <b>Režie</b> přirážku
-        <b>${typeof atypSazbaProc === 'function' ? atypSazbaProc() : 30} %</b> z nákladu
-        <b>celé sekce Režie</b> za projekční a koordinační práce. Sazba patří k této
-        zakázce (je v jejím ceníku) a mění ji administrátor v <b>Nastavení → Obecné</b>;
-        starší nabídky se změnou nepřepočítají.</div>`, false, 'ock-zadani') +
+      /* Sazba ATYP se 20. 8. 2026 přestěhovala z Nastavení → Obecné SEM
+       * (dotaz J. V. „proč to máme v obecném nastavení?"). Je to parametr
+       * TÉTO zakázky, ne nastavení aplikace: bydlí v ceníku varianty
+       * a u starších nabídek se nepřepočítává. Patří proto k zaškrtávátku,
+       * které ji zapíná — ne o dvě obrazovky dál. Měnit ji smí jen ten,
+       * kdo vidí nákladové sloupce (právo `sloupce.naklad`); ostatní ji
+       * vidí jen jako číslo, aby věděli, co zaškrtnutí udělá. */
+      `<div class="row"><label>Přirážka za ATYP <span class="note">(projekční a koordinační práce)</span></label>
+        ${smiZobrazit('sloupce.naklad')
+          ? `<input type="number" step="1" min="0" max="300" style="width:90px"
+               value="${typeof atypSazbaProc === 'function' ? atypSazbaProc() : 30}"
+               onchange="nastSetAtyp(this.value)"> %`
+          : `<b>${typeof atypSazbaProc === 'function' ? atypSazbaProc() : 30} %</b>`}<span class="u"></span></div>` +
+      `<div class="note" style="margin-top:2px">Zaškrtnutí ATYP přidá do sekce <b>Režie</b> samostatný
+        řádek „PŘIRÁŽKA ZA ATYP – PROJEKČNÍ A KOORDINAČNÍ PRÁCE" ve výši tohoto procenta z nákladu
+        <b>celé sekce Režie</b> (včetně 3D zaměření a výstupu pro zákazníka). Sazba je uložená
+        v ceníku <b>této zakázky</b>, takže se mění u jednotlivé nabídky a ukládá se s ní —
+        starší nabídky se změnou nepřepočítají. Nová zakázka začíná na 30 %.</div>`, false, 'ock-zadani') +
     card('Dimenze profilů',
       profRow('sloupek', 'Sloupek') + profRow('precnikBok', 'Příčníky bok/zadek') + profRow('sloupekPortal', 'Sloupek portálu') +
       profRow('precnikPortal', 'Příčníky portálu') + profRow('spojka', 'Spojka sloupků') + profRow('lemovani', 'Lemování ext. šachty') +

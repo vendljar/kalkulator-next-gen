@@ -320,9 +320,12 @@ function vychoziPolozkaChk(klic, zaklad, popis) {
   if (typeof zobrazeniPolozkaVychozi !== 'function') return '';
   const v = zobrazeniPolozkaVychozi(NAST.zobrazeni, klic, zaklad);
   const zmeneno = !!v !== !!zaklad;
+  /* Do 20. 8. 2026 měla přenastavená položka tmavší zaškrtávátko
+   * (accent-color). Vypadalo to jako porucha vykreslování, ne jako
+   * informace — zaškrtávátka v jednom sloupci mají být stejná.
+   * Že je hodnota přenastavená proti kódu, se dozvíte z nápovědy. */
   return `<input type="checkbox" class="noprint" ${v ? 'checked' : ''}
     onchange="vychoziPolozkaSet('${escJs(klic)}', this.checked, ${zaklad ? 'true' : 'false'})"
-    style="${zmeneno ? 'accent-color:#1e3a8a' : ''}"
     title="${esc(popis || 'výchozí stav v NOVÉ zakázce (platí pro všechny)')}${zmeneno ? ' — přenastaveno oproti výchozímu stavu aplikace' : ''}">`;
 }
 
@@ -448,7 +451,7 @@ const TAB_ZOBRAZENI_KLIC = {
   cenik: 'tab.cenik', cenikproj: 'tab.cenikproj', detail: 'tab.detail',
   detailproj: 'tab.detailproj', specdata: 'tab.specdata', spec: 'tab.spec',
   kryci: 'tab.kryci', proj: 'tab.proj', kryciproj: 'tab.kryciproj',
-  zakazka: 'tab.zakazka', schvalovani: 'tab.schvalovani',
+  zakazka: 'tab.zakazka', zakaznici: 'tab.zakaznici', schvalovani: 'tab.schvalovani',
 };
 function tabViditelny(t) {
   const k = TAB_ZOBRAZENI_KLIC[t];
@@ -626,10 +629,21 @@ function zakazkaHlavicka(ock) {
      * v postupu – hlavička se dá vyplnit ručně a nabídka odejde i tak. */
     const kde = kdeAres || (path.indexOf('projHlavicka') >= 0 ? 'proj' : 'ock');
     const ares = (typeof aresRadek === 'function') ? aresRadek(kde) : '';
+    /* Vedle ARES stojí od 20. 8. 2026 cesta do databáze zákazníků (#162):
+     * u zákazníka, kterého už jednou někdo vyplnil, se všechno přenese
+     * jedním kliknutím. Je to nabídka, ne krok v postupu — hlavička se dá
+     * pořád vyplnit ručně. */
+    const zakDb = (typeof zakazniciMozne === 'function' && zakazniciMozne() && kde === 'ock')
+      ? `<div class="row"><label></label><button class="mini noprint" onclick="prepniTab('zakaznici')"
+           title="vybrat zákazníka z databáze — přenese hlavičku i kontakty do krycích listů"
+           >👤 Vybrat z databáze zákazníků…</button>
+         <button class="mini noprint" onclick="zakaznikZeZakazkyUI()"
+           title="uložit údaje z téhle hlavičky jako novou kartu zákazníka">Uložit jako zákazníka</button></div>`
+      : '';
     return `<div class="row"><label>IČO zákazníka${pill}</label>
       <input type="text" value="${esc(h)}" placeholder="8 číslic"
         title="IČO zákazníka; přebírá ho krycí list. Prázdné pole se nikde nehlásí."
-        onchange="set('${path}', this.value)"></div>${ares}`;
+        onchange="set('${path}', this.value)"></div>${ares}${zakDb}`;
   };
 
   // indikátor řídící varianty přímo za popiskem „Otevřená varianta" (odsazený)
@@ -1188,7 +1202,7 @@ function dokPodpisHtml(prekl) {
 
 /* ---------- záložky ---------- */
 let TAB = 'kalk';
-const TABY = ['kalk', 'detail', 'spec', 'specdata', 'kryci', 'proj', 'detailproj', 'kryciproj', 'cenik', 'cenikproj', 'zakazka', 'schvalovani'];
+const TABY = ['kalk', 'detail', 'spec', 'specdata', 'kryci', 'proj', 'detailproj', 'kryciproj', 'cenik', 'cenikproj', 'zakazka', 'zakaznici', 'schvalovani'];
 function prepniTab(t) {
   if (!tabViditelny(t)) t = 'kalk';
   TAB = t;
@@ -1395,6 +1409,7 @@ function renderTelo() {
   renderCenik();
   renderCenikProj();
   renderZakazka();
+  if (typeof renderZakaznici === 'function') renderZakaznici();
   if (typeof renderSchvalovani === 'function') renderSchvalovani();
   aplikujViditelnostTabu();
   // #41: protokol o kalkulaci. Musí být PŘED historií – zapsaný řádek je změna

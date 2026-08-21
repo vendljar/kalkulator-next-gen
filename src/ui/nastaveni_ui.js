@@ -152,19 +152,12 @@ function nastSetAtyp(v) {
 /* ---------- vnitřní záložka: Obecné ---------- */
 function nastObecne() {
   const chk = (checked, on) => `<input type="checkbox" ${checked ? 'checked' : ''} onchange="${on}">`;
-  const adminFeatures = [
-    'Ceník nákladů OCK a Ceník nákladů PROJ (celé záložky)',
-    'Editace jednotkových cen přímo v kalkulaci (obousměrně s ceníkem)',
-    'Globální přirážka a sloupce <b>Náklad</b> / <b>Přirážka</b>',
-    'Režim výpočtu (Model 2 – opravený / Model 1 – 1:1 jako Excel)',
-    'Rezervy a záložka <b>Detail výpočtu</b>',
-    'Záložka <b>Technická specifikace OCK Data</b> (editace číselníků a výchozích hodnot)',
-    '<b>Import / Export dat</b> – ceník do/z Excelu, export dat specifikace (jen administrátor)',
-    '<b>Slevy</b> – zadání slevy, schvalování nad rámec stropu role (viz záložka Slevy)',
-    '<b>Úložiště šablon dokumentů</b> (Nastavení → Šablony)',
-    '<b>Firemní údaje pro dokumenty</b> (Nastavení → Firma) – IČO, DIČ, sídlo, banka, logo; propisují se do nabídky i krycího listu',
-    'Toto <b>Nastavení</b> (ozubené kolo) včetně záložek Firma, Uživatelé, Slevy a Šablony',
-  ];
+  /* Seznam „Přístupová práva (příprava pro role)" zanikl 20. 8. 2026.
+   * Byl to výčet toho, co JEDNOU BUDE skryté běžným uživatelům — jenže od
+   * 5. 8. 2026 to skutečně skryté JE a nastavuje se po jednotlivých prvcích
+   * v záložce Zobrazení. Seznam už tedy jen popisoval budoucnost, která
+   * nastala, a mátl: čtenář v něm hledal ovládání, které je jinde. */
+
   const navrhy = [
         '<b>Číselné řady CN</b> – automatické číslování nové zakázky (2026-OPR-CN-xxxx).',
     '<b>Výchozí hodnoty</b> – DPH, globální přirážka, splatnost, záruka, platební milníky.',
@@ -191,25 +184,12 @@ function nastObecne() {
       v paměti prohlížeče a po odhlášení se ztratil. Matice v Zobrazení má každou záložku po
       rolích a ukládá se na server, takže platí všem a přežije obnovení stránky.</div>
 
-    <div class="sec-title">Zobrazení kalkulace (admin)</div>
+    <div class="sec-title">Moje obrazovka</div>
     <label style="display:flex;align-items:center;gap:8px">${chk(NAST.zobrazitNaklady, 'nastSetNaklady(this.checked)')} Zobrazovat sloupce <b>Náklad</b> a <b>Přirážka</b> v kalkulaci</label>
-
-    <div class="sec-title">Parametry výpočtu</div>
-    <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-      <span>Přirážka za <b>ATYP</b> (projekční a koordinační práce) — <b>pro tuto zakázku</b>:</span>
-      <input type="number" step="1" min="0" max="300" style="width:90px"
-             value="${atypSazbaProc()}" ${jeAdmin() ? '' : 'disabled'}
-             onchange="nastSetAtyp(this.value)"> %
-    </label>
-    <div class="note">Zaškrtnutí <b>ATYP (nestandardní zakázka)</b> v kalkulaci OCK přidá do sekce
-      <b>Režie</b> samostatný řádek „PŘIRÁŽKA ZA ATYP – PROJEKČNÍ A KOORDINAČNÍ PRÁCE" ve výši tohoto
-      procenta z nákladu <b>celé sekce Režie</b> (včetně 3D zaměření a výstupu pro zákazníka).
-      Sazba je uložená v ceníku zakázky, takže se mění <b>u jednotlivé zakázky</b> a ukládá se s ní –
-      dřívější nabídky se změnou nepřepočítají. Nová zakázka začíná na 30 %.${jeAdmin() ? '' : ' Měnit ji smí jen administrátor.'}</div>
-
-    <div class="sec-title">Přístupová práva (příprava pro role)</div>
-    <div class="note">Tyto vlastnosti budou v budoucnu skryté běžným uživatelům (napojení na role a přihlášení):</div>
-    <ul style="margin:6px 0 0;padding-left:20px;font-size:13px">${adminFeatures.map(x => `<li style="margin:3px 0">${x}</li>`).join('')}</ul>
+    <div class="note">Tohle <b>není</b> nastavení práv a nikoho jiného se netýká — je to vypínač
+      pro <b>tuhle obrazovku a tuhle relaci</b>, hodí se, když si k monitoru sedne zákazník.
+      Kdo nákladové sloupce vidí vůbec, se nastavuje v <b>Zobrazení</b> (prvek
+      „Sloupce Náklad a Přirážka v kalkulaci").</div>
 
     <div class="sec-title">Návrhy dalších možností do Nastavení</div>
     <ul style="margin:6px 0 0;padding-left:20px;font-size:13px">${navrhy.map(x => `<li style="margin:4px 0">${x}</li>`).join('')}</ul>`;

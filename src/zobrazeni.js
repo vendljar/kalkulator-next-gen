@@ -171,6 +171,16 @@ const ZOBRAZENI_PRVKY = [
         + 'nedoporučuji — spíš omezit, co v ní kdo smí (mazání, odemykání).',
   },
   {
+    klic: 'tab.zakaznici', skupina: 'zalozky', nazev: 'Záložka Zákazníci',
+    kde: 'horní lišta záložek',
+    popis: 'Databáze zákazníků: identifikace, bankovní údaje, zástupci a kontakty, '
+         + 'které se odtud přenášejí do hlavičky zakázky a do krycích listů.',
+    vychozi: { 'Obchodník': true, 'Vedoucí': true },
+    navrh: { 'Obchodník': true, 'Vedoucí': true },
+    proc: 'Kartu vyplňuje obchodník u zákazníka — bez záložky by databáze nikdy nevznikla. '
+        + 'Mazat karty smí i tak jen administrátor, to hlídá server.',
+  },
+  {
     klic: 'tab.schvalovani', skupina: 'zalozky', nazev: 'Záložka Schvalování slev',
     kde: 'horní lišta záložek',
     popis: 'Fronta žádostí o slevu nad strop role a rozhodování o nich.',
