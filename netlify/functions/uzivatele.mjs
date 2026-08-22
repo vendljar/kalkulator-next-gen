@@ -25,7 +25,8 @@
  * a z nabídek by odcházel starý kontakt. Cizí profil ale nikdo přepsat
  * nesmí: s cizím podpisem by šla poslat nabídka jménem kolegy. */
 import { uloziste, otiskHesla, hesloSedi, vyzadujRoli, json, ROLE, ADMIN_EMAIL,
-         PODPIS_ULOZISTE, podpisZkontroluj, hesloVerzeUctu, relaceCookie } from '../lib/sdilene.mjs';
+         PODPIS_ULOZISTE, podpisZkontroluj, hesloVerzeUctu, relaceCookie,
+         emailPlatny, hesloPlatne, HESLO_PRAVIDLO } from '../lib/sdilene.mjs';
 
 /* Text z formuláře: ořízne okolní mezery a nepustí dál román. Telefon se
  * jinak NEUPRAVUJE — každý si ho píše po svém („+420 602 590 945",
@@ -73,8 +74,8 @@ export default async (req) => {
       if (!ucet) return json({ ok: false, chyba: 'Účet neexistuje.' }, 404);
       if (!hesloSedi(String(t.stare || ''), ucet.heslo))
         return json({ ok: false, chyba: 'Staré heslo nesouhlasí.' }, 401);
-      if (!t.nove || String(t.nove).length < 8)
-        return json({ ok: false, chyba: 'Nové heslo musí mít aspoň 8 znaků.' }, 400);
+      if (!hesloPlatne(t.nove))
+        return json({ ok: false, chyba: HESLO_PRAVIDLO }, 400);
       ucet.heslo = otiskHesla(t.nove);
       /* Změna hesla zneplatní všechny dosavadní relace (B6) — i tuhle,
        * proto se hned vydá nová cookie, ať se uživatel nemusí přihlašovat. */
@@ -125,13 +126,17 @@ export default async (req) => {
 
     const email = String(t.email || '').trim().toLowerCase();
     if (!email) return json({ ok: false, chyba: 'Chybí e-mail.' }, 400);
+    /* Tvar e-mailu (B16, 22. 8. 2026): je to klíč v úložišti a jméno účtu —
+     * bez mezer, s jedním @, nanejvýš 254 znaků. */
+    if (t.akce === 'zaloz' && !emailPlatny(email))
+      return json({ ok: false, chyba: 'E-mail nemá platný tvar.' }, 400);
     let ucet = await u.cti(email);
 
     if (t.akce === 'zaloz') {
       if (ucet) return json({ ok: false, chyba: 'Účet už existuje.' }, 400);
       if (!ROLE.includes(t.role)) return json({ ok: false, chyba: 'Neznámá role.' }, 400);
-      if (!t.heslo || String(t.heslo).length < 8)
-        return json({ ok: false, chyba: 'Heslo musí mít aspoň 8 znaků.' }, 400);
+      if (!hesloPlatne(t.heslo))
+        return json({ ok: false, chyba: HESLO_PRAVIDLO }, 400);
       ucet = { email, jmeno: text(t.jmeno), titul: text(t.titul, 40),
                funkce: text(t.funkce, 80), telefon: text(t.telefon, 40), role: t.role,
                heslo: otiskHesla(t.heslo), zalozen: new Date().toISOString(),
@@ -144,8 +149,8 @@ export default async (req) => {
        * by si resetem vzal účet, který nikdo nemůže vypnout ani degradovat. */
       if (email === ADMIN_EMAIL && relace.email !== ADMIN_EMAIL)
         return json({ ok: false, chyba: 'Heslo hlavního administrátora si mění jen on sám.' }, 403);
-      if (!t.heslo || String(t.heslo).length < 8)
-        return json({ ok: false, chyba: 'Heslo musí mít aspoň 8 znaků.' }, 400);
+      if (!hesloPlatne(t.heslo))
+        return json({ ok: false, chyba: HESLO_PRAVIDLO }, 400);
       ucet.heslo = otiskHesla(t.heslo);
       ucet.hesloVerze = hesloVerzeUctu(ucet) + 1;                       // B6: odhlásí dosavadní relace
       ucet.hesloZmeneno = new Date().toISOString(); ucet.hesloZmenil = relace.email;
@@ -153,10 +158,20 @@ export default async (req) => {
       if (!ROLE.includes(t.role)) return json({ ok: false, chyba: 'Neznámá role.' }, 400);
       if (email === ADMIN_EMAIL && t.role !== 'Administrátor')
         return json({ ok: false, chyba: 'Hlavnímu administrátorovi roli nesnižuj — zamkl by sis dveře.' }, 400);
+      /* Vlastní roli si správce nesnižuje (B15) — přišel by o přístup hned
+       * (vyzadujRoli čte účet) a nemohl by to vrátit. Stejný guard jako u smazání. */
+      if (email === relace.email && t.role !== 'Administrátor')
+        return json({ ok: false, chyba: 'Vlastní roli si nesnižujte — o přístup byste přišli okamžitě. Požádejte jiného administrátora.' }, 400);
       ucet.role = t.role;
     } else if (t.akce === 'aktivni') {
       if (email === ADMIN_EMAIL && t.aktivni === false)
         return json({ ok: false, chyba: 'Hlavní administrátorský účet nejde vypnout.' }, 400);
+      if (email === relace.email && t.aktivni === false)
+        return json({ ok: false, chyba: 'Vlastní účet si nevypínejte — zamkl byste si dveře.' }, 400);
+      /* Archivovaný účet se zapnutím neobživí (B15): archiv slibuje, že se
+       * účet nikdy nepřihlásí. Nejdřív zrušit archiv, pak zapnout. */
+      if (t.aktivni && ucet.archiv)
+        return json({ ok: false, chyba: 'Účet je archivovaný. Nejdřív zrušte archivaci, pak ho zapněte.' }, 400);
       ucet.aktivni = !!t.aktivni;
     } else if (t.akce === 'archiv') {
       /* Archivace (11. 8. 2026) — třetí stav vedle „zapnutý" a „vypnutý".

@@ -302,7 +302,11 @@ function firmaLzeZverejnit(f) {
 function firmaKZverejneni(f) {
   const out = {};
   FIRMA_POLE.forEach(p => { if (f && f[p.id] !== undefined) out[p.id] = f[p.id]; });
-  if (f && f.logo) { out.logo = f.logo; out.logoNazev = f.logoNazev || ''; }
+  /* Logo jen jako datový zápis PNG/JPEG (audit 22. 8. 2026, B18) — stejné
+   * pravidlo jako u podpisu: SVG umí nést skript, odkaz prozradí otevření
+   * nabídky. Cokoli jiného se tiše zahodí (logo je volitelné). */
+  if (f && f.logo && /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(String(f.logo)))
+    { out.logo = f.logo; out.logoNazev = f.logoNazev || ''; }
   return out;
 }
 

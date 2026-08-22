@@ -42,6 +42,24 @@ export async function uloziste(nazev) {
   };
 }
 
+/* ---------- tvar e-mailu a hesla (audit 22. 8. 2026, B16) ----------
+ * E-mail je klíč záznamu účtu i počítadla pokusů — bez omezení by kdokoli
+ * zakládal kilobajtové klíče. Heslo: minimum 8 znaků zůstává (zadání 3. 8.),
+ * strop 200 znaků brání tomu, aby scrypt mlel megabajtový vstup. Kontrola
+ * stojí na jednom místě pro přihlášení i všechny tři cesty změny hesla. */
+export const EMAIL_MAX = 254;
+export const HESLO_MIN = 8;
+export const HESLO_MAX = 200;
+export const HESLO_PRAVIDLO = 'Heslo musí mít aspoň ' + HESLO_MIN + ' a nejvýš ' + HESLO_MAX + ' znaků.';
+export function emailPlatny(email) {
+  const e = String(email == null ? '' : email);
+  return e.length > 0 && e.length <= EMAIL_MAX && /^[^\s@/]+@[^\s@/]+\.[^\s@/]+$/.test(e);
+}
+export function hesloPlatne(heslo) {
+  const h = String(heslo == null ? '' : heslo);
+  return h.length >= HESLO_MIN && h.length <= HESLO_MAX;
+}
+
 /* ---------- hesla (scrypt) ---------- */
 export function otiskHesla(heslo) {
   const sul = randomBytes(16).toString('hex');
@@ -227,7 +245,23 @@ export function json(data, status = 200, hlavicky = {}) {
   return new Response(JSON.stringify(data), { status,
     headers: { 'Content-Type': 'application/json; charset=utf-8', ...hlavicky } });
 }
+/* Kontrola původu požadavku (audit 22. 8. 2026, B17). Ochrana proti CSRF
+ * stojí na SameSite=Lax; tohle je druhá vrstva: je-li v požadavku hlavička
+ * Origin (prohlížeč ji u POST/DELETE posílá vždy), musí odpovídat Host.
+ * Bez Origin (starší klienti, testy, curl) se nic neodmítá — chybějící
+ * hlavička není útok, cizí hlavička ano. */
+export function cizihoPuvodu(req) {
+  try {
+    const origin = req.headers.get('origin');
+    if (!origin || origin === 'null') return false;
+    const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || '';
+    if (!host) return false;
+    return new URL(origin).host.toLowerCase() !== String(host).toLowerCase();
+  } catch (e) { return true; }
+}
 export async function prihlaseny(req) {
+  /* Mutující požadavek z cizího původu se nepovažuje za přihlášený (B17). */
+  if (req.method && req.method !== 'GET' && cizihoPuvodu(req)) return null;
   return relaceOver(req.headers.get('cookie'));
 }
 

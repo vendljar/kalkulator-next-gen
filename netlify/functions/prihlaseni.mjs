@@ -9,7 +9,8 @@
  */
 import { uloziste, otiskHesla, hesloSedi, relaceCookie, json, ADMIN_EMAIL,
          profilZUctu, podpisCti, FALESNY_OTISK, POKUSY_MAX, POKUSY_IP_MAX,
-         zpozdeniMs, pockej, pokusyZacatek, pokusyUspech, adresaKlienta } from '../lib/sdilene.mjs';
+         zpozdeniMs, pockej, pokusyZacatek, pokusyUspech, adresaKlienta,
+         EMAIL_MAX, HESLO_MAX } from '../lib/sdilene.mjs';
 
 export default async (req) => {
   if (req.method !== 'POST') return json({ ok: false, chyba: 'Použijte POST.' }, 405);
@@ -17,6 +18,11 @@ export default async (req) => {
   try { const t = await req.json(); email = String(t.email || '').trim().toLowerCase(); heslo = String(t.heslo || ''); }
   catch (e) { return json({ ok: false, chyba: 'Vstup není platný JSON.' }, 400); }
   if (!email || !heslo) return json({ ok: false, chyba: 'Zadejte e-mail i heslo.' }, 400);
+  /* Délky (B16): nesmyslně dlouhý e-mail by založil obří klíč v počítadle
+   * pokusů, nesmyslně dlouhé heslo by zaměstnalo scrypt. Stejná hláška jako
+   * u špatného hesla — tvar vstupu nesmí prozradit, co existuje. */
+  if (email.length > EMAIL_MAX || heslo.length > HESLO_MAX)
+    return json({ ok: false, chyba: 'Nesprávný e-mail nebo heslo.' }, 401);
 
   /* Pokus se započítá HNED — dřív než se cokoli ověřuje (B4, 22. 8. 2026).
    * Čekání podle počítadla běží také před ověřením, aby souběžné požadavky

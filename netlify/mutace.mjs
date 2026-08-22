@@ -298,6 +298,47 @@ const MUTACE = [
     nahrad: "    v.zamek.kdo = v.zamek.kdo || relace.email;",
     proc: 'pod odeslanou nabídkou by stálo cizí jméno' },
 
+  /* ---------- 3. dávka (B10, B14, B15, B16, B17, B19) ---------- */
+  { nazev: 'B10: razítko verze se nekontroluje', soubor: 'functions/zakazky.mjs',
+    hledej: "  if (stara && typeof t.ocekavaneRazitko === 'string' && t.prepsat !== true) {",
+    nahrad: "  if (false) {",
+    proc: 'dva obchodníci by si tiše přepisovali práci; stejné číslo by přepsalo cizí zakázku' },
+
+  { nazev: 'B14: velikost zakázky bez stropu', soubor: 'functions/zakazky.mjs',
+    hledej: "  if (JSON.stringify(t).length > ZAKAZKA_MAX_B)",
+    nahrad: "  if (false)",
+    proc: 'jedna příloha z mobilu by zaplnila úložiště' },
+
+  { nazev: 'B15: správce si může vypnout vlastní účet', soubor: 'functions/uzivatele.mjs',
+    hledej: "      if (email === relace.email && t.aktivni === false)",
+    nahrad: "      if (false)",
+    proc: 'omyl správce = okamžitá ztráta přístupu bez cesty zpět' },
+
+  { nazev: 'B15: archivovaný účet jde zapnout', soubor: 'functions/uzivatele.mjs',
+    hledej: "      if (t.aktivni && ucet.archiv)",
+    nahrad: "      if (false)",
+    proc: 'archiv slibuje, že se účet nikdy nepřihlásí — a šlo by to obejít jedním zapnutím' },
+
+  { nazev: 'B16: tvar e-mailu se nekontroluje', soubor: 'functions/uzivatele.mjs',
+    hledej: "    if (t.akce === 'zaloz' && !emailPlatny(email))",
+    nahrad: "    if (false)",
+    proc: 'klíč záznamu účtu by mohl být cokoli' },
+
+  { nazev: 'B16: délky při přihlášení bez stropu', soubor: 'functions/prihlaseni.mjs',
+    hledej: "  if (email.length > EMAIL_MAX || heslo.length > HESLO_MAX)",
+    nahrad: "  if (false)",
+    proc: 'obří e-mail by zakládal obří klíče v počítadle, obří heslo by mlel scrypt' },
+
+  { nazev: 'B17: cizí Origin se nekontroluje', soubor: 'lib/sdilene.mjs',
+    hledej: "  if (req.method && req.method !== 'GET' && cizihoPuvodu(req)) return null;",
+    nahrad: "  if (false) return null;",
+    proc: 'druhá vrstva proti CSRF by zmizela; stačilo by jednou povolit SameSite' },
+
+  { nazev: 'B17: odhlášení i na GET', soubor: 'functions/odhlaseni.mjs',
+    hledej: "  if (req.method !== 'POST') return json({ ok: false, chyba: 'Použijte POST.' }, 405);",
+    nahrad: "",
+    proc: 'odkaz z cizí stránky by uživatele odhlásil' },
+
   { nazev: 'B9: noční otisk bez zákazníků, podpisů a zobrazení', soubor: 'lib/zalohovani.mjs',
     hledej: "    ...(await zalohaDoplnky()),",
     nahrad: "",
@@ -325,7 +366,7 @@ const MUTACE = [
     proc: 'kdo sedne k odemčenému počítači, ukradne účet natrvalo' },
 
   { nazev: 'heslo smí být kratší než osm znaků', soubor: 'functions/uzivatele.mjs',
-    hledej: '      if (!t.nove || String(t.nove).length < 8)',
+    hledej: '      if (!hesloPlatne(t.nove))',
     nahrad: '      if (!t.nove)',
     proc: 'jednoznakové heslo se uhodne hned' },
 
@@ -340,8 +381,8 @@ const MUTACE = [
     proc: 'totéž jinou cestou — nikdo by už nemohl spravovat účty' },
 
   { nazev: 'zakládá se účet s neznámou rolí', soubor: 'functions/uzivatele.mjs',
-    hledej: '      if (!ROLE.includes(t.role)) return json({ ok: false, chyba: \'Neznámá role.\' }, 400);\n      if (!t.heslo',
-    nahrad: '      if (!t.heslo',
+    hledej: "      if (!ROLE.includes(t.role)) return json({ ok: false, chyba: 'Neznámá role.' }, 400);\n      if (!hesloPlatne(t.heslo))",
+    nahrad: "      if (!hesloPlatne(t.heslo))",
     proc: 'účet s vymyšlenou rolí by se choval nepředvídatelně' },
 
   /* ---------- ceník a firma ---------- */

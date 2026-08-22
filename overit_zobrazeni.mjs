@@ -511,6 +511,38 @@ test('obchodník vidí všechny NESKRYTÉ volitelné položky, ne jen zahrnuté'
     NAST.jeAdmin = true; NAST.nahledRole = ''; render();
     return vsech > 0 && zahrnutych < pocetKatalogu && chk === pocetKatalogu;
   }));
+/* Ukazatele Náklad / Hrubý zisk / Marže v hlavičce řídí právo `kpi.marze`,
+ * NE `sloupce.naklad` (oprava 22. 8. 2026 večer — J. V. je v náhledu
+ * obchodníka viděl, protože obchodník má sloupce nákladů kvůli přirážce). */
+test('obchodník se sloupci nákladů, ale bez kpi.marze, ukazatele v hlavičce NEVIDÍ',
+  await page.evaluate(() => {
+    try {
+      NAST.jeAdmin = true; NAST.nahledRole = '';
+      zobrSet('sloupce.naklad', 'Obchodník', true);
+      zobrSet('kpi.marze', 'Obchodník', false);
+      NAST.kpiViditelne = { naklad: false, hrubyZisk: false, sleva: false, marze: false };
+      NAST.jeAdmin = false; NAST.nahledRole = 'Obchodník'; prepniTab('kalk'); render();
+      const h = document.getElementById('page-kalk').innerText;
+      window.__kpi1 = { zakl: /Základní cena/i.test(h), hz: /Hrubý zisk/i.test(h), smiN: smiZobrazit('sloupce.naklad'), smiK: smiZobrazit('kpi.marze') };
+      return window.__kpi1.zakl && !window.__kpi1.hz && window.__kpi1.smiN && !window.__kpi1.smiK;
+    } catch (e) { window.__kpi1 = String(e); return false; }
+    finally { NAST.jeAdmin = true; NAST.nahledRole = ''; render(); }
+  }), await page.evaluate(() => JSON.stringify(window.__kpi1)));
+test('po přidělení kpi.marze obchodník ukazatele vidí; bez přidělení je zase ztratí',
+  await page.evaluate(() => {
+    try {
+      NAST.jeAdmin = true; NAST.nahledRole = '';
+      zobrSet('kpi.marze', 'Obchodník', true);
+      NAST.jeAdmin = false; NAST.nahledRole = 'Obchodník'; render();
+      const vidi = /Hrubý zisk/i.test(document.getElementById('page-kalk').innerText);
+      NAST.jeAdmin = true; NAST.nahledRole = '';
+      zobrSet('kpi.marze', 'Obchodník', false);
+      NAST.jeAdmin = false; NAST.nahledRole = 'Obchodník'; render();
+      const nevidi = !/Hrubý zisk/i.test(document.getElementById('page-kalk').innerText);
+      return vidi && nevidi;
+    } catch (e) { return false; }
+    finally { NAST.jeAdmin = true; NAST.nahledRole = ''; zobrSet('sloupce.naklad', 'Obchodník', false); render(); }
+  }));
 test('a sloupce Viditelné / Výchozí u nich obchodník nemá',
   await page.evaluate(() => {
     NAST.jeAdmin = false; NAST.nahledRole = 'Obchodník'; render();

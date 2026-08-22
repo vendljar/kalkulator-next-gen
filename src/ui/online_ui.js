@@ -576,7 +576,12 @@ function onlineUloz(opts) {
   // k okamžiku uložení (stejně jako ukládání do složky).
   if (typeof protokolZapisTed === 'function') protokolZapisTed();
   ONLINE_STAV.pracuje = true;
-  return onlineApi('/api/zakazky', { zakazka: ZAK }).then(o => {
+  /* Razítko verze jde se zakázkou (B10, 22. 8. 2026): server odmítne přepsat
+   * verzi, ze které jsme nevyšli. Při kolizi se uživatel ptá a může vědomě
+   * přepsat (`prepsat: true`). */
+  const telo = { zakazka: ZAK, ocekavaneRazitko: ONLINE_STAV.razitko || '' };
+  if (opts.prepsat) telo.prepsat = true;
+  return onlineApi('/api/zakazky', telo).then(o => {
     ONLINE_STAV.soubor = o.soubor; ONLINE_STAV.razitko = o.razitko || '';
     ONLINE_STAV.posledni = JSON.stringify(ZAK);
     ONLINE_STAV.kdyUlozeno = new Date();
@@ -594,6 +599,13 @@ function onlineUloz(opts) {
     }
     return onlineNactiRejstrik().then(() => true);
   }).catch(e => {
+    /* Kolize verzí (B10): při ručním uložení se zeptat a případně přepsat;
+     * automatické uložení se neptá — jen varuje, ať se nepřepisuje potichu. */
+    if (e && e.data && e.data.kolize && !opts.tiche && !opts.prepsat
+        && confirm(e.message + '\n\nPřepsat uloženou verzi mými změnami?')) {
+      ONLINE_STAV.pracuje = false;
+      return onlineUloz({ ...opts, prepsat: true });
+    }
     /* Server odmítá i pokus přepsat odeslanou (uzamčenou) nabídku – jeho
      * zdůvodnění se ukáže doslova, je z téhož kódu jako hláška u složky. */
     onlineZprava('Neuloženo online: ' + e.message, 'varovani');
