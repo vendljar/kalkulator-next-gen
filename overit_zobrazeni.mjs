@@ -980,6 +980,32 @@ test('filtr zúží seznam na PROJ a hledání funguje i podle obchodníka',
     return jenProj === 1 && podleJmena === 1;
   }));
 
+test('pole Zákazník našeptává z kartotéky i z rejstříku',
+  await page.evaluate(() => {
+    NAST.jeAdmin = true; prepniTab('kalk');
+    const zalohaRej = ONLINE_STAV.rejstrik;      // vrátíme, další test na něm stojí
+    ZAK_DB.seznam = [{ nazev: 'Novotný stavby s.r.o.' }, { nazev: 'SVJ Verdunská' }];
+    ONLINE_STAV.rejstrik = [{ soubor: 'a.json', cislo: 'x', nazevAkce: 'a',
+      objednatel: 'Šachtové konstrukce a.s.', autor: '', autorJmeno: '', datum: '', variant: 1,
+      odeslane: 0, upraveno: '' }];
+    render();
+    /* obě hlavičky mají vlastní box — dvě stejná id by byla chyba */
+    if (!document.getElementById('naseptBoxZak_ock')
+      || !document.getElementById('naseptBoxZak_proj')) return false;
+    naseptavacZakKresli('ock', 'nov');
+    const box = document.getElementById('naseptBoxZak_ock');
+    const jenNovotny = [...box.querySelectorAll('.nasept-radek')].map(x => x.textContent);
+    naseptavacZakKresli('ock', 'sachtove');              // bez diakritiky
+    const bezDia = [...box.querySelectorAll('.nasept-radek')].map(x => x.textContent);
+    naseptavacZakVyber('SVJ Verdunská');
+    const zapsano = ZAK.objednatel === 'SVJ Verdunská';
+    ZAK.objednatel = '';
+    ONLINE_STAV.rejstrik = zalohaRej; ZAK_DB.seznam = [];
+    prepniTab('zakazka'); render();
+    return jenNovotny.length === 1 && /Novotný/.test(jenNovotny[0])
+      && bezDia.length === 1 && /Šachtové/.test(bezDia[0]) && zapsano;
+  }));
+
 test('žádná chyba JavaScriptu', chyby.length === 0, chyby.slice(0, 2).join(' | '));
 
 await prohlizec.close();

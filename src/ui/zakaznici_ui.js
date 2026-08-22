@@ -20,6 +20,58 @@ const ZAK_DB = {
   pracuje: false,
 };
 
+/* ---------- našeptávání v poli „Zákazník" (22. 8. 2026, zadání J. V.) -------
+ *
+ * Táž mechanika jako u vyhledávání nabídek (naseptavacFiltr v online_ui.js),
+ * jen jiný zdroj: jména z KARTOTÉKY zákazníků a k tomu zákazníci z rejstříku
+ * zakázek — kdo v kartotéce ještě není, ale nabídku už dostal, se má
+ * napovědět taky. Vybráním se vyplní JEN název; celou hlavičku i s IČO
+ * a kontakty přenese tlačítko „Vybrat z databáze zákazníků".
+ *
+ * Dvě hlavičky (OCK a PROJ) jsou v dokumentu obě, proto se box rozlišuje
+ * příponou — dvě stejná id by byla chyba. */
+function naseptavacZakazniciHodnoty() {
+  const videno = {};
+  const out = [];
+  const pridej = (h) => {
+    const t = String(h == null ? '' : h).trim();
+    if (!t || videno[t.toLowerCase()]) return;
+    videno[t.toLowerCase()] = true;
+    out.push(t);
+  };
+  (typeof ZAK_DB !== 'undefined' ? (ZAK_DB.seznam || []) : []).forEach(z => pridej(z && z.nazev));
+  (typeof ONLINE_STAV !== 'undefined' ? (ONLINE_STAV.rejstrik || []) : []).forEach(z => pridej(z && z.objednatel));
+  return out;
+}
+
+function naseptavacZakKresli(kde, dotaz) {
+  const el = document.getElementById('naseptBoxZak_' + kde);
+  if (!el) return;
+  const slova = (typeof uloSlova === 'function') ? uloSlova(dotaz) : [];
+  const n = !slova.length ? [] : naseptavacZakazniciHodnoty().filter(h => {
+    const t = uloNorm(h);
+    return h.toLowerCase() !== String(dotaz).trim().toLowerCase()
+      && slova.every(x => t.indexOf(x) >= 0);
+  }).slice(0, 10);
+  if (!n.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.innerHTML = n.map(h => `<div class="nasept-radek"
+    onmousedown="naseptavacZakVyber('${escJs(h)}')">${esc(h)}</div>`).join('');
+  el.style.display = '';
+}
+
+function naseptavacZakSchovej(kde) {
+  setTimeout(() => {
+    const el = document.getElementById('naseptBoxZak_' + kde);
+    if (el) el.style.display = 'none';
+  }, 150);
+}
+
+/* Zápis jde přes set(), takže platí zámek varianty i zápis do protokolu
+ * stejně, jako by uživatel jméno napsal ručně. */
+function naseptavacZakVyber(hodnota) {
+  set('ZAK.objednatel', hodnota);
+}
+
 function zakazniciMozne() {
   return typeof onlineApi === 'function' && typeof ONLINE_STAV !== 'undefined'
     && ONLINE_STAV.bezi && !!ONLINE_STAV.ja;

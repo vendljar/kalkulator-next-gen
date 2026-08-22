@@ -701,6 +701,114 @@ test('zámek nesmí být potichu vyměněn za jiný',
   (await post(zakazky, 'http://x/api/zakazky', { zakazka: jinyZamek }, cObch)).status === 409);
 
 /* ============================================================
+ * BEZPEČNOSTNÍ AUDIT 22. 8. 2026 — nálezy B1, B2, B3
+ *
+ * Tři místa, kde server do té doby věřil tomu, co poslal klient: tvar
+ * identifikátorů (B1 — id šlo do onclick), rozhodnutí o slevě (B2 — stav
+ * „schváleno" psal prohlížeč) a odemčení odeslané nabídky (B3 — roli
+ * správce ověřoval jen prohlížeč). Každý test tu posílá přesně ten
+ * požadavek, který by poslal upravený klient.
+ * ============================================================ */
+
+console.log('\n===== AUDIT B1: TVAR IDENTIFIKÁTORŮ =====\n');
+
+const xssZak = zakazkaCislo('2026 - OPR - CN - 0960');
+xssZak.varianty[0].id = "x');fetch('/api/zaloha');//";
+xssZak.aktivni = xssZak.varianty[0].id;
+const xssOdp = await post(zakazky, 'http://x/api/zakazky', { zakazka: xssZak }, cObch);
+test('B1: id varianty se skriptem server odmítne (400)', xssOdp.status === 400, 'vrátil ' + xssOdp.status);
+test('B1: odmítnutí je srozumitelné a bez vnitřku serveru',
+  /identifik/i.test(JSON.stringify(await xssOdp.json())));
+const xssMin = zakazkaCislo('2026 - OPR - CN - 0960');
+xssMin.varianty[0].id = "v1')x(";     // nejmenší nutná sada: apostrof a závorky
+test('B1: stačí apostrof a závorky v id a server odmítne',
+  (await post(zakazky, 'http://x/api/zakazky', { zakazka: xssMin }, cObch)).status === 400);
+const xssPozn = zakazkaCislo('2026 - OPR - CN - 0961');
+xssPozn.poznamky = [{ id: "p');alert(1);//", text: 'x' }];
+test('B1: id poznámky se skriptem server odmítne',
+  (await post(zakazky, 'http://x/api/zakazky', { zakazka: xssPozn }, cObch)).status === 400);
+const xssPril = zakazkaCislo('2026 - OPR - CN - 0961');
+xssPril.prilohy = [{ id: '<img src=x onerror=alert(1)>', nazev: 'a' }];
+test('B1: id přílohy se značkou server odmítne',
+  (await post(zakazky, 'http://x/api/zakazky', { zakazka: xssPril }, cObch)).status === 400);
+const ciste = zakazkaCislo('2026 - OPR - CN - 0961');
+ciste.poznamky = [{ id: 'pz1abc', text: 'x' }]; ciste.prilohy = [{ id: 'pr_1-2.3', nazev: 'a' }];
+test('B1: běžné identifikátory aplikace projdou',
+  (await post(zakazky, 'http://x/api/zakazky', { zakazka: ciste }, cObch)).status === 200);
+
+console.log('\n===== AUDIT B3: ODEMČENÍ ODESLANÉ NABÍDKY =====\n');
+
+const odemZak = zakazkaCislo('2026 - OPR - CN - 0962');
+zam.zamkniVariantu(odemZak.varianty[0], { typ: 'nabidka', kdy: new Date().toISOString(), kdo: 'Obchodník' });
+test('B3: příprava — zamčená zakázka uložena',
+  (await post(zakazky, 'http://x/api/zakazky', { zakazka: odemZak }, cObch)).status === 200);
+const odemPodvrh = JSON.parse(JSON.stringify(odemZak));
+odemPodvrh.varianty[0].odemceni = [{ kdy: new Date().toISOString(), kdo: 'Podvržený správce', duvod: 'x',
+                                     zamek: odemPodvrh.varianty[0].zamek }];
+odemPodvrh.varianty[0].zamek = null;
+test('B3: obchodník nemůže odemknout přes odemceni[] (403)',
+  (await post(zakazky, 'http://x/api/zakazky', { zakazka: odemPodvrh }, cObch)).status === 403);
+test('B3: ani vedoucí ne (403)',
+  (await post(zakazky, 'http://x/api/zakazky', { zakazka: odemPodvrh }, UCTY['Vedoucí'].cookie)).status === 403);
+const poPokusu = await (await get(zakazky,
+  'http://x/api/zakazky?soubor=2026-OPR-CN-0962.json', cAdmin)).json();
+test('B3: po odmítnutém pokusu je zámek v databázi nedotčen',
+  zam.variantaUzamcena(poPokusu.zakazka.varianty[0]));
+const odemAdmin = await post(zakazky, 'http://x/api/zakazky', { zakazka: odemPodvrh }, cAdmin);
+test('B3: administrátor odemkne', odemAdmin.status === 200, 'vrátil ' + odemAdmin.status);
+const poOdemceni = await (await get(zakazky,
+  'http://x/api/zakazky?soubor=2026-OPR-CN-0962.json', cAdmin)).json();
+const zaznamOdem = poOdemceni.zakazka.varianty[0].odemceni.slice(-1)[0];
+test('B3: razítko „kdo odemkl" píše server z relace, ne z těla',
+  zaznamOdem.kdo !== 'Podvržený správce' && zaznamOdem.kdo.includes(ADMIN_EMAIL), JSON.stringify(zaznamOdem));
+/* Druhý krok útoku: po odemčení přepsat data. Teď už zakázka zamčená není,
+ * takže obchodník data změnit smí — to je správně, odemčení bylo doložené
+ * správcem. Útok stál na tom, že KROK 1 udělal obchodník sám. */
+
+console.log('\n===== AUDIT B2: ROZHODNUTÍ O SLEVĚ =====\n');
+
+/* Stropy pro tuhle sadu: program má z přípravy jen minMarze; doplníme
+ * ukázkové stropy (obchodník 3 %, vedoucí 10 %), jako v test_schvalovani.js. */
+await post(program, 'http://x/api/program',
+  { cenik: cenikJinak(), cenikProj: ZC.zkusebniCenikProj(),
+    slevy: { minMarze: 0.02, stropy: { 'Obchodník': 0.03, 'Vedoucí': 0.10, 'Administrátor': 1 } } }, cAdmin);
+function slevaPodvrh(p) {
+  return { procenta: p, schema: '', role: 'Obchodník', poznamka: '', stav: 'schváleno',
+           schvalenoProc: p, schvalil: 'Vedoucí Podvržený', schvalilKdy: '2026-08-22T00:00:00Z' };
+}
+const slZak = zakazkaCislo('2026 - OPR - CN - 0963');
+slZak.varianty[0].data.sleva = slevaPodvrh(6);
+const slOdp = await post(zakazky, 'http://x/api/zakazky', { zakazka: slZak }, cObch);
+test('B2: obchodník nemůže uložit slevu jako schválenou (403)', slOdp.status === 403, 'vrátil ' + slOdp.status);
+const slProj = zakazkaCislo('2026 - OPR - CN - 0963');
+slProj.varianty[0].data.slevaProj = slevaPodvrh(6);
+test('B2: totéž pro slevu PROJ',
+  (await post(zakazky, 'http://x/api/zakazky', { zakazka: slProj }, cObch)).status === 403);
+const slAuto = zakazkaCislo('2026 - OPR - CN - 0963');
+slAuto.varianty[0].data.sleva = { ...slevaPodvrh(6), stav: 'schváleno automaticky', schvalil: '', schvalenoProc: undefined };
+test('B2: obchodník nemůže označit slevu nad stropem jako „schváleno automaticky"',
+  (await post(zakazky, 'http://x/api/zakazky', { zakazka: slAuto }, cObch)).status === 403);
+const slCeka = zakazkaCislo('2026 - OPR - CN - 0963');
+slCeka.varianty[0].data.sleva = { ...slevaPodvrh(6), stav: 'čeká na schválení', schvalil: '', schvalenoProc: undefined };
+test('B2: žádost „čeká na schválení" obchodník uloží',
+  (await post(zakazky, 'http://x/api/zakazky', { zakazka: slCeka }, cObch)).status === 200);
+const slVed = await post(zakazky, 'http://x/api/zakazky', { zakazka: slZak }, UCTY['Vedoucí'].cookie);
+test('B2: vedoucí slevu 6 % schválí', slVed.status === 200, 'vrátil ' + slVed.status);
+const slPo = await (await get(zakazky, 'http://x/api/zakazky?soubor=2026-OPR-CN-0963.json', cAdmin)).json();
+test('B2: jméno schvalovatele píše server z relace',
+  slPo.zakazka.varianty[0].data.sleva.schvalil !== 'Vedoucí Podvržený'
+  && slPo.zakazka.varianty[0].data.sleva.schvalilEmail === UCTY['Vedoucí'].email,
+  JSON.stringify(slPo.zakazka.varianty[0].data.sleva));
+test('B2: obchodník pak zakázku se schválenou slevou beze změny uloží',
+  (await post(zakazky, 'http://x/api/zakazky', { zakazka: slPo.zakazka }, cObch)).status === 200);
+const slVedNad = zakazkaCislo('2026 - OPR - CN - 0964');
+slVedNad.varianty[0].data.sleva = slevaPodvrh(15);
+test('B2: vedoucí nemůže schválit slevu nad svůj strop (403)',
+  (await post(zakazky, 'http://x/api/zakazky', { zakazka: slVedNad }, UCTY['Vedoucí'].cookie)).status === 403);
+test('B2: administrátor schválí i slevu nad stropem vedoucího',
+  (await post(zakazky, 'http://x/api/zakazky', { zakazka: slVedNad }, cAdmin)).status === 200);
+
+/* ============================================================
  * PLÁNOVANÁ FUNKCE
  * ============================================================ */
 
@@ -877,7 +985,7 @@ const PODPIS_PNG = 'data:image/png;base64,iVBORw0KGgo=';
 
 await post(uzivatele, 'http://x/api/uzivatele',
   { akce: 'zaloz', email: 'mazany@example.com', jmeno: 'Ke smazání',
-    role: 'Obchodník', heslo: 'MazanyHeslo1' }, cAdmin);
+    role: 'Vedoucí', heslo: 'MazanyHeslo1' }, cAdmin);   // vedoucí: smí sám schválit slevu do stropu (B2)
 const cMazany = await prihlas('mazany@example.com', 'MazanyHeslo1');
 await post(uzivatele, 'http://x/api/uzivatele',
   { akce: 'podpis', email: 'mazany@example.com', obrazek: PODPIS_PNG }, cAdmin);
@@ -889,8 +997,10 @@ test('příprava: mazaný účet má nahraný podpis',
  * pod rozhodnutím o slevě. Obojí musí smazání účtu přežít beze změny —
  * říkají, kdo co tehdy udělal, a to se nepřepisuje. */
 const razitkova = zakazkaCislo('2026 - OPR - CN - 0940');
-razitkova.varianty[0].data.sleva = { procenta: 12, role: 'Obchodník',
-  stav: 'schváleno', schvalil: 'mazany@example.com',
+/* Od 22. 8. 2026 (B2) rozhodnutí ověřuje server: razítko schvalovatele si
+ * napíše sám z relace. Proto tu účet je vedoucí a sleva je pod jeho stropem. */
+razitkova.varianty[0].data.sleva = { procenta: 6, role: 'Vedoucí',
+  stav: 'schváleno', schvalenoProc: 6, schvalil: 'mazany@example.com',
   schvalilKdy: new Date().toISOString(), poznamka: '' };
 zam.zamkniVariantu(razitkova.varianty[0],
   { typ: 'nabidka', kdy: new Date().toISOString(), kdo: 'mazany@example.com' });
@@ -1015,8 +1125,9 @@ test('zámek odeslané nabídky nese pořád jméno toho, kdo ji tehdy odeslal',
   razitkaPo.zakazka.varianty[0].zamek.kdo === 'mazany@example.com',
   JSON.stringify(razitkaPo.zakazka.varianty[0].zamek));
 test('podpis pod rozhodnutím o slevě zůstal taky beze změny',
-  razitkaPo.zakazka.varianty[0].data.sleva.schvalil === 'mazany@example.com',
-  razitkaPo.zakazka.varianty[0].data.sleva.schvalil);
+  razitkaPo.zakazka.varianty[0].data.sleva.schvalilEmail === 'mazany@example.com'
+  && /Ke smazání/.test(razitkaPo.zakazka.varianty[0].data.sleva.schvalil),
+  JSON.stringify(razitkaPo.zakazka.varianty[0].data.sleva));
 test('autor zakázky je ale nový hospodář, ne smazaný účet',
   razitkaPo.zakazka.autor === UCTY['Vedoucí'].email, razitkaPo.zakazka.autor);
 
@@ -1232,6 +1343,9 @@ test('vyzadujRoli si ověřuje účet v databázi, ne jen cookie',
  * znak po znaku.) */
 test('hesla se porovnávají časově bezpečně (timingSafeEqual)',
   /function hesloSedi[\s\S]{0,500}timingSafeEqual\s*\(/.test(sdilene));
+/* Totéž pro podpis relace (audit 22. 8. 2026, B22). */
+test('podpis relace se porovnává časově bezpečně (timingSafeEqual v relaceOver)',
+  /function relaceOver[\s\S]{0,700}timingSafeEqual\s*\(/.test(sdilene));
 /* Sůl se hledá UVNITŘ otiskHesla, ne kdekoli v souboru. Volné hledání
  * `randomBytes(` přestalo platit ve chvíli, kdy soubor začal náhodná data
  * používat i jinde (zástupný otisk pro #93) — mutace „sůl je pro všechny

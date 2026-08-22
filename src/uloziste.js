@@ -455,6 +455,54 @@ function uloProblemPopis(p) {
   return (p && p.cislo) ? t + ' (' + p.cislo + ')' : t;
 }
 
+/* ---------- kdo odemkl (bezpečnostní audit 22. 8. 2026, nález B3) --------
+ *
+ * uloKontrolaZamku přijímá zmizení zámku, když v nové variantě přibyl záznam
+ * v `odemceni[]` — to je správně, řádné odemčení správcem je doložený krok.
+ * Jenže KDO ten krok udělal, hlídal do 22. 8. jen prohlížeč (odemkniVariantu
+ * s `jeAdmin`). Upravený klient obchodníka poslal `zamek: null` + jeden
+ * záznam navíc a server to vzal. Tahle funkce vrátí varianty, u kterých
+ * se počet odemčení zvedl; server pak u nich vyžaduje roli administrátora
+ * a razítko `kdo`/`kdy` doplní sám z relace, ne z toho, co přišlo. */
+function uloOdemceniPribylo(naDisku, kUlozeni) {
+  const nove = (kUlozeni && kUlozeni.varianty) || [];
+  const stare = (naDisku && naDisku.varianty) || [];
+  return nove.filter(nv => {
+    if (!nv) return false;
+    const sv = stare.find(v => v && v.id === nv.id);
+    return uloPocetOdemceni(nv) > uloPocetOdemceni(sv);
+  });
+}
+
+/* ---------- tvar identifikátorů (bezpečnostní audit 22. 8. 2026, B1) ------
+ *
+ * Identifikátory variant, poznámek a příloh vyrábí aplikace (v<čas><pořadí>,
+ * pz…, pr…) a jsou to jediné hodnoty ze zakázky, které se v obrazovce
+ * vkládají přímo do `onclick="…('${id}')"`. Server je do 22. 8. přebíral,
+ * jak přišly — upravený klient tak mohl do id schovat skript, který by se
+ * spustil tomu, kdo zakázku otevře (administrátor: klik na „nastavit jako
+ * řídící"). Obrazovka od té doby escapuje, a server navíc nebezpečný tvar
+ * odmítne: písmena, číslice, tečka, podtržítko, pomlčka, nejvýš 80 znaků.
+ * Starší uložené zakázky mají id právě v tomhle tvaru, nic se nemigruje. */
+const ULO_ID_TVAR = /^[A-Za-z0-9._-]{1,80}$/;
+function uloIdBezpecne(id) { return ULO_ID_TVAR.test(String(id == null ? '' : id)); }
+function uloIdProblemy(zak) {
+  const out = [];
+  if (!zak) return out;
+  (Array.isArray(zak.varianty) ? zak.varianty : []).forEach(v => {
+    if (v && !uloIdBezpecne(v.id)) out.push({ kde: 'varianta', id: v.id });
+  });
+  (Array.isArray(zak.poznamky) ? zak.poznamky : []).forEach(p => {
+    if (p && !uloIdBezpecne(p.id)) out.push({ kde: 'poznámka', id: p.id });
+  });
+  (Array.isArray(zak.prilohy) ? zak.prilohy : []).forEach(p => {
+    if (p && !uloIdBezpecne(p.id)) out.push({ kde: 'příloha', id: p.id });
+  });
+  if (zak.aktivni != null && zak.aktivni !== '' && !uloIdBezpecne(zak.aktivni))
+    out.push({ kde: 'aktivní varianta', id: zak.aktivni });
+  return out;
+}
+
 if (typeof module !== 'undefined')
   module.exports = { ULO_PRIPONA, ULO_REJSTRIK_SOUBOR, ULO_SCHEMA, ULO_PROBLEMY,
                      uloNorm, uloSlova, uloCisloVyplneno, uloKlicSouboru,
@@ -467,4 +515,5 @@ if (typeof module !== 'undefined')
                      uloRejstrikZaznam, uloRejstrikNormalizuj, uloRejstrikSloucit,
                      uloDruhZakazky, uloObchodnik,
                      uloRejstrikOdeber, uloRejstrikSerad, uloHledej,
-                     uloZamekKlic, uloPocetOdemceni, uloKontrolaZamku, uloProblemPopis };
+                     uloZamekKlic, uloPocetOdemceni, uloKontrolaZamku, uloProblemPopis,
+                     uloOdemceniPribylo, ULO_ID_TVAR, uloIdBezpecne, uloIdProblemy };

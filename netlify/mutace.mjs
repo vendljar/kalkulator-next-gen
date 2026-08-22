@@ -40,8 +40,8 @@ const filtr = (process.argv[2] || '').toLowerCase();
 const MUTACE = [
   /* ---------- relace a hesla (lib/sdilene.mjs) ---------- */
   { nazev: 'podpis relace se neověřuje', soubor: 'lib/sdilene.mjs',
-    hledej: 'if (!telo || !pod || podpis(telo) !== pod) return null;',
-    nahrad: 'if (!telo) return null;',
+    hledej: '  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;',
+    nahrad: '  if (false) return null;',
     proc: 'kdokoli by si napsal vlastní cookie a byl administrátorem' },
 
   { nazev: 'platnost relace se neověřuje', soubor: 'lib/sdilene.mjs',
@@ -333,6 +333,52 @@ const MUTACE = [
     hledej: '      if (nv && JSON.stringify(nv.data) !== JSON.stringify(sv.data))',
     nahrad: '      if (false)',
     proc: 'zámek by zůstal, ale ceny pod ním by se změnily' },
+
+  /* ---------- bezpečnostní audit 22. 8. 2026 (B1, B2, B3, B22) ---------- */
+  { nazev: 'B22: podpis relace se porovnává obyčejně', soubor: 'lib/sdilene.mjs',
+    hledej: '  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;',
+    nahrad: '  if (a.toString() !== b.toString()) return null;',
+    proc: 'z doby odpovědi by šlo podpis relace hádat po znacích' },
+
+  { nazev: 'B1: id ze zakázky se berou, jak přijdou', soubor: 'functions/zakazky.mjs',
+    hledej: '  const spatnaId = ULO.uloIdProblemy(zak);\n  if (spatnaId.length)',
+    nahrad: '  const spatnaId = ULO.uloIdProblemy(zak);\n  if (false)',
+    proc: 'do id varianty by šel schovat skript, který se spustí tomu, kdo zakázku otevře' },
+
+  { nazev: 'B1: tvar id propustí apostrof', soubor: '../src/uloziste.js',
+    hledej: "const ULO_ID_TVAR = /^[A-Za-z0-9._-]{1,80}$/;",
+    nahrad: "const ULO_ID_TVAR = /^[A-Za-z0-9._'()-]{1,80}$/;",
+    proc: 'apostrof a závorky stačí k ukončení řetězce v onclick' },
+
+  { nazev: 'B3: odemknout přes odemceni[] smí kdokoli', soubor: 'functions/zakazky.mjs',
+    hledej: "      if (relace.role !== 'Administrátor')\n        return json({ ok: false, chyba: 'Odemknout odeslanou",
+    nahrad: "      if (false)\n        return json({ ok: false, chyba: 'Odemknout odeslanou",
+    proc: 'obchodník by dvěma zápisy přepsal odeslanou nabídku' },
+
+  { nazev: 'B3: razítko „kdo odemkl" se bere od klienta', soubor: 'functions/zakazky.mjs',
+    hledej: "          posledni.kdo = relace.jmeno ? relace.jmeno + ' <' + relace.email + '>' : relace.email;",
+    nahrad: "          posledni.kdo = posledni.kdo || relace.email;",
+    proc: 'záznam o odemčení by tvrdil, že to udělal někdo jiný' },
+
+  { nazev: 'B2: rozhodnutí o slevě se nekontroluje', soubor: 'functions/zakazky.mjs',
+    hledej: "  if (!rozhodnuti.ok) return json({ ok: false, chyba: 'Neuloženo: ' + rozhodnuti.chyba }, 403);",
+    nahrad: "  if (false) return json({ ok: false, chyba: 'Neuloženo: ' + rozhodnuti.chyba }, 403);",
+    proc: 'obchodník by si slevu schválil sám a do nabídky by odešla' },
+
+  { nazev: 'B2: strop role se při rozhodnutí ignoruje', soubor: '../src/schvalovani.js',
+    hledej: "        if (!schvalovaniSmiRozhodnout(role, p, nast))\n          return { ok: false, chyba: 'Slevu '",
+    nahrad: "        if (false)\n          return { ok: false, chyba: 'Slevu '",
+    proc: 'vedoucí (nebo kdokoli) by schválil slevu nad svůj strop' },
+
+  { nazev: 'B2: „schváleno automaticky" se věří klientovi', soubor: '../src/schvalovani.js',
+    hledej: "      if (sl.stav === SCHV_AUTO && p > 0 && !autoBezeZmeny && !schvalovaniSmiRozhodnout(role, p, nast))",
+    nahrad: "      if (false)",
+    proc: 'obchodník by poslal slevu 40 % jako automaticky schválenou' },
+
+  { nazev: 'B2: jméno schvalovatele se bere od klienta', soubor: '../src/schvalovani.js',
+    hledej: "          sl.schvalil = jmeno; sl.schvalilEmail = relace.email || '';",
+    nahrad: "          sl.schvalilEmail = relace.email || '';",
+    proc: 'v zakázce by stálo cizí jméno pod rozhodnutím' },
 
   /* ---------- zálohy ---------- */
   { nazev: 'zálohu stáhne kdokoli', soubor: 'functions/zaloha.mjs',

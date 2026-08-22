@@ -11,8 +11,8 @@ import { uloziste, vyzadujRoli, json } from '../lib/sdilene.mjs';
 import { jadro, jadroChyba } from '../lib/jadro.mjs';
 
 export default async (req) => {
-  let ULO;
-  try { ({ ULO } = await jadro()); } catch (e) { return jadroChyba(e); }
+  let ULO, SCHV;
+  try { ({ ULO, SCHV } = await jadro()); } catch (e) { return jadroChyba(e); }
 
   const { chyba, relace } = await vyzadujRoli(req);
   if (chyba) return chyba;
@@ -76,6 +76,16 @@ export default async (req) => {
   const jmeno = ULO.uloJmenoSouboru(zak);
   if (!jmeno) return json({ ok: false, chyba: 'Zakázka nemá vyplněné číslo nabídky.' }, 400);
 
+  /* Tvar identifikátorů (bezpečnostní audit 22. 8. 2026, nález B1). Id variant,
+   * poznámek a příloh jdou v obrazovce do onclick; obrazovka je od 22. 8.
+   * escapuje, ale server navíc nepustí dovnitř nic, co není písmeno, číslice,
+   * tečka, podtržítko nebo pomlčka. Dvě vrstvy — kdyby jedna selhala. */
+  const spatnaId = ULO.uloIdProblemy(zak);
+  if (spatnaId.length)
+    return json({ ok: false, chyba: 'Zakázka nese identifikátor v nepovoleném tvaru ('
+      + spatnaId.map(x => x.kde).join(', ') + '). Povolená jsou písmena, číslice, tečka, '
+      + 'podtržítko a pomlčka.' }, 400);
+
   /* vytištěná (odeslaná) nabídka se nikdy nepřepíše. Dvě vrstvy:
    * 1) TÁŽ kontrola jako u složky (uloKontrolaZamku) — zámek nesmí zmizet
    *    ani se změnit; žádná druhá pravda o zámcích.
@@ -84,6 +94,24 @@ export default async (req) => {
    *    klient by jinak mohl přepsat obsah odeslané nabídky a zámek si nechat. */
   const stara = await s.cti('z/' + jmeno);
   if (stara) {
+    /* Odemčení odeslané nabídky smí jen administrátor (audit 22. 8. 2026, B3).
+     * uloKontrolaZamku bere zmizení zámku jako řádné, když přibyl záznam
+     * v odemceni[] — ale KDO ho přidal, do té doby nikdo na serveru neověřil.
+     * Teď: přibylo-li odemčení, vyžaduje se role Administrátor a razítko
+     * kdo/kdy se přepíše z relace, ne z toho, co poslal klient. */
+    const odemcene = ULO.uloOdemceniPribylo(stara, zak);
+    if (odemcene.length) {
+      if (relace.role !== 'Administrátor')
+        return json({ ok: false, chyba: 'Odemknout odeslanou (uzamčenou) nabídku smí jen '
+          + 'administrátor. Pokračujte klonem varianty.' }, 403);
+      for (const v of odemcene) {
+        const posledni = v.odemceni[v.odemceni.length - 1];
+        if (posledni && typeof posledni === 'object') {
+          posledni.kdo = relace.jmeno ? relace.jmeno + ' <' + relace.email + '>' : relace.email;
+          posledni.kdy = new Date().toISOString();
+        }
+      }
+    }
     const k = ULO.uloKontrolaZamku(stara, zak);
     if (!k.ok)
       return json({ ok: false, chyba: 'Neuloženo: '
@@ -97,6 +125,15 @@ export default async (req) => {
           + 'nabídky. Pokračujte klonem varianty.' }, 409);
     }
   }
+
+  /* Rozhodnutí o slevě (bezpečnostní audit 22. 8. 2026, nález B2). Stav
+   * „schváleno" / „zamítnuto" a jméno schvalovatele se do té doby přebíraly
+   * z prohlížeče. Teď je hlídá SCHV.schvalovaniServerKontrola proti stropům
+   * z programu (program/db.slevy) a roli z relace; razítka píše server. */
+  const prog = await (await uloziste('program')).cti('db');
+  const slevyNast = (prog && prog.platny && prog.platny.slevy) || {};
+  const rozhodnuti = SCHV.schvalovaniServerKontrola(stara, zak, relace, slevyNast);
+  if (!rozhodnuti.ok) return json({ ok: false, chyba: 'Neuloženo: ' + rozhodnuti.chyba }, 403);
 
   /* Autor zakázky (11. 8. 2026). Doteď se nikde nepsalo, kdo zakázku založil —
    * rejstřík věděl jen, kdo do něj naposledy sáhl. Bez autora se ale nedá

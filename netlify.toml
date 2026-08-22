@@ -12,3 +12,26 @@
 [functions]
   directory = "netlify/functions"
   included_files = ["verze.txt"]
+
+# Bezpečnostní hlavičky (bezpečnostní audit 22. 8. 2026, nález B5).
+# Aplikace je jeden soubor s vloženými skripty a styly, proto 'unsafe-inline'
+# u script-src a style-src zatím zůstává. Podstatné je, co CSP ZAKAZUJE:
+# spojení kamkoli jinam než na vlastní web a ARES (connect-src) — tedy žádný
+# odvod dat ven, kdyby se do stránky přece jen dostal cizí skript; vložení
+# stránky do cizího rámu (frame-ancestors); objekty a změnu základu adresy.
+# Tiskové náhledy (window.open + document.write) dědí CSP rodiče a inline
+# skripty mají povolené, takže fungují beze změny.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://ares.gov.cz; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'"
+
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Cache-Control = "no-store"

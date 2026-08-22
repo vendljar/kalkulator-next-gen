@@ -43,6 +43,7 @@ Object.assign(globalThis, require('../../src/zakazka.js'));
 Object.assign(globalThis, require('../../src/uloziste.js'));
 Object.assign(globalThis, require('../../src/zamek.js'));
 Object.assign(globalThis, require('../../src/sleva.js'));
+Object.assign(globalThis, require('../../src/schvalovani.js'));   // serverová pojistka rozhodnutí (B2)
 Object.assign(globalThis, require('../../src/zaokrouhleni.js'));
 Object.assign(globalThis, require('../../src/marze.js'));
 Object.assign(globalThis, require('../../src/kontroly.js'));
@@ -62,6 +63,7 @@ Object.assign(globalThis, require('../../src/sluzba.js'));   // jen server (slu�
  * (ULO.uloJmenoSouboru, fm.firmaLzeZverejnit) – ať se nemíchá s globály. */
 module.exports = {
   ULO: require('../../src/uloziste.js'),
+  SCHV: require('../../src/schvalovani.js'),
   fm: require('../../src/firma.js'),
   /* Matice zobrazení (#136). Server ji čte i zapisuje v /api/zobrazeni a
    * očistu dělá TÝMŽ kódem jako prohlížeč — jinak by mohl uložit klíč, který

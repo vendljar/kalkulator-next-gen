@@ -361,8 +361,76 @@ function schvalovaniSouhrn(seznam) {
   return out;
 }
 
+/* ---------- serverová pojistka rozhodnutí (audit 22. 8. 2026, nález B2) ----
+ *
+ * Do 22. 8. 2026 se stav schválení slevy ukládal tak, jak přišel z prohlížeče.
+ * Strop role hlídala jen obrazovka — upravený klient obchodníka mohl poslat
+ * `stav: 'schváleno', schvalil: 'vedoucí'` a sleva se propsala do nabídky
+ * i do rejstříku žádostí jako rozhodnutá. Komentář v schvalovani.mjs tvrdil
+ * kontrolu „při zápisu zakázky", která v kódu nebyla.
+ *
+ * Pravidlo: ROZHODNUTÍ (schváleno / zamítnuto člověkem) se smí ve srovnání
+ * s uloženou verzí OBJEVIT NEBO ZMĚNIT jen od role, která by ho směla udělat
+ * i v obrazovce (schvalovaniSmiRozhodnout — Administrátor vždy, Vedoucí do
+ * svého stropu). Stejné rozhodnutí, jaké už v databázi je, projde každému
+ * (obchodník ukládá zakázku se schválenou slevou dál). „Schváleno
+ * automaticky" je také tvrzení, že sleva je ve stropu — server ho ověří
+ * proti stropu role TOHO, KDO UKLÁDÁ. Razítko `schvalil`/`zamitl` (+ e-mail)
+ * píše server z relace, nikdy z těla požadavku. Zamítnutí bez jména
+ * (`zamitl: ''`) je automatické „pod minimální marží" a nehlídá se tady —
+ * marži server nepočítá; propsat ho do ceny stejně nejde (slevaPlati).
+ *
+ * Vrací { ok:true } nebo { ok:false, chyba } a v `nova` doplní razítka.
+ * `relace` = { email, jmeno, role }, `nast` = program.db.slevy (stropy). */
+function schvalovaniRozhodnutiKlic(sl) {
+  if (!sl) return '';
+  const lidske = sl.stav === SCHV_SCHVALENO || (sl.stav === SCHV_ZAMITNUTO && !!sl.zamitl);
+  if (!lidske) return '';
+  return JSON.stringify({ stav: sl.stav, p: +sl.procenta || 0,
+    sp: sl.schvalenoProc, s: sl.schvalil || '', sk: sl.schvalilKdy || '',
+    zp: sl.zamitnutoProc, z: sl.zamitl || '', zk: sl.zamitlKdy || '' });
+}
+function schvalovaniServerKontrola(stara, nova, relace, nast) {
+  relace = relace || {};
+  const role = relace.role || '';
+  const jmeno = (relace.jmeno || relace.email || '') + (role ? ' (' + role + ')' : '');
+  const stare = (stara && Array.isArray(stara.varianty)) ? stara.varianty : [];
+  const ted = new Date().toISOString();
+  for (const v of ((nova && Array.isArray(nova.varianty)) ? nova.varianty : [])) {
+    if (!v || !v.data) continue;
+    const sv = stare.find(x => x && x.id === v.id);
+    for (const cast of ['sleva', 'slevaProj']) {
+      const sl = v.data[cast];
+      if (!sl) continue;
+      const p = +sl.procenta || 0;
+      const ulozene = sv && sv.data ? sv.data[cast] : null;
+      const klicNovy = schvalovaniRozhodnutiKlic(sl);
+      if (klicNovy && klicNovy === schvalovaniRozhodnutiKlic(ulozene)) continue;   // beze změny
+      if (klicNovy) {
+        if (!schvalovaniSmiRozhodnout(role, p, nast))
+          return { ok: false, chyba: 'Slevu ' + p + ' % smí schválit nebo zamítnout jen '
+            + 'nadřízený s dostatečným stropem; role ' + (role || '?') + ' na to právo nemá.' };
+        if (sl.stav === SCHV_SCHVALENO) {
+          sl.schvalil = jmeno; sl.schvalilEmail = relace.email || '';
+          if (!sl.schvalilKdy) sl.schvalilKdy = ted;
+        } else {
+          sl.zamitl = jmeno; sl.zamitlEmail = relace.email || '';
+          if (!sl.zamitlKdy) sl.zamitlKdy = ted;
+        }
+        continue;
+      }
+      const autoBezeZmeny = !!ulozene && ulozene.stav === SCHV_AUTO && (+ulozene.procenta || 0) === p;
+      if (sl.stav === SCHV_AUTO && p > 0 && !autoBezeZmeny && !schvalovaniSmiRozhodnout(role, p, nast))
+        return { ok: false, chyba: 'Sleva ' + p + ' % je nad stropem role ' + (role || '?')
+          + ' a nemůže být schválená automaticky — musí počkat na nadřízeného.' };
+    }
+  }
+  return { ok: true };
+}
+
 if (typeof module !== 'undefined')
   module.exports = { SCHV_BEZ, SCHV_AUTO, SCHV_CEKA, SCHV_SCHVALENO, SCHV_ZAMITNUTO,
+                     schvalovaniRozhodnutiKlic, schvalovaniServerKontrola,
                      SCHV_PORADI, SCHV_POPIS, SCHV_ROLE_VYCHOZI,
                      schvalovaniKategorie, schvalovaniStrop, schvalovaniSmiRozhodnout,
                      schvalovaniKdoMuze, schvalovaniPrepocti,

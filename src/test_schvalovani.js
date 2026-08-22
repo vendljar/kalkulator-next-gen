@@ -240,5 +240,62 @@ test('null místo zakázky dá prázdný seznam', schvalovaniSeznam(null, VYP, N
 test('souhrn prázdného seznamu je samé nuly',
   schvalovaniSouhrn([]).celkem === 0 && schvalovaniSouhrn([]).ceka === 0);
 
+
+/* ---------- serverová pojistka rozhodnutí (bezpečnostní audit 22. 8. 2026, B2) ---- */
+console.log('\n--- schvalovaniServerKontrola (B2) ---');
+function zakSe(sleva, slevaProj) {
+  return { varianty: [{ id: 'v1', data: { sleva: sleva || slevaDefault(), slevaProj: slevaProj || slevaDefault() } }] };
+}
+function podvrh(p) {
+  return { ...slevaDefault(), procenta: p, stav: SCHV_SCHVALENO, schvalenoProc: p,
+           schvalil: 'Vedoucí Podvržený', schvalilKdy: '2026-08-22T00:00:00Z' };
+}
+const OBCH = { email: 'o@x.cz', jmeno: 'Obchodník Ondřej', role: 'Obchodník' };
+const VED = { email: 'v@x.cz', jmeno: 'Vedoucí Věra', role: 'Vedoucí' };
+const ADM = { email: 'a@x.cz', jmeno: 'Admin Alois', role: 'Administrátor' };
+
+let r = schvalovaniServerKontrola(null, zakSe(podvrh(NAD_STROP)), OBCH, NAST);
+test('obchodník nemůže poslat slevu jako schválenou', r.ok === false, JSON.stringify(r));
+r = schvalovaniServerKontrola(null, zakSe(null, podvrh(NAD_STROP)), OBCH, NAST);
+test('totéž platí pro slevu PROJ', r.ok === false);
+const zv = zakSe(podvrh(NAD_STROP));
+r = schvalovaniServerKontrola(null, zv, VED, NAST);
+test('vedoucí schválí slevu pod svým stropem', r.ok === true, JSON.stringify(r));
+test('razítko schvalovatele píše server z relace, ne z těla požadavku',
+  zv.varianty[0].data.sleva.schvalil === 'Vedoucí Věra (Vedoucí)'
+  && zv.varianty[0].data.sleva.schvalilEmail === 'v@x.cz', JSON.stringify(zv.varianty[0].data.sleva));
+r = schvalovaniServerKontrola(null, zakSe(podvrh(NAD_VEDOUCIHO)), VED, NAST);
+test('vedoucí nemůže schválit slevu nad svůj strop', r.ok === false);
+r = schvalovaniServerKontrola(null, zakSe(podvrh(NAD_VEDOUCIHO)), ADM, NAST);
+test('administrátor schválí cokoli', r.ok === true);
+/* obchodník ukládá zakázku, kde už schválení JE (beze změny) */
+const ulozena = JSON.parse(JSON.stringify(zv));
+r = schvalovaniServerKontrola(ulozena, JSON.parse(JSON.stringify(ulozena)), OBCH, NAST);
+test('obchodník smí uložit zakázku s už uloženým (nezměněným) schválením', r.ok === true, JSON.stringify(r));
+const zmenena = JSON.parse(JSON.stringify(ulozena)); zmenena.varianty[0].data.sleva.procenta = NAD_STROP + 1;
+r = schvalovaniServerKontrola(ulozena, zmenena, OBCH, NAST);
+test('změna procenta pod cizím schválením obchodníkovi neprojde', r.ok === false);
+/* „schváleno automaticky" je tvrzení o stropu */
+const auto = { ...slevaDefault(), procenta: NAD_STROP, stav: SCHV_AUTO };
+r = schvalovaniServerKontrola(null, zakSe(auto), OBCH, NAST);
+test('obchodník nemůže označit slevu nad stropem jako schválenou automaticky', r.ok === false);
+r = schvalovaniServerKontrola(null, zakSe({ ...slevaDefault(), procenta: DO_STROPU, stav: SCHV_AUTO }), OBCH, NAST);
+test('sleva do stropu obchodníka projde automaticky', r.ok === true, JSON.stringify(r));
+const autoUlozena = zakSe({ ...auto });
+r = schvalovaniServerKontrola(autoUlozena, JSON.parse(JSON.stringify(autoUlozena)), OBCH, NAST);
+test('už uložené automatické schválení (např. od admina) obchodník uloží beze změny', r.ok === true);
+/* zamítnutí */
+const zam = { ...slevaDefault(), procenta: NAD_STROP, stav: SCHV_ZAMITNUTO, zamitnutoProc: NAD_STROP, zamitl: 'někdo' };
+r = schvalovaniServerKontrola(null, zakSe(zam), OBCH, NAST);
+test('lidské zamítnutí od obchodníka neprojde', r.ok === false);
+const zamAuto = { ...slevaDefault(), procenta: NAD_STROP, stav: SCHV_ZAMITNUTO, zamitl: '' };
+r = schvalovaniServerKontrola(null, zakSe(zamAuto), OBCH, NAST);
+test('automatické zamítnutí (pod marží, bez jména) projde — do ceny se stejně nepropíše',
+  r.ok === true && !slevaPlati(zamAuto));
+r = schvalovaniServerKontrola(null, zakSe({ ...slevaDefault(), procenta: NAD_STROP, stav: SCHV_CEKA }), OBCH, NAST);
+test('žádost „čeká na schválení" obchodník uloží', r.ok === true);
+r = schvalovaniServerKontrola(null, { varianty: [{ id: 'v1' }, null, { id: 'v2', data: {} }] }, OBCH, NAST);
+test('varianty bez dat nepadají', r.ok === true);
+
 console.log(`\n${ok} prošlo, ${fail} selhalo`);
 process.exit(fail ? 1 : 0);

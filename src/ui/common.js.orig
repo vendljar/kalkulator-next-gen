@@ -95,17 +95,17 @@ const NAST = {
   // změny vidět kdo, kdy a proč. Odtud se načte při spuštění a tyhle
   // hodnoty přepíše. Čísla níž jsou schválně kulatá, aby si je nikdo
   // nespletl se skutečnými.
-  slevy: {  // STROPY A MIN. MARŽE VYNULOVÁNY pro GitHub (pripravit_github.py)
+  slevy: {
     ukazkove: true,            // #40 – vymyšlené hodnoty; zhasne načtením _program.json
-    minMarze: 0,            // pojistka: sleva nesmí stlačit marži pod tuto hranici
+    minMarze: 0.10,            // pojistka: sleva nesmí stlačit marži pod tuto hranici
     /* Maximum globální slevy (zadání 2. 8. 2026: „nastav maximální globální
      * slevu na 30 %"). Hlídá pole „Globální sleva PROJ" – sleva ZAK-10 má
      * vlastní stropy dle role výše. Zákonná třicítka to není, proto je
      * editovatelná v Nastavení → Slevy; záloha v kontroly.js se s ní musí
      * shodovat (hlídá test_kontroly.js). */
-    maxGlobalni: 0,
+    maxGlobalni: 0.30,
     stropy: {                  // max sleva bez schválení dle role (podíl z ceny bez DPH)
-      'Obchodník': 0, 'Vedoucí': 0, 'Administrátor': 0,
+      'Obchodník': 0.05, 'Vedoucí': 0.15, 'Administrátor': 1,
     },
     schemata: [
       { nazev: 'Standardní obchodní sleva', typ: 'percentage', popis: 'Běžná vyjednávací sleva na cenu bez DPH.' },
@@ -759,21 +759,6 @@ function zakazkaHlavicka(ock) {
   const txt = (path, label, pill) => `<div class="row"><label>${label}${pill || ''}</label>
     <input type="text" value="${esc(get(path))}" onchange="set('${path}', this.value)"></div>`;
 
-  /* Pole „Zákazník" našeptává z kartotéky i z rejstříku zakázek (22. 8. 2026,
-   * zadání J. V.). `kde` je 'ock' nebo 'proj' — obě hlavičky jsou v dokumentu
-   * zároveň, takže box potřebuje vlastní id. Zapisuje se přes onchange jako
-   * dosud; našeptávač jen nabízí, nic nevyplňuje sám. */
-  const zakaznikRow = (kde) => `<div class="row"><label>Zákazník</label>
-    <span class="nasept-wrap" style="flex:1"><input type="text" style="width:100%" autocomplete="off"
-      value="${esc(get('ZAK.objednatel'))}"
-      title="Při psaní se nabízejí zákazníci z databáze a z dřívějších zakázek. Celou hlavičku i s IČO přenese tlačítko „Vybrat z databáze zákazníků“."
-      onchange="set('ZAK.objednatel', this.value)"
-      oninput="naseptavacZakKresli('${kde}', this.value)"
-      onfocus="naseptavacZakKresli('${kde}', this.value)"
-      onblur="naseptavacZakSchovej('${kde}')"
-      onkeydown="if(event.key==='Escape')naseptavacZakSchovej('${kde}')">
-    <span class="nasept-box" id="naseptBoxZak_${kde}" style="display:none"></span></span></div>`;
-
   /* Kontrola duplicit (19. 8. 2026): číslo i název se porovnávají s online
    * rejstříkem zakázek; kolize svítí štítkem hned u pole, kde se opravuje.
    * Tvrdá pojistka je na serveru (cizí zakázku pod stejným číslem odmítne). */
@@ -845,7 +830,7 @@ function zakazkaHlavicka(ock) {
   const ridiciPill = `<span class="pill ${akt.ridici ? '' : 'mut'}" style="margin-left:12px" title="řídící = aktuálně platná varianta pro nabídku">${akt.ridici ? '✓ řídící' : 'není řídící'}</span>`;
   const variantaRow = `<div class="row"><label>Otevřená varianta${ridiciPill}</label>
     <select onchange="varAktivuj(this.value)" title="přepnout počítanou variantu">${opts}</select></div>`;
-  const ridiciBtn = akt.ridici ? '' : `<div class="row"><label></label><button class="mini noprint" onclick="varRidici('${escJs(akt.id)}')">nastavit jako řídící (platná je „${esc(rid.nazev)}")</button></div>`;
+  const ridiciBtn = akt.ridici ? '' : `<div class="row"><label></label><button class="mini noprint" onclick="varRidici('${akt.id}')">nastavit jako řídící (platná je „${esc(rid.nazev)}")</button></div>`;
   const rezimRow = `<div class="row"><label>Režim výpočtu</label>
     <select onchange="set('OCK.fixes', this.value==='fix')" title="přepnutí Model 2 – opravený / Model 1 – 1:1 jako Excel">
       <option value="fix" ${OCK.fixes ? 'selected' : ''}>Model 2 – opravený</option>
@@ -901,7 +886,7 @@ function zakazkaHlavicka(ock) {
           ${txt('ZAK.cislo', 'Číslo nabídky (CN)', dupCislo)}${txt('ZAK.nazevAkce', 'Název akce', dupNazev)}${txt('ZAK.adresa', 'Adresa stavby')}${datumRow}
         </div>
         <div class="zak-head-col">
-          ${zakaznikRow('proj')}${txt('ZAK.kontakt', 'Kontaktní osoba')}${icoRow('ZAK.ico', 'proj')}${dphRowProj}
+          ${txt('ZAK.objednatel', 'Zákazník')}${txt('ZAK.kontakt', 'Kontaktní osoba')}${icoRow('ZAK.ico', 'proj')}${dphRowProj}
         </div>
         <div class="zak-head-col">${variantaRow}${ridiciBtn}${prirazkaRowProj}</div>
       </div>${puvodRadek}
@@ -921,7 +906,7 @@ function zakazkaHlavicka(ock) {
         ${txt('ZAK.cislo', 'Číslo nabídky (CN)', dupCislo)}${txt('ZAK.nazevAkce', 'Název akce', dupNazev)}${txt('ZAK.adresa', 'Adresa stavby')}${datumRow}
       </div>
       <div class="zak-head-col">
-        ${zakaznikRow('ock')}${txt('ZAK.kontakt', 'Kontaktní osoba')}${icoRow('ZAK.ico')}${dphRow}
+        ${txt('ZAK.objednatel', 'Zákazník')}${txt('ZAK.kontakt', 'Kontaktní osoba')}${icoRow('ZAK.ico')}${dphRow}
       </div>
       <div class="zak-head-col">
         ${variantaRow}${ridiciBtn}${rezimRow}${prirazkaRow}

@@ -38,6 +38,7 @@ const { uloJmenoSouboru, uloJeZakazkovySoubor, uloKlicSouboru,
         uloRejstrikOdeber, uloRejstrikSerad, uloHledej,
         uloKontrolaZamku, uloProblemPopis, uloKolize, uloRazitko,
         uloRazitkoNove, ULO_REJSTRIK_SOUBOR,
+        uloIdBezpecne, uloIdProblemy, uloOdemceniPribylo,
         uloZalohaRozhodni, uloZalohaStariDni, ULO_ZALOHA_STARI_DNI,
         uloZalohaSmiPrepsat } = U;
 
@@ -296,6 +297,36 @@ test('záznam bez těla zakázky nechrání nic',
                       { cislo: '', nazevAkce: '' }) === true);
 test('chybějící ctx se bere jako prázdná zakázka (radši nepřepisovat)',
   uloZalohaSmiPrepsat(zaloha(), null) === false);
+
+
+/* ---------- bezpečnostní audit 22. 8. 2026: B1 (tvar id) a B3 (kdo odemkl) ---- */
+console.log('\n--- tvar identifikátorů (B1) ---');
+test('běžná id aplikace jsou v povoleném tvaru',
+  uloIdBezpecne('v' + Date.now().toString(36) + 'a') && uloIdBezpecne('pz1abc') && uloIdBezpecne('pr_1-2.3'));
+test('id se skriptem (apostrof, závorky) je nepřípustné',
+  !uloIdBezpecne("x');fetch('/api/zaloha');//") && !uloIdBezpecne('<img onerror=1>') && !uloIdBezpecne(''));
+test('id delší než 80 znaků je nepřípustné', !uloIdBezpecne('a'.repeat(81)) && uloIdBezpecne('a'.repeat(80)));
+const zakId = { varianty: [{ id: 'v1' }, { id: "v2');alert(1);//" }],
+                poznamky: [{ id: 'pz1' }], prilohy: [{ id: 'pr<1>' }], aktivni: 'v1' };
+const probl = uloIdProblemy(zakId);
+test('uloIdProblemy najde špatnou variantu i přílohu, dobré nechá',
+  probl.length === 2 && probl[0].kde === 'varianta' && probl[1].kde === 'příloha', JSON.stringify(probl));
+test('čistá zakázka nemá žádný problém s id',
+  uloIdProblemy({ varianty: [{ id: 'v1' }], poznamky: [], prilohy: [], aktivni: 'v1' }).length === 0);
+test('prázdná zakázka nepadá', uloIdProblemy(null).length === 0 && uloIdProblemy({}).length === 0);
+
+console.log('\n--- přibylé odemčení (B3) ---');
+const naDiskuB3 = { varianty: [{ id: 'v1', zamek: { zamceno: true, kdy: 'k', typ: 'nabidka' }, odemceni: [] },
+                             { id: 'v2' }] };
+const odemknuta = { varianty: [{ id: 'v1', zamek: null, odemceni: [{ kdo: 'x', duvod: 'd' }] }, { id: 'v2' }] };
+test('uloOdemceniPribylo vrátí variantu, u které přibyl záznam odemčení',
+  uloOdemceniPribylo(naDiskuB3, odemknuta).map(v => v.id).join() === 'v1');
+test('beze změny počtu odemčení nevrací nic',
+  uloOdemceniPribylo(naDiskuB3, naDiskuB3).length === 0);
+test('nová varianta s odemčením (na disku není) se také počítá jako přibylé',
+  uloOdemceniPribylo(naDiskuB3, { varianty: [{ id: 'v9', odemceni: [{}] }] }).map(v => v.id).join() === 'v9');
+test('uloKontrolaZamku odemčení přes odemceni[] samo propouští (roli hlídá server)',
+  uloKontrolaZamku(naDiskuB3, odemknuta).ok === true);
 
 console.log('\n' + ok + ' prošlo, ' + fail + ' selhalo');
 process.exit(fail ? 1 : 0);

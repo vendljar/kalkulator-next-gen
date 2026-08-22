@@ -162,7 +162,11 @@ export function relaceOver(cookieHlavicka) {
   const m = /(?:^|;\s*)relace=([^;]+)/.exec(cookieHlavicka || '');
   if (!m) return null;
   const [telo, pod] = m[1].split('.');
-  if (!telo || !pod || podpis(telo) !== pod) return null;
+  if (!telo || !pod) return null;
+  /* Porovnání podpisu v konstantním čase (audit 22. 8. 2026, B22) — stejně
+   * jako u hesla. Přes síť je rozdíl neměřitelný, ale je to jeden řádek. */
+  const a = Buffer.from(podpis(telo)), b = Buffer.from(pod);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
   try {
     const r = JSON.parse(Buffer.from(telo, 'base64url').toString());
     return (r.exp > Date.now()) ? r : null;

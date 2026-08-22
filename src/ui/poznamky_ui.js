@@ -131,9 +131,9 @@ function poznamkyRadek(p) {
   const upr = p.upraveno
     ? ` <span class="pozn-upr">upraveno ${esc(poznamkyDatum(p.upraveno.kdy))}</span>` : '';
   const ovladani = smazana
-    ? `<button class="mini" onclick="poznamkyObnovUI('${p.id}')">Vrátit</button>`
-    : `<button class="mini" onclick="poznamkyUpravStart('${p.id}')">Upravit</button>
-       <button class="mini" onclick="poznamkySmazUI('${p.id}')">Smazat</button>`;
+    ? `<button class="mini" onclick="poznamkyObnovUI('${escJs(p.id)}')">Vrátit</button>`
+    : `<button class="mini" onclick="poznamkyUpravStart('${escJs(p.id)}')">Upravit</button>
+       <button class="mini" onclick="poznamkySmazUI('${escJs(p.id)}')">Smazat</button>`;
   const stopa = smazana
     ? `<div class="pozn-stopa">Smazal ${esc(p.smazano.kdo || 'neuvedeno')} ${esc(poznamkyDatum(p.smazano.kdy))}
        – záznam zůstává v zakázce, dokud ho někdo nevrátí.</div>` : '';
@@ -153,8 +153,8 @@ function prilohyRadek(p) {
     <span class="vel">${esc(poznamkyVelikostText(p.velikost))}</span>
     <span class="kdy">${esc(poznamkyDatum(p.kdy))}${p.kdo ? ', ' + esc(p.kdo) : ''}</span>
     <span class="ovl">
-      <button class="mini" onclick="prilohyStahni('${p.id}')">Stáhnout</button>
-      <button class="mini" onclick="prilohySmazUI('${p.id}')">Odebrat</button>
+      <button class="mini" onclick="prilohyStahni('${escJs(p.id)}')">Stáhnout</button>
+      <button class="mini" onclick="prilohySmazUI('${escJs(p.id)}')">Odebrat</button>
     </span></li>`;
 }
 
