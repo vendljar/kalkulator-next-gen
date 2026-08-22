@@ -1532,6 +1532,18 @@ function onlineHlavickaZakazek(vyber) {
       <th></th></tr>`;
 }
 
+/* Klik na ŘÁDEK otevře zakázku (22. 8. 2026, zadání J. V.: „při kliku na
+ * vybranou nabídku potřebuji, aby se zobrazily její detaily a varianty
+ * v následujících sekcích"). Otevření naplní souhrn řídící varianty
+ * i seznam kalkulací pod hledáním — jsou to živé pohledy na otevřenou
+ * zakázku. Kliky na zaškrtávátko, tlačítko nebo políčko se nehijackují
+ * a neuložené změny hlídá onlineOtevri (ptá se, nic nezahazuje samo). */
+function prehledRadekOtevri(ev, soubor) {
+  const cil = ev && ev.target;
+  if (cil && /^(INPUT|BUTTON|SELECT|A|LABEL)$/.test(cil.tagName)) return;
+  onlineOtevri(soubor);
+}
+
 function onlineRadekZakazky(z, vyber) {
   const otevrena = z.soubor === ONLINE_STAV.soubor;
   const odeslane = z.odeslane ? `<span title="odeslané (vytištěné) nabídky">🔒 ${z.odeslane}</span>` : '';
@@ -1544,7 +1556,8 @@ function onlineRadekZakazky(z, vyber) {
     ? `<td><input type="checkbox" ${onlineVybrano(z.soubor) ? 'checked' : ''}
         onchange="onlineVyberPrepni('${escJs(z.soubor)}', this.checked)"
         title="vybrat ke smazání"></td>` : '';
-  return `<tr class="${otevrena ? 'aktivni' : ''}">${chk}
+  return `<tr class="${otevrena ? 'aktivni' : ''} radek-klik" onclick="prehledRadekOtevri(event, '${escJs(z.soubor)}')"
+    title="kliknutím otevřete zakázku — souhrn a varianty se ukážou v sekcích níž">${chk}
     <td style="text-align:left">${esc(z.cislo || '(bez čísla)')}</td>
     <td style="text-align:left;white-space:normal">${esc(z.nazevAkce || '—')}</td>
     <td style="text-align:left;white-space:normal">${esc(z.objednatel || '—')}</td>
@@ -1592,6 +1605,32 @@ function prehledNabidky() {
  * Výběr žije v paměti okna, ne v datech — je to volba, ne vlastnost zakázky.
  * Maže se PO JEDNÉ (server neumí a nemá umět dávku): když jedna zakázka
  * selže, ostatní se tím nezruší a v hlášce je vidět, která zůstala. */
+/* ---------- našeptávání ve vyhledávání (22. 8. 2026, zadání J. V.) ----------
+ *
+ * Nativní <datalist>: prohlížeč nabízí hodnoty už při psaní a filtruje je
+ * sám, žádný vlastní dropdown se nekreslí (a nemá co rozbít). Nabízejí se
+ * hodnoty, které v rejstříku OPRAVDU jsou — čísla nabídek, názvy akcí,
+ * zákazníci a jména obchodníků — každá jednou, prázdné se vynechají.
+ * Dvě místa vyhledávání (Přehled a okno Zakázky online) = dva id,
+ * jinak by v dokumentu bylo dvojí id. */
+function naseptavacNabidek(id) {
+  const videno = {};
+  const hodnoty = [];
+  (ONLINE_STAV.rejstrik || []).forEach(z => {
+    [z.cislo, z.nazevAkce, z.objednatel,
+      (typeof uloObchodnik === 'function' ? uloObchodnik(z) : z.autorJmeno)].forEach(h => {
+      const t = String(h || '').trim();
+      if (!t || t === '—' || videno[t.toLowerCase()]) return;
+      videno[t.toLowerCase()] = true;
+      hodnoty.push(t);
+    });
+  });
+  /* Strop je pojistka pro obří rejstříky — prohlížeč by dlouhý seznam
+   * stejně jen filtroval, ale nemá smysl mu posílat tisíce položek. */
+  return `<datalist id="${id}">${hodnoty.slice(0, 400)
+    .map(h => `<option value="${esc(h)}"></option>`).join('')}</datalist>`;
+}
+
 function onlineVybrano(soubor) { return (ONLINE_STAV.prehled.vybrane || []).indexOf(soubor) >= 0; }
 
 function onlineVyberPrepni(soubor, zap) {
@@ -1696,9 +1735,11 @@ function prehledHledaniKarta() {
   const volba = (id, popis) => `<option value="${id}" ${p.druh === id ? 'selected' : ''}>${esc(popis)}</option>`;
   return card('Vyhledání nabídek',
     bezDb + `<div class="seznam-ovladani noprint">
-      <input type="search" class="seznam-hledat" placeholder="Hledat číslo, akci, zákazníka, obchodníka…"
-        title="Hledá se v čísle nabídky, názvu akce, zákazníkovi, datu i jménu obchodníka."
+      <input type="search" class="seznam-hledat" list="naseptavacPrehled"
+        placeholder="Hledat číslo, akci, zákazníka, obchodníka…"
+        title="Hledá se v čísle nabídky, názvu akce, zákazníkovi, datu i jménu obchodníka. Při psaní se nabízejí hodnoty ze seznamu."
         value="${esc(p.hledat)}" oninput="prehledHledatSet(this.value)">
+      ${naseptavacNabidek('naseptavacPrehled')}
       <select onchange="prehledDruhSet(this.value)" title="druh nabídky">
         ${volba('vse', 'OCK i PROJ')}${volba('OCK', 'jen OCK')}${volba('PROJ', 'jen PROJ')}</select>
       <button class="mini" onclick="prehledHledatSet('');prehledDruhSet('vse')"
@@ -1718,8 +1759,11 @@ function prehledHledaniKarta() {
 function onlinePanelZakazky() {
   const radky = uloHledej(ONLINE_STAV.rejstrik, ONLINE_STAV.hledat);
   return `<div class="seznam-ovladani">
-      <input type="text" class="seznam-hledat" placeholder="Hledat číslo, akci, zákazníka, obchodníka…"
+      <input type="text" class="seznam-hledat" list="naseptavacOnline"
+             placeholder="Hledat číslo, akci, zákazníka, obchodníka…"
+             title="Při psaní se nabízejí hodnoty ze seznamu."
              value="${esc(ONLINE_STAV.hledat)}" oninput="onlineHledatSet(this.value)">
+      ${naseptavacNabidek('naseptavacOnline')}
       <span class="note">${radky.length} z ${ONLINE_STAV.rejstrik.length}</span>
     </div>
     ${radky.length

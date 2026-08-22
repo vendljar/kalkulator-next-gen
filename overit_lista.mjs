@@ -1383,6 +1383,18 @@ ok('tlačítko ARES je v liště společné hlavičky', !!zarovnani);
 const POradi = ['Vybrat z databáze zákazníků', 'Uložit jako zákazníka', '🔎 Najít firmu v ARES'];
 ok(`tlačítka zákazníků a ARES jsou v jednom řádku (${zarovnani ? zarovnani.radku : '—'})`,
    !!zarovnani && zarovnani.radku === 1, JSON.stringify(zarovnani && zarovnani.popisky));
+/* Ze souboru (file://) není databáze zákazníků dostupná — tlačítka se od
+ * 22. 8. 2026 kreslí i tak, jen zhasnutá s důvodem v bublině (dřív mizela
+ * a vypadalo to jako chyba; hlášeno J. V.). */
+const offlineZak = await p.evaluate(() => {
+  const b = [...document.querySelectorAll('#page-kalk .ares-tlacitka button')]
+    .filter(x => /databáze zákazníků|jako zákazníka/i.test(x.textContent));
+  return { pocet: b.length, zhasla: b.filter(x => x.disabled).length,
+    duvod: b.every(x => /z disku není dostupná/.test(x.getAttribute('title') || '')) };
+});
+ok('tlačítka zákazníků jsou ze souboru vidět, jen zhasnutá',
+   offlineZak.pocet === 2 && offlineZak.zhasla === 2, JSON.stringify(offlineZak));
+ok('a bublina říká proč', offlineZak.duvod);
 ok('pořadí končí ARESem (a lupa u něj zůstává)',
    !!zarovnani && zarovnani.popisky.join(' | ')
      === POradi.slice(POradi.length - zarovnani.popisky.length).join(' | '),

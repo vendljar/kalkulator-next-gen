@@ -669,10 +669,18 @@ function standardRozpis() {
     : `<tr><td colspan="3">Všech ${v.kontrol} kontrolovaných pravidel sedí.</td></tr>`;
   /* Nabídka zapnout ATYP se ukazuje jen u skutečného atypu a jen tomu, kdo
    * na to má právo. Nikdy se nezapíná sama — přirážka mění cenu. */
+  /* Věta u tlačítka přepsána 22. 8. 2026 („co znamená ať přirážku
+   * nezapínáme sami? nerozumím" — J. V.): má říkat, CO tlačítko udělá
+   * a PROČ tu vůbec je, když jindy ATYP zaškrtává automat. Automat sahá
+   * na zakázku jen při ZMĚNĚ zadání — u zakázky, která se nestandardní
+   * teprve NAČETLA (nebo kde byl ATYP ručně odškrtnut), by tiché zapnutí
+   * změnilo cenu bez vědomí obchodníka. */
   const nabidka = (v.stav === 'atyp' && !Z.atyp && smiZobrazit('sloupce.naklad'))
     ? `<div style="padding:8px 12px;border-top:1px solid var(--line)">
          <button class="mini" onclick="atypPrepni(true)">Zapnout ATYP a přirážku</button>
-         <span class="note" style="margin-left:8px">Přirážku nikdy nezapínáme sami — cena se nesmí změnit bez vás.</span>
+         <span class="note" style="margin-left:8px">Zaškrtne ATYP v zadání a přidá do Režie přirážku
+           za projekční a koordinační práce — cena se zvýší. U načtené zakázky to necháváme
+           na vás, aby se cena nezměnila jen otevřením souboru.</span>
        </div>` : '';
   return `<div class="std-panel noprint">
     <div class="hd" style="${barva}">${esc(standardPopis(v))} — kontrolováno ${v.kontrol} pravidel</div>
@@ -793,12 +801,23 @@ function zakazkaHlavicka(ock) {
      * zarovnaná zleva s popiskem „IČO zákazníka" a zprava s koncem pole IČO.
      * Proto vlastní řádek s `justify-content:space-between`, ne mřížka .row
      * s prázdným popiskem — ta začínala až u pole a tlačítka se lámala. */
-    const zakDbBtns = (typeof zakazniciMozne === 'function' && zakazniciMozne() && kde === 'ock')
-      ? `<button class="mini noprint" onclick="prepniTab('zakaznici')"
-           title="vybrat zákazníka z databáze — přenese hlavičku i kontakty do krycích listů"
+    /* Tlačítka databáze zákazníků se kreslí VŽDY (22. 8. 2026, hlášeno
+     * J. V.: „v offline html se nám nezobrazují"). Databáze žije na
+     * serveru, takže bez přihlášení fungovat nemůžou — ale zmizelé
+     * tlačítko vypadá jako chyba. Zhasnuté tlačítko s důvodem v bublině
+     * říká pravdu: funkce existuje, jen tady není k dispozici. */
+    const zakMozne = typeof zakazniciMozne === 'function' && zakazniciMozne();
+    const zakDuvod = zakMozne ? ''
+      : (typeof onlineMozne === 'function' && !onlineMozne()
+        ? ' — databáze zákazníků žije na serveru; v souboru spuštěném z disku není dostupná'
+        : ' — nejdřív se přihlaste k databázi (Nastavení → Databáze)');
+    const zakVyp = zakMozne ? '' : ' disabled';
+    const zakDbBtns = (kde === 'ock')
+      ? `<button class="mini noprint"${zakVyp} onclick="prepniTab('zakaznici')"
+           title="vybrat zákazníka z databáze — přenese hlavičku i kontakty do krycích listů${esc(zakDuvod)}"
            >Vybrat z databáze zákazníků</button>
-         <button class="mini noprint" onclick="zakaznikZeZakazkyUI()"
-           title="uložit údaje z téhle hlavičky jako novou kartu zákazníka">Uložit jako zákazníka</button>`
+         <button class="mini noprint"${zakVyp} onclick="zakaznikZeZakazkyUI()"
+           title="uložit údaje z téhle hlavičky jako novou kartu zákazníka${esc(zakDuvod)}">Uložit jako zákazníka</button>`
       : '';
     const aresBtns = (typeof aresRadek === 'function') ? aresRadek(kde, false, zakDbBtns) : zakDbBtns;
     return `<div class="row"><label>IČO zákazníka${pill}</label>

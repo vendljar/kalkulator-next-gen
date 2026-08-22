@@ -918,6 +918,31 @@ test('obchodníkovi se hromadné mazání vůbec nenabízí',
     ONLINE_STAV.ja = zaloha; NAST.jeAdmin = true; render();
     return !je;
   }));
+test('vyhledávání má našeptávání z rejstříku (datalist)',
+  await page.evaluate(() => {
+    renderPrehledHledaniTelo(); render();
+    const inp = document.querySelector('#page-zakazka input.seznam-hledat');
+    const dl = document.getElementById('naseptavacPrehled');
+    if (!inp || !dl || inp.getAttribute('list') !== 'naseptavacPrehled') return false;
+    const hodnoty = [...dl.querySelectorAll('option')].map(o => o.value);
+    return hodnoty.includes('Jan Novák') && hodnoty.includes('Šachta')
+      && hodnoty.includes('2026 - OPR - CN - 1')
+      && hodnoty.length === new Set(hodnoty).size;   // bez duplicit
+  }));
+test('klik na řádek otevře zakázku, klik na zaškrtávátko ne',
+  await page.evaluate(() => {
+    const radek = document.querySelector('#prehledHledaniTelo tr.radek-klik');
+    if (!radek || !/prehledRadekOtevri/.test(radek.getAttribute('onclick') || '')) return false;
+    /* Otevření se nevolá doopravdy (fetch by spadl) — podstrčí se špión. */
+    const puvodni = window.onlineOtevri;
+    let volani = 0;
+    window.onlineOtevri = () => { volani++; };
+    const chk = radek.querySelector('input[type=checkbox]');
+    if (chk) prehledRadekOtevri({ target: chk }, 'a.json');          // zaškrtávátko → nic
+    prehledRadekOtevri({ target: radek.querySelector('td:nth-child(2)') }, 'a.json'); // buňka → otevřít
+    window.onlineOtevri = puvodni;
+    return volani === 1;
+  }));
 test('filtr zúží seznam na PROJ a hledání funguje i podle obchodníka',
   await page.evaluate(() => {
     ONLINE_STAV.ja = { email: 'a@b.cz', jmeno: 'Správce', role: 'Administrátor' };

@@ -66,7 +66,7 @@ function zakUlozeniStav() {
 
 /* Hláška pod trojicí. Vlastní pole ve stavu online části nemá co dělat —
  * je to informace o zakázce, ne o přihlášení; proto se drží tady. */
-const ZAKULO_STAV = { hlaska: '', hlaskaTyp: '' };
+const ZAKULO_STAV = { hlaska: '', hlaskaTyp: '', uklada: false };
 
 function zakUlozeniZprava(text, typ) {
   ZAKULO_STAV.hlaska = text || '';
@@ -88,9 +88,12 @@ function zakTrojice() {
   const kanal = zakKanal();
   const kam = kanal === 'online' ? 'do databáze na serveru'
     : (kanal === 'slozka' ? 'do složky _DB' : 'do souboru');
-  const pracuje = ONLINE_STAV.pracuje || ULO_STAV.pracuje;
+  const pracuje = ONLINE_STAV.pracuje || ULO_STAV.pracuje || ZAKULO_STAV.uklada;
+  /* mousedown řeší ztracený první klik (viz zakUlozMousedown), onclick
+   * zůstává pro klávesnici. Během zápisu tlačítko říká, co dělá. */
   return `<button class="mini${ceka ? ' vyzva' : ''}${ulozeno ? ' ulozeno-ok' : ''}" ${pracuje ? 'disabled' : ''}
-      title="uložit otevřenou zakázku ${kam}" onclick="zakUlozUI()">💾 Uložit zakázku</button>
+      title="uložit otevřenou zakázku ${kam}"
+      onmousedown="zakUlozMousedown()" onclick="zakUlozUI()">${ZAKULO_STAV.uklada ? '⏳ Ukládám…' : '💾 Uložit zakázku'}</button>
     <button class="mini" title="otevřít jinou zakázku (${kam})" onclick="zakNactiUI()">📂 Načíst zakázku</button>
     <button class="mini" title="začít novou prázdnou zakázku" onclick="novaZakazkaUI()">✚ Nová zakázka</button>`;
 }
@@ -143,6 +146,10 @@ function zakUlozeniZhasniPoChvili(zbyva) {
 function zakUlozeniRadek() {
   const s = zakUlozeniStav();
   const radky = [];
+  /* Průběh zápisu je vidět VŽDY — i kdyby trval vteřiny (studený start
+   * serverové funkce), uživatel ví, že se pracuje a nemá klikat znovu. */
+  if (ZAKULO_STAV.uklada)
+    radky.push(`<div class="${zapisTridaHlasky('')} zak-ulozeni noprint">Ukládám do databáze…</div>`);
   if (s.stav === 'ulozeno') {
     /* Krátké potvrzení hned po zápisu — pak zhasne. */
     const pred = zakUlozenoPred();
@@ -176,7 +183,36 @@ function zakUlozeniRadek() {
  * sirotek. Proto se v tomhle jediném případě do databáze nezapisuje —
  * ale ani se nic neblokuje: uživatel se rovnou octne v hlavičce a v kartě
  * pod ní má „Uložit do souboru (JSON)", takže o práci přijít nemůže. */
+/* ---------- ZTRACENÝ PRVNÍ KLIK a viditelný průběh (22. 8. 2026) ----------
+ *
+ * Hlášeno J. V.: „na tlačítko musím kliknout dvakrát a nevidím, co se děje."
+ *
+ * DVOJÍ KLIK: klasická past překreslované aplikace. Když má uživatel kurzor
+ * v políčku a klikne na Uložit, pořadí událostí je mousedown → blur pole →
+ * onchange → set() → render(). render() postaví NOVÉ tlačítko, takže click
+ * původního tlačítka už nikdy nedoběhne — první klik jen potvrdil políčko.
+ * Řešení: uložení se plánuje už na MOUSEDOWN (ten přijde před blur), ale
+ * odloženě přes setTimeout(0) — spustí se až PO onchange a render(), tedy
+ * s čerstvými daty. onclick zůstává kvůli klávesnici (Enter/mezerník);
+ * proti dvojímu spuštění drží zámek `uklada` + krátká známka času.
+ *
+ * PRŮBĚH: po dobu zápisu je tlačítko „Ukládám…" a pod lištou svítí řádek
+ * „Ukládám do databáze…" — je vidět, že se něco děje, a druhé kliknutí
+ * se tiše ignoruje. */
+let _zakUlozPosledni = 0;
+
+function zakUlozMousedown() {
+  setTimeout(() => { zakUlozUI(); }, 0);
+}
+
 function zakUlozUI() {
+  /* Zápis už běží → druhé kliknutí nic nespustí. */
+  if (ZAKULO_STAV.uklada) return Promise.resolve(false);
+  /* Jeden stisk může doručit až dvě volání (odložené z mousedown + click);
+   * cokoli do 400 ms od posledního skutečného spuštění se zahodí. */
+  const ted = Date.now();
+  if (ted - _zakUlozPosledni < 400) return Promise.resolve(false);
+  _zakUlozPosledni = ted;
   const s = zakUlozeniStav();
   if (s.stav === 'vyplnit') {
     zakUlozeniZprava('Vyplňte v hlavičce: ' + s.chybi.join(', ')
@@ -188,8 +224,13 @@ function zakUlozUI() {
   }
   zakUlozeniZprava('');
   const kanal = zakKanal();
-  if (kanal === 'online') return onlineUloz();
-  if (kanal === 'slozka') return uloUlozDoSlozky();
+  if (kanal === 'online' || kanal === 'slozka') {
+    ZAKULO_STAV.uklada = true;
+    render();   // tlačítko hned ukáže „Ukládám…"
+    const beh = kanal === 'online' ? onlineUloz() : uloUlozDoSlozky();
+    return beh.then(v => { ZAKULO_STAV.uklada = false; render(); return v; },
+      e => { ZAKULO_STAV.uklada = false; render(); throw e; });
+  }
   ulozZakazku();
   render();
   return Promise.resolve(true);

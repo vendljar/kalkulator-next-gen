@@ -234,6 +234,19 @@ test('tlačítko Uložit zakázku svítí červeně, dokud zakázka není ulože
     window.zakUlozeniStav = puvodni;
     return cervene && zelene;
   }));
+/* Průběh ukládání (22. 8. 2026): během zápisu tlačítko říká „Ukládám…",
+ * svítí řádek a druhé kliknutí se ignoruje; mousedown řeší ztracený klik. */
+test('během ukládání je vidět průběh a druhé kliknutí se ignoruje',
+  await p.evaluate(() => {
+    ZAKULO_STAV.uklada = true;
+    const tl = /Ukládám…/.test(zakTrojice()) && /disabled/.test(zakTrojice());
+    const radek = /Ukládám do databáze…/.test(zakUlozeniRadek());
+    const druhy = zakUlozUI();   // musí se odmítnout, ne spustit další zápis
+    ZAKULO_STAV.uklada = false;
+    const mousedown = /onmousedown="zakUlozMousedown\(\)"/.test(zakTrojice());
+    return tl && radek && mousedown && druhy && typeof druhy.then === 'function';
+  }));
+
 /* Hláška o uložení svítí JEN CHVÍLI po zápisu (21. 8. 2026 večer, zadání
  * J. V.: „informaci o uložení zobraz vždy jen jednou a po chvíli skryj").
  * Trvalý zelený pruh přestal nést informaci — stav teď drží tlačítko. */

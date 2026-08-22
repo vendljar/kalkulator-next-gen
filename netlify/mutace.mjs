@@ -305,10 +305,24 @@ const MUTACE = [
     nahrad: '  const relace = { email: \'\' };',
     proc: 'obsah zakázek zákazníků by byl veřejný' },
 
+  /* Kotva rozšířena 21. 8. 2026: řádek `s.cti('z/' + soubor)` je od zavedení
+   * mazání v souboru dvakrát (GET i DELETE) a mutace se přestala hledat
+   * jednoznačně — hlásilo se CHYBNĚ ZADANÁ. */
   { nazev: 'jméno souboru se bere, jak přijde', soubor: 'functions/zakazky.mjs',
-    hledej: '    const zak = await s.cti(\'z/\' + soubor);',
-    nahrad: '    const zak = await s.cti(soubor);',
+    hledej: '    const zak = await s.cti(\'z/\' + soubor);\n    return zak ? json({ ok: true, zakazka: zak })',
+    nahrad: '    const zak = await s.cti(soubor);\n    return zak ? json({ ok: true, zakazka: zak })',
     proc: 'požadavkem na „_rejstrik" nebo cestou ven by šlo číst cizí záznamy' },
+
+  /* Mazání zakázek (21. 8. 2026). */
+  { nazev: 'zakázku smaže kdokoli přihlášený', soubor: 'functions/zakazky.mjs',
+    hledej: "    if (relace.role !== 'Administrátor')\n      return json({ ok: false, chyba: 'Mazat zakázky smí jen administrátor.' }, 403);",
+    nahrad: '    if (false) return null;',
+    proc: 'obchodník by smazal zakázky kolegů — i s historií cen a variant' },
+
+  { nazev: 'odeslaná nabídka se smaže bez potvrzení', soubor: 'functions/zakazky.mjs',
+    hledej: "      if (zamcenych && url.searchParams.get('ismazatOdeslane') !== '1')",
+    nahrad: '      if (false)',
+    proc: 'doklad o tom, co odešlo zákazníkovi, by zmizel jedním přehlédnutým kliknutím' },
 
   { nazev: 'uzamčenou nabídku lze přepsat', soubor: 'functions/zakazky.mjs',
     hledej: '    const k = ULO.uloKontrolaZamku(stara, zak);\n    if (!k.ok)',
