@@ -1513,7 +1513,7 @@ function zavriOnline() {
 
 function onlineHledatSet(v) {
   ONLINE_STAV.hledat = v;
-  renderOnlinePanel();
+  renderOnlineZakTelo();
 }
 
 /* Hlavička seznamu zakázek. Jedna pro obě místa, kde se seznam kreslí
@@ -1607,13 +1607,14 @@ function prehledNabidky() {
  * selže, ostatní se tím nezruší a v hlášce je vidět, která zůstala. */
 /* ---------- našeptávání ve vyhledávání (22. 8. 2026, zadání J. V.) ----------
  *
- * Nativní <datalist>: prohlížeč nabízí hodnoty už při psaní a filtruje je
- * sám, žádný vlastní dropdown se nekreslí (a nemá co rozbít). Nabízejí se
- * hodnoty, které v rejstříku OPRAVDU jsou — čísla nabídek, názvy akcí,
- * zákazníci a jména obchodníků — každá jednou, prázdné se vynechají.
- * Dvě místa vyhledávání (Přehled a okno Zakázky online) = dva id,
- * jinak by v dokumentu bylo dvojí id. */
-function naseptavacNabidek(id) {
+ * PRVNÍ VERZE byla nativní <datalist> — jenže Chrome u něj nabídku
+ * spolehlivě NEZUŽUJE při dalším psaní (hlášeno J. V. týž den: „teď bere
+ * v úvahu jen první písmeno"). Proto vlastní malý našeptávač: filtruje
+ * TOUTÉŽ logikou jako samotné hledání (uloSlova/uloNorm — bez diakritiky,
+ * každé napsané slovo musí sedět), takže co našeptávač nabídne, to hledání
+ * opravdu najde. Nabízí se nejvýš 10 hodnot; vybírá se myší (mousedown,
+ * aby předběhl blur), Esc nebo klik jinam nabídku schová. */
+function naseptavacHodnoty() {
   const videno = {};
   const hodnoty = [];
   (ONLINE_STAV.rejstrik || []).forEach(z => {
@@ -1625,10 +1626,56 @@ function naseptavacNabidek(id) {
       hodnoty.push(t);
     });
   });
-  /* Strop je pojistka pro obří rejstříky — prohlížeč by dlouhý seznam
-   * stejně jen filtroval, ale nemá smysl mu posílat tisíce položek. */
-  return `<datalist id="${id}">${hodnoty.slice(0, 400)
-    .map(h => `<option value="${esc(h)}"></option>`).join('')}</datalist>`;
+  return hodnoty;
+}
+
+function naseptavacFiltr(dotaz) {
+  const slova = (typeof uloSlova === 'function') ? uloSlova(dotaz) : [];
+  if (!slova.length) return [];
+  return naseptavacHodnoty().filter(h => {
+    const t = uloNorm(h);
+    /* Hodnota, kterou už uživatel napsal celou (doslova, jen na velikosti
+     * písmen nezáleží), se nenabízí — překážela by nad výsledky. Porovnává
+     * se BEZ očisty diakritiky: kdo napsal „sachta", tomu se „Šachta"
+     * nabídnout má. */
+    return h.toLowerCase() !== String(dotaz).trim().toLowerCase()
+      && slova.every(x => t.indexOf(x) >= 0);
+  }).slice(0, 10);
+}
+
+/* Vykreslení nabídky pod políčkem. `cil` říká, kterému hledání vybraná
+ * hodnota patří ('prehled' | 'online'). */
+function naseptavacKresli(boxId, dotaz, cil) {
+  const el = document.getElementById(boxId);
+  if (!el) return;
+  const n = naseptavacFiltr(dotaz);
+  if (!n.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.innerHTML = n.map(h => `<div class="nasept-radek"
+    onmousedown="naseptavacVyber('${cil}', '${escJs(h)}')">${esc(h)}</div>`).join('');
+  el.style.display = '';
+}
+
+function naseptavacSchovej(boxId) {
+  /* Odloženě — kliknutí na řádek nabídky (mousedown) musí stihnout doběhnout
+   * dřív, než blur políčka nabídku schová. */
+  setTimeout(() => {
+    const el = document.getElementById(boxId);
+    if (el) { el.style.display = 'none'; }
+  }, 150);
+}
+
+function naseptavacVyber(cil, hodnota) {
+  if (cil === 'prehled') {
+    const inp = document.querySelector('#page-zakazka input.seznam-hledat');
+    if (inp) inp.value = hodnota;
+    prehledHledatSet(hodnota);
+    naseptavacSchovej('naseptBoxPrehled');
+  } else {
+    const inp = document.getElementById('onlineZakHledat');
+    if (inp) inp.value = hodnota;
+    onlineHledatSet(hodnota);
+    naseptavacSchovej('naseptBoxOnline');
+  }
 }
 
 function onlineVybrano(soubor) { return (ONLINE_STAV.prehled.vybrane || []).indexOf(soubor) >= 0; }
@@ -1735,11 +1782,15 @@ function prehledHledaniKarta() {
   const volba = (id, popis) => `<option value="${id}" ${p.druh === id ? 'selected' : ''}>${esc(popis)}</option>`;
   return card('Vyhledání nabídek',
     bezDb + `<div class="seznam-ovladani noprint">
-      <input type="search" class="seznam-hledat" list="naseptavacPrehled"
+      <span class="nasept-wrap"><input type="search" class="seznam-hledat"
         placeholder="Hledat číslo, akci, zákazníka, obchodníka…"
-        title="Hledá se v čísle nabídky, názvu akce, zákazníkovi, datu i jménu obchodníka. Při psaní se nabízejí hodnoty ze seznamu."
-        value="${esc(p.hledat)}" oninput="prehledHledatSet(this.value)">
-      ${naseptavacNabidek('naseptavacPrehled')}
+        title="Hledá se v čísle nabídky, názvu akce, zákazníkovi, datu i jménu obchodníka. Při psaní se nabídka průběžně zužuje."
+        value="${esc(p.hledat)}" autocomplete="off"
+        oninput="prehledHledatSet(this.value); naseptavacKresli('naseptBoxPrehled', this.value, 'prehled')"
+        onfocus="naseptavacKresli('naseptBoxPrehled', this.value, 'prehled')"
+        onblur="naseptavacSchovej('naseptBoxPrehled')"
+        onkeydown="if(event.key==='Escape')naseptavacSchovej('naseptBoxPrehled')">
+      <span class="nasept-box" id="naseptBoxPrehled" style="display:none"></span></span>
       <select onchange="prehledDruhSet(this.value)" title="druh nabídky">
         ${volba('vse', 'OCK i PROJ')}${volba('OCK', 'jen OCK')}${volba('PROJ', 'jen PROJ')}</select>
       <button class="mini" onclick="prehledHledatSet('');prehledDruhSet('vse')"
@@ -1758,23 +1809,40 @@ function prehledHledaniKarta() {
  * jedno místo, aby se omylem neklikalo ve dvou různých oknech. */
 function onlinePanelZakazky() {
   const radky = uloHledej(ONLINE_STAV.rejstrik, ONLINE_STAV.hledat);
+  /* Tělo seznamu má vlastní obal (#onlineZakTelo) a při psaní se překresluje
+   * JEN ono (onlineHledatSet) — kdyby se stavěl celý panel, políčko by při
+   * každém písmenu přišlo o kurzor a našeptávač by zmizel. Stejný vzor jako
+   * seznam variant (seznam_ui.js). */
   return `<div class="seznam-ovladani">
-      <input type="text" class="seznam-hledat" list="naseptavacOnline"
+      <span class="nasept-wrap"><input type="text" class="seznam-hledat" id="onlineZakHledat"
              placeholder="Hledat číslo, akci, zákazníka, obchodníka…"
-             title="Při psaní se nabízejí hodnoty ze seznamu."
-             value="${esc(ONLINE_STAV.hledat)}" oninput="onlineHledatSet(this.value)">
-      ${naseptavacNabidek('naseptavacOnline')}
-      <span class="note">${radky.length} z ${ONLINE_STAV.rejstrik.length}</span>
+             title="Při psaní se nabídka průběžně zužuje."
+             value="${esc(ONLINE_STAV.hledat)}" autocomplete="off"
+             oninput="onlineHledatSet(this.value); naseptavacKresli('naseptBoxOnline', this.value, 'online')"
+             onfocus="naseptavacKresli('naseptBoxOnline', this.value, 'online')"
+             onblur="naseptavacSchovej('naseptBoxOnline')"
+             onkeydown="if(event.key==='Escape')naseptavacSchovej('naseptBoxOnline')">
+      <span class="nasept-box" id="naseptBoxOnline" style="display:none"></span></span>
+      <span class="note" id="onlineZakPocet"></span>
     </div>
-    ${radky.length
+    <div id="onlineZakTelo"></div>
+    <div class="note">Seznam se čte z rejstříku na serveru. <b>Mazat zakázky</b> jde od 21. 8. 2026
+      v záložce <b>Přehled cenových nabídek</b> — hromadně a jen administrátorovi; smazaná zakázka
+      je pryč i s historií cen a vrátit ji lze jen ze zálohy databáze.</div>`;
+}
+
+function renderOnlineZakTelo() {
+  const el = document.getElementById('onlineZakTelo');
+  if (!el) return;
+  const radky = uloHledej(ONLINE_STAV.rejstrik, ONLINE_STAV.hledat);
+  el.innerHTML = radky.length
     ? `<div class="tab-scroll"><table class="vartbl archtbl">${onlineHlavickaZakazek(false)}
         ${radky.map(z => onlineRadekZakazky(z, false)).join('')}</table></div>`
     : `<div class="seznam-prazdno">${ONLINE_STAV.rejstrik.length
       ? 'Hledání „' + esc(ONLINE_STAV.hledat) + '" nic nenašlo.'
-      : 'Online zatím není žádná zakázka. Uložte tu otevřenou tlačítkem „Uložit online".'}</div>`}
-    <div class="note">Seznam se čte z rejstříku na serveru. <b>Mazat zakázky</b> jde od 21. 8. 2026
-      v záložce <b>Přehled cenových nabídek</b> — hromadně a jen administrátorovi; smazaná zakázka
-      je pryč i s historií cen a vrátit ji lze jen ze zálohy databáze.</div>`;
+      : 'Online zatím není žádná zakázka. Uložte tu otevřenou tlačítkem „Uložit online".'}</div>`;
+  const poc = document.getElementById('onlineZakPocet');
+  if (poc) poc.textContent = radky.length + ' z ' + ONLINE_STAV.rejstrik.length;
 }
 
 function onlineRadekUzivatele(u) {
@@ -1881,6 +1949,7 @@ function renderOnlinePanel() {
       ${ONLINE_STAV.hlaska ? `<div class="${zapisTridaHlasky(ONLINE_STAV.hlaskaTyp)}">${esc(ONLINE_STAV.hlaska)}</div>` : ''}
       ${onlinePanelZakazky()}
     </div>`;
+  renderOnlineZakTelo();
 }
 
 /* Spuštění: sonda /api běží jen nad http(s); ze souboru se nevolá nic. */

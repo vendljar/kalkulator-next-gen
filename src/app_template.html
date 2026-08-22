@@ -515,6 +515,16 @@
   .prehled-vyber { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:8px 0 6px; }
   /* Klik na řádek seznamu nabídek otevírá zakázku (22. 8. 2026). */
   tr.radek-klik { cursor:pointer; }
+  /* Vlastní našeptávač hledání (22. 8. 2026) — nativní datalist v Chrome
+     nabídku při psaní spolehlivě nezužoval. */
+  .nasept-wrap { position:relative; display:inline-block; }
+  .nasept-box { position:absolute; top:100%; left:0; min-width:100%; max-width:420px;
+    background:#fff; border:1px solid var(--line); border-radius:8px;
+    box-shadow:0 8px 24px rgba(0,0,0,.12); z-index:60; max-height:16em; overflow:auto;
+    display:block; }
+  .nasept-radek { padding:6px 10px; cursor:pointer; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; font-size:13px; }
+  .nasept-radek:hover { background:#f0f6ff; }
   .archtbl th, .archtbl td { border-bottom:1px solid var(--line); vertical-align:middle; }
   .archtbl tr:hover td { background:#f7f9fe; }
   .archiv-soubory { display:flex; align-items:center; gap:6px; flex-wrap:wrap;

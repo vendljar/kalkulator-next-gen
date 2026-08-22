@@ -918,16 +918,33 @@ test('obchodníkovi se hromadné mazání vůbec nenabízí',
     ONLINE_STAV.ja = zaloha; NAST.jeAdmin = true; render();
     return !je;
   }));
-test('vyhledávání má našeptávání z rejstříku (datalist)',
+test('našeptávač se při psaní PRŮBĚŽNĚ zužuje (ne jen první písmeno)',
   await page.evaluate(() => {
     renderPrehledHledaniTelo(); render();
+    /* Filtruje toutéž logikou jako hledání: bez diakritiky, každé slovo. */
+    const vse = naseptavacFiltr('a');
+    const uzsi = naseptavacFiltr('nov');                 // uprostřed slova
+    const bezDia = naseptavacFiltr('sachta');            // „Šachta" bez háčku
+    const dveSlova = naseptavacFiltr('jan nov');
+    return vse.length > uzsi.length
+      && uzsi.some(h => /Novák/.test(h)) && uzsi.every(h => /nov/i.test(h.normalize('NFD').replace(/[\u0300-\u036f]/g, '')))
+      && bezDia.length === 1 && bezDia[0] === 'Šachta'
+      && dveSlova.length === 1 && dveSlova[0] === 'Jan Novák'
+      && naseptavacFiltr('').length === 0;
+  }));
+test('nabídka se kreslí pod políčko a klik ji vybere',
+  await page.evaluate(() => {
     const inp = document.querySelector('#page-zakazka input.seznam-hledat');
-    const dl = document.getElementById('naseptavacPrehled');
-    if (!inp || !dl || inp.getAttribute('list') !== 'naseptavacPrehled') return false;
-    const hodnoty = [...dl.querySelectorAll('option')].map(o => o.value);
-    return hodnoty.includes('Jan Novák') && hodnoty.includes('Šachta')
-      && hodnoty.includes('2026 - OPR - CN - 1')
-      && hodnoty.length === new Set(hodnoty).size;   // bez duplicit
+    if (!inp || !document.getElementById('naseptBoxPrehled')) return false;
+    naseptavacKresli('naseptBoxPrehled', 'nov', 'prehled');
+    const box = document.getElementById('naseptBoxPrehled');
+    const radku = box.querySelectorAll('.nasept-radek').length;
+    if (!radku || box.style.display === 'none') return false;
+    naseptavacVyber('prehled', 'Jan Novák');
+    const vysledek = ONLINE_STAV.prehled.hledat === 'Jan Novák'
+      && document.querySelector('#page-zakazka input.seznam-hledat').value === 'Jan Novák';
+    prehledHledatSet('');
+    return vysledek;
   }));
 test('klik na řádek otevře zakázku, klik na zaškrtávátko ne',
   await page.evaluate(() => {
