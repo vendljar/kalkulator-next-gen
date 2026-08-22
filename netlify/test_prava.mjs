@@ -34,6 +34,7 @@ globalThis.__TEST_ULOZISTE = (nazev) => ({
     return [...pamet.keys()].filter(x => x.startsWith(nazev + '/' + (prefix || '')))
       .map(x => x.slice(nazev.length + 1));
   },
+  async smaz(k) { pamet.delete(nazev + '/' + k); },
 });
 
 import prihlaseni from './functions/prihlaseni.mjs';
@@ -84,6 +85,8 @@ const test = (n, cond, info) => {
 const post = (fn, url, telo, cookie) => fn(new Request(url, {
   method: 'POST', headers: cookie ? { cookie } : {}, body: JSON.stringify(telo) }));
 const get = (fn, url, cookie) => fn(new Request(url, { headers: cookie ? { cookie } : {} }));
+const smaz = (fn, url, cookie) => fn(new Request(url,
+  { method: 'DELETE', headers: cookie ? { cookie } : {} }));
 
 async function prihlas(email, heslo) {
   const r = await post(prihlaseni, 'http://x/api/prihlaseni', { email, heslo });
@@ -332,6 +335,13 @@ const MATICE = [
     telo: (r) => ({ zakazka: zakazkaCislo('2026 - OPR - CN - 09' + (10 + R.indexOf(r))) }),
     proc: 'ukládat zakázky je běžná práce obchodníka',
     prava: PRIHLASENY_OK },
+
+  /* Mazání zakázek (21. 8. 2026). Smazaná kalkulace je pryč i s historií
+   * cen — proto jako jediná operace nad zakázkami JEN ADMINISTRÁTOR. */
+  { fn: zakazky, nazev: 'zakázky — smazání (DELETE /api/zakazky?soubor=…)', metoda: 'DELETE',
+    url: 'http://x/api/zakazky?soubor=neexistujici-zakazka.json',
+    proc: 'smazaná zakázka je pryč i s historií cen; rozhodnutí patří administrátorovi',
+    prava: JEN_ADMIN },
 
   { fn: vypocet, soubor: 'vypocet.mjs', nazev: 'výpočet (POST /api/vypocet)', metoda: 'POST',
     url: 'http://x/api/vypocet',
@@ -1250,6 +1260,43 @@ test('heslo se ověřuje dřív, než se rozhoduje o brzdě',
   kodPrihlaseni.indexOf('hesloSedi(') < kodPrihlaseni.indexOf('pokusyNeuspech('));
 test('u neznámého účtu se scrypt počítá proti zástupnému otisku (#93)',
   /hesloSedi\([\s\S]{0,120}FALESNY_OTISK/.test(kodPrihlaseni));
+
+/* ---------- mazání zakázek (21. 8. 2026, hromadné mazání v přehledu) ------- */
+console.log('\n===== MAZÁNÍ ZAKÁZEK =====\n');
+{
+  await post(zakazky, 'http://x/api/zakazky', { zakazka: zakazkaCislo('2026 - OPR - CN - 0950') }, cAdmin);
+  const pred = await (await get(zakazky, 'http://x/api/zakazky', cAdmin)).json();
+  test('zakázka ke smazání je v rejstříku',
+    pred.rejstrik.zakazky.some(z => z.soubor === '2026-OPR-CN-0950.json'));
+
+  test('obchodník zakázku smazat nesmí',
+    (await smaz(zakazky, 'http://x/api/zakazky?soubor=2026-OPR-CN-0950.json', cObch)).status === 403);
+  const porad = await (await get(zakazky, 'http://x/api/zakazky', cAdmin)).json();
+  test('a odmítnutí ji opravdu nechalo být',
+    porad.rejstrik.zakazky.some(z => z.soubor === '2026-OPR-CN-0950.json'));
+
+  const o = await smaz(zakazky, 'http://x/api/zakazky?soubor=2026-OPR-CN-0950.json', cAdmin);
+  test('administrátor zakázku smaže', o.status === 200);
+  const po = await (await get(zakazky, 'http://x/api/zakazky', cAdmin)).json();
+  test('zmizí ze seznamu i z rejstříku',
+    !po.rejstrik.zakazky.some(z => z.soubor === '2026-OPR-CN-0950.json'));
+  test('a samotná zakázka se už nenačte',
+    (await get(zakazky, 'http://x/api/zakazky?soubor=2026-OPR-CN-0950.json', cAdmin)).status === 404);
+  test('smazat neexistující zakázku není chyba (hromadné mazání se nesmí zaseknout)',
+    (await smaz(zakazky, 'http://x/api/zakazky?soubor=neni-tam.json', cAdmin)).status === 200);
+
+  /* Odeslaná (uzamčená) nabídka je doklad — smaže se jen na druhé potvrzení. */
+  const sZamkem = zakazkaCislo('2026 - OPR - CN - 0951');
+  sZamkem.varianty[0].zamek = { zamceno: true, kdy: '2026-08-21T10:00:00.000Z', kdo: ADMIN_EMAIL };
+  await post(zakazky, 'http://x/api/zakazky', { zakazka: sZamkem }, cAdmin);
+  const odmitnuto = await smaz(zakazky, 'http://x/api/zakazky?soubor=2026-OPR-CN-0951.json', cAdmin);
+  test('zakázku s odeslanou nabídkou server napoprvé odmítne', odmitnuto.status === 409);
+  test('a řekne, kolik odeslaných nabídek v ní je',
+    (await odmitnuto.json()).zamcenych === 1);
+  test('s výslovným potvrzením se smaže',
+    (await smaz(zakazky,
+      'http://x/api/zakazky?soubor=2026-OPR-CN-0951.json&ismazatOdeslane=1', cAdmin)).status === 200);
+}
 
 /* ---------- oddělení testovacího a ostrého prostředí (21. 8. 2026) ----------
  * Kdyby testovací web dostal omylem stejné TAJEMSTVI_RELACE jako ostrý,

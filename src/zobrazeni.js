@@ -573,11 +573,15 @@ function zobrazeniSekceNastav(mat, klic, volba) {
 /* Klíč `ock.pocitat:<původní název položky>` má vlastní tvar: názvy položek
  * nesou tečky („PLECHY - OPLECH. DVEŘÍ…"), takže by přes tečkové omezení
  * neprošly a sloupec Výchozí by u nich tiše nefungoval. */
-const ZOBRAZENI_VYCHOZI_KLIC = /^(ock|proj)\.([^.]+(\.[^.]+)?|pocitat:.+)$/;
+const ZOBRAZENI_VYCHOZI_KLIC = /^(ock|proj)\.([^.]+(\.[^.]+)?|(pocitat|priplatek):.+)$/;
 
 /* Předpona klíče pro „počítá se v nové zakázce" u běžné (nevolitelné)
  * položky kalkulace OCK. */
 const ZOBRAZENI_POCITAT = 'ock.pocitat:';
+/* A pro příplatkovou položku: „jde v nové zakázce do cenové nabídky"
+ * (sloupec Nabídka). Klíč příplatku tečku neobsahuje, ale vlastní tvar
+ * má i tak — ať se obě věci nepletou. */
+const ZOBRAZENI_PRIPLATEK = 'ock.priplatek:';
 
 function zobrazeniPolozkaVychozi(mat, klic, zaklad) {
   const v = mat && mat.vychozi && mat.vychozi[klic];
@@ -629,6 +633,16 @@ function zobrazeniVychoziAplikuj(mat, zadaniOck, zadaniProj) {
       zadaniOck.nepocitat = vyrazene;
       zmen += Math.abs(vyrazene.length - dnes.length) || 1;
     }
+    /* Příplatky: matice nese jen ty, které se do nabídky dávat NEMAJÍ —
+     * základ je „jde do nabídky". V zadání je to `priplatkyVynechat`. */
+    const vynechane = Object.keys(mv)
+      .filter(k => k.indexOf(ZOBRAZENI_PRIPLATEK) === 0 && mv[k] === false)
+      .map(k => k.slice(ZOBRAZENI_PRIPLATEK.length));
+    const dnesP = Array.isArray(zadaniOck.priplatkyVynechat) ? zadaniOck.priplatkyVynechat : [];
+    if (vynechane.join('\u0000') !== dnesP.join('\u0000')) {
+      zadaniOck.priplatkyVynechat = vynechane;
+      zmen += Math.abs(vynechane.length - dnesP.length) || 1;
+    }
   }
   if (zadaniProj && Array.isArray(zadaniProj.sekce)) {
     zadaniProj.sekce.forEach(s => {
@@ -659,7 +673,7 @@ if (typeof module !== 'undefined')
     ZOBRAZENI_PRVKY, ZOBRAZENI_SKUPINY, ZOBRAZENI_ROLE_VZDY, ZOBRAZENI_ROLE_PRIDELITELNE,
     zobrazeniVychozi, zobrazeniPrvek, zobrazeniSmi, zobrazeniOciste, zobrazeniZmeny,
     ZOBRAZENI_SEKCE_VOLBY, zobrazeniSekceVolba, zobrazeniSekceNastav,
-    ZOBRAZENI_POCITAT,
+    ZOBRAZENI_POCITAT, ZOBRAZENI_PRIPLATEK,
     zobrazeniPolozkaVychozi, zobrazeniPolozkaVychoziNastav,
     zobrazeniProjKlic, zobrazeniVychoziAplikuj,
   };

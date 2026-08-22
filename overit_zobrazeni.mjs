@@ -371,6 +371,23 @@ test('návrat do standardu značku zruší a příští odchylka zase zabere',
     set('Z.hloubka', 2.48);
     return zruseno && Z.atyp === true;
   }));
+test('když potřeba atypu pomine, automat svoje zaškrtnutí zase vypne',
+  await page.evaluate(() => {
+    Z.atyp = false; delete Z.atypRucneVypnut; delete Z.atypAutomat;
+    set('Z.hloubka', 2.48);                    // mimo standard → zapne se
+    const zapnuto = Z.atyp === true && Z.atypAutomat === true;
+    set('Z.hloubka', 1.9);                     // zpátky ve standardu
+    return zapnuto && Z.atyp === false && !Z.atypAutomat;
+  }));
+test('ručně zaškrtnutý ATYP ale automat nikdy nevypne',
+  await page.evaluate(() => {
+    Z.atyp = false; delete Z.atypRucneVypnut; delete Z.atypAutomat;
+    atypPrepni(true);                          // člověk, ne automat
+    set('Z.hloubka', 1.91);                    // šachta je ve standardu
+    const drzi = Z.atyp === true;
+    atypPrepni(false); delete Z.atypRucneVypnut;
+    return drzi;
+  }));
 test('vypnutá kontrola ATYP nezapíná',
   await page.evaluate(() => {
     NAST.standard.zapnuto = false;
@@ -439,6 +456,9 @@ const std = await page.evaluate(() => {
   zavriNastaveni();
   return { nadpisy, tabulek, iExt, iMustek, iInt,
     nehlidame: (html.match(/zatím nehlídáme/g) || []).length,
+    bezPopisu: !/Popis opláštění/i.test(html) && !/>Opláštění\s*</.test(html),
+    zaskleniBloku: (html.match(/Povolené způsoby\s*\n?\s*zasklení/g) || []).length
+      || (html.match(/zasklívací terče na profily/g) || []).length,
     ramecek: /sklo do rámečku/i.test(html),
     ramecekZaskrtnuty: (NAST.standard.interier.zaskleniPovolene || []).indexOf('mezi příčníky') >= 0 };
 });
@@ -447,9 +467,15 @@ test('exteriér i interiér mají stejnou tabulku limitů po profilech',
 test('sekce Můstek stojí u exteriéru, ne za interiérem',
   std.iExt >= 0 && std.iMustek === std.iExt + 1 && std.iInt > std.iMustek,
   JSON.stringify(std.nadpisy));
-test('pole, která se nehlídají, jsou označená', std.nehlidame >= 2, String(std.nehlidame));
+/* Po úklidu 21. 8. večer zbylo jediné takové pole: konstrukční řešení
+ * můstku. Popisná pole „Opláštění" z nastavení zmizela úplně — nikde se
+ * nekontrolovala a jen budila dojem, že se podle nich něco hlídá. */
+test('pole, které se nehlídá, je označené', std.nehlidame === 1, String(std.nehlidame));
+test('popisná pole opláštění z nastavení zmizela', std.bezPopisu, String(std.bezPopisu));
 test('sklo do rámečku je ve standardu interiéru a je zaškrtnuté',
   std.ramecek && std.ramecekZaskrtnuty);
+test('povolené způsoby zasklení se zadávají v OBOU větvích stejně',
+  std.zaskleniBloku === 2, String(std.zaskleniBloku));
 test('a šachta se sklem do rámečku projde jako standard',
   await page.evaluate(() => {
     prepniTab('kalk');
@@ -793,6 +819,30 @@ test('odškrtnutí zapíše odchylku do matice a nová zakázka ji převezme',
     return vMatici && vNove && uklizeno;
   }));
 
+test('Výchozí je i u příplatkových položek',
+  await page.evaluate(() => {
+    NAST.jeAdmin = true; prepniTab('kalk'); render();
+    const tab = [...document.querySelectorAll('#page-kalk table')]
+      .find(t => /Nabídka/.test((t.querySelector('tr') || {}).textContent || ''));
+    if (!tab) return false;
+    const radky = [...tab.querySelectorAll('tr')]
+      .filter(r => r.querySelectorAll('td.admincol').length === 2);
+    return radky.length > 0
+      && radky.every(r => [...r.querySelectorAll('td.admincol')]
+        .every(td => td.querySelector('input[type=checkbox]') || td.textContent.trim() === ''));
+  }));
+test('odškrtnutý příplatek se v nové zakázce nedostane do nabídky',
+  await page.evaluate(() => {
+    const klic = ZOBRAZENI_PRIPLATEK + 'vsgFolie';
+    zobrazeniPolozkaVychoziNastav(NAST.zobrazeni, klic, false, true);
+    const zadani = JSON.parse(JSON.stringify(DEFAULT_ZADANI));
+    zobrazeniVychoziAplikuj(NAST.zobrazeni, zadani, null);
+    const je = (zadani.priplatkyVynechat || []).indexOf('vsgFolie') >= 0;
+    zobrazeniPolozkaVychoziNastav(NAST.zobrazeni, klic, true, true);
+    render();
+    return je;
+  }));
+
 /* ---------- Přehled cenových nabídek po úklidu (21. 8. 2026 večer) ---------- */
 test('Nastavení má novou záložku Databáze s kartou online databáze',
   await page.evaluate(() => {
@@ -816,12 +866,68 @@ test('seznam nabídek má sloupec Obchodník i druh OCK/PROJ',
     prepniTab('zakazka'); render();
     const hl = [...document.querySelectorAll('#prehledHledaniTelo th')].map(x => x.textContent.trim());
     const radky = [...document.querySelectorAll('#prehledHledaniTelo tr')].map(r => r.textContent);
-    return hl.includes('Obchodník') && hl.includes('Druh')
+    /* Obchodník stojí na KONCI řádku (zadání J. V. 21. 8. večer):
+     * poslední sloupec před tlačítkem Otevřít. */
+    const naKonci = hl.indexOf('Obchodník') === hl.length - 2;
+    return hl.includes('Obchodník') && hl.includes('Druh') && naKonci
       && radky.some(r => /Jan Novák/.test(r) && /OCK/.test(r))
       && radky.some(r => /c@d\.cz/.test(r) && /PROJ/.test(r));
   }));
+test('seznam nabídek se roluje (pět řádků a dál posuvník)',
+  await page.evaluate(() => {
+    const el = document.querySelector('#prehledHledaniTelo .prehled-seznam');
+    if (!el) return false;
+    const max = getComputedStyle(el).maxHeight;
+    return /auto|scroll/.test(getComputedStyle(el).overflowY) && max && max !== 'none';
+  }));
+const hromadne = await page.evaluate(() => {
+    /* Rejstřík se nastavuje znovu: přepnutí na Přehled si ho od 21. 8. 2026
+     * načítá ze serveru, a ten v harnessu vrací prázdno. */
+    ONLINE_STAV.ja = { email: 'a@b.cz', jmeno: 'Správce', role: 'Administrátor' };
+    NAST.jeAdmin = true;
+    ONLINE_STAV.rejstrik = [
+      { soubor: 'a.json', cislo: '2026 - OPR - CN - 1', nazevAkce: 'Šachta', objednatel: 'SVJ',
+        autor: 'a@b.cz', autorJmeno: 'Jan Novák', datum: '2026-08-01', variant: 1, odeslane: 0, upraveno: '' },
+      { soubor: 'b.json', cislo: '2026 - OVP - CN - 2', nazevAkce: 'Studie', objednatel: 'Firma',
+        autor: 'c@d.cz', autorJmeno: '', datum: '2026-08-02', variant: 1, odeslane: 0, upraveno: '' },
+    ];
+    renderPrehledHledaniTelo();
+    const lista = document.querySelector('#prehledHledaniTelo .prehled-vyber');
+    if (!lista) return { lista: false };
+    const smazat = [...lista.querySelectorAll('button')].find(b => /Smazat vybrané/.test(b.textContent));
+    const predVyberem = !!smazat && smazat.disabled;      // bez výběru je zhasnuté
+    onlineVyberPrepni('a.json', true);
+    const poVyberu = [...document.querySelectorAll('#prehledHledaniTelo .prehled-vyber button')]
+      .find(b => /Smazat vybrané/.test(b.textContent));
+    const zaskrtnutych = document.querySelectorAll(
+      '#prehledHledaniTelo tbody input[type=checkbox]:checked, #prehledHledaniTelo tr input[type=checkbox]:checked').length;
+    onlineVyberZrus();
+    return { lista: true, predVyberem, poVyberu: !!poVyberu,
+      zhasnuto: poVyberu ? poVyberu.disabled : null, zaskrtnutych };
+  });
+test('administrátor může zakázky hromadně vybrat a smazat',
+  hromadne.lista && hromadne.predVyberem && hromadne.poVyberu
+  && hromadne.zhasnuto === false && hromadne.zaskrtnutych >= 1, JSON.stringify(hromadne));
+test('obchodníkovi se hromadné mazání vůbec nenabízí',
+  await page.evaluate(() => {
+    const zaloha = ONLINE_STAV.ja;
+    ONLINE_STAV.ja = { email: 'o@b.cz', jmeno: 'Obchodník', role: 'Obchodník' };
+    NAST.jeAdmin = false;
+    render();
+    const je = !!document.querySelector('#prehledHledaniTelo .prehled-vyber');
+    ONLINE_STAV.ja = zaloha; NAST.jeAdmin = true; render();
+    return !je;
+  }));
 test('filtr zúží seznam na PROJ a hledání funguje i podle obchodníka',
   await page.evaluate(() => {
+    ONLINE_STAV.ja = { email: 'a@b.cz', jmeno: 'Správce', role: 'Administrátor' };
+    NAST.jeAdmin = true;
+    ONLINE_STAV.rejstrik = [
+      { soubor: 'a.json', cislo: '2026 - OPR - CN - 1', nazevAkce: 'Šachta', objednatel: 'SVJ',
+        autor: 'a@b.cz', autorJmeno: 'Jan Novák', datum: '2026-08-01', variant: 1, odeslane: 0, upraveno: '' },
+      { soubor: 'b.json', cislo: '2026 - OVP - CN - 2', nazevAkce: 'Studie', objednatel: 'Firma',
+        autor: 'c@d.cz', autorJmeno: '', datum: '2026-08-02', variant: 1, odeslane: 0, upraveno: '' },
+    ];
     prehledDruhSet('PROJ');
     const jenProj = [...document.querySelectorAll('#prehledHledaniTelo tbody tr, #prehledHledaniTelo tr')]
       .filter(r => r.querySelector('td')).length;

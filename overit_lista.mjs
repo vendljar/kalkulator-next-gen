@@ -1380,10 +1380,10 @@ ok('tlačítko ARES je v liště společné hlavičky', !!zarovnani);
  * 21. 8. 2026 večer); dvouřádková varianta vypadala jako porucha. Tlačítka
  * databáze zákazníků se kreslí jen po přihlášení, takže se kontroluje KONEC
  * pořadí — ARES je vždy poslední. */
-const POradi = ['Vybrat z databáze zákazníků', 'Uložit jako zákazníka', 'Najít firmu v ARES'];
+const POradi = ['Vybrat z databáze zákazníků', 'Uložit jako zákazníka', '🔎 Najít firmu v ARES'];
 ok(`tlačítka zákazníků a ARES jsou v jednom řádku (${zarovnani ? zarovnani.radku : '—'})`,
    !!zarovnani && zarovnani.radku === 1, JSON.stringify(zarovnani && zarovnani.popisky));
-ok('pořadí končí ARESem a v popiscích nejsou ikonky',
+ok('pořadí končí ARESem (a lupa u něj zůstává)',
    !!zarovnani && zarovnani.popisky.join(' | ')
      === POradi.slice(POradi.length - zarovnani.popisky.length).join(' | '),
    JSON.stringify(zarovnani && zarovnani.popisky));

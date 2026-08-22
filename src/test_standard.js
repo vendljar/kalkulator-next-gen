@@ -92,6 +92,21 @@ test('prázdný seznam povolených způsobů = nekontroluje se', (() => {
   const s = std(); s.interier.zaskleniPovolene = [];
   return S.standardVyhodnot(int({ zaskleni: 'lepené na sraz' }), 20, s).stav === 'standard';
 })());
+/* Exteriér se od 21. 8. 2026 večer kontroluje STEJNĚ jako interiér — do té
+ * doby se u venkovní šachty zasklení neposuzovalo vůbec. */
+test('exteriér: terče na profily jsou standard',
+  S.standardVyhodnot(ext({ zaskleni: 'na terče' }), 25, std()).stav === 'standard');
+test('exteriér: sklo do rámečku standard NENÍ (jinak než uvnitř)',
+  S.standardVyhodnot(ext({ zaskleni: 'mezi příčníky' }), 25, std()).stav === 'atyp');
+test('a nález pojmenuje, co standard připouští',
+  /terče na profily/.test(
+    S.standardVyhodnot(ext({ zaskleni: 'mezi příčníky' }), 25, std()).nalezy[0].limit));
+test('popis povolených způsobů se skládá ze seznamu, ne z volného textu',
+  S.standardZaskleniPopis({ zaskleniPovolene: ['na terče', 'mezi příčníky'] })
+    === 'zasklívací terče na profily nebo sklo do rámečku (mezi příčníky, lišty)',
+  S.standardZaskleniPopis({ zaskleniPovolene: ['na terče', 'mezi příčníky'] }));
+test('prázdný seznam se popíše jako „nekontroluje se"',
+  S.standardZaskleniPopis({ zaskleniPovolene: [] }) === 'nekontroluje se');
 
 /* ---------- 4) můstek a třetí stav ---------- */
 

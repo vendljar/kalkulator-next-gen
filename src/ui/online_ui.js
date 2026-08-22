@@ -63,7 +63,7 @@ const ONLINE_STAV = {
   kdyUlozeno: null,
   /* Stav vyhledávání nabídek v záložce Přehled cenových nabídek (21. 8. 2026).
    * Je to nastavení okna, ne dat — do zakázky se neukládá. */
-  prehled: { hledat: '', druh: 'vse' },
+  prehled: { hledat: '', druh: 'vse', vybrane: [] },
   auto: true,
   timer: null,
   hledat: '',
@@ -1518,33 +1518,42 @@ function onlineHledatSet(v) {
 
 /* Hlavička seznamu zakázek. Jedna pro obě místa, kde se seznam kreslí
  * (okno „Zakázky online" a vyhledávání v Přehledu cenových nabídek) — jinak
- * by se sloupce mezi nimi rozešly. */
-function onlineHlavickaZakazek() {
-  return `<tr><th style="text-align:left">Číslo</th><th style="text-align:left">Akce</th>
+ * by se sloupce mezi nimi rozešly.
+ *
+ * Obchodník stojí od 21. 8. 2026 večer na KONCI řádku (zadání J. V.):
+ * uprostřed rozrážel čísla a data, podle kterých se zakázka hledá nejčastěji. */
+function onlineHlavickaZakazek(vyber) {
+  return `<tr>${vyber ? '<th style="width:28px"></th>' : ''}
+      <th style="text-align:left">Číslo</th><th style="text-align:left">Akce</th>
       <th style="text-align:left">Zákazník</th>
-      <th style="text-align:left" title="kdo zakázku založil">Obchodník</th>
       <th>Druh</th><th>Datum</th><th>Variant</th>
-      <th>Odesláno</th><th>Uloženo</th><th></th></tr>`;
+      <th>Odesláno</th><th>Uloženo</th>
+      <th style="text-align:left" title="kdo zakázku založil">Obchodník</th>
+      <th></th></tr>`;
 }
 
-function onlineRadekZakazky(z) {
+function onlineRadekZakazky(z, vyber) {
   const otevrena = z.soubor === ONLINE_STAV.soubor;
   const odeslane = z.odeslane ? `<span title="odeslané (vytištěné) nabídky">🔒 ${z.odeslane}</span>` : '';
   /* Obchodník = autor zakázky (21. 8. 2026, zadání J. V.). Jméno chodí
-   * z rejstříku; u starších záznamů, které ho ještě nenesou, se ukáže
-   * e-mail — vymýšlet se nic nebude. */
+   * z rejstříku; server ho doplňuje z účtů, takže e-mail zůstane jen tam,
+   * kde účet jméno vyplněné nemá — nic se nevymýšlí. */
   const kdo = (typeof uloObchodnik === 'function') ? uloObchodnik(z) : (z.autor || '—');
   const druh = (typeof uloDruhZakazky === 'function') ? uloDruhZakazky(z) : '';
-  return `<tr class="${otevrena ? 'aktivni' : ''}">
+  const chk = vyber
+    ? `<td><input type="checkbox" ${onlineVybrano(z.soubor) ? 'checked' : ''}
+        onchange="onlineVyberPrepni('${escJs(z.soubor)}', this.checked)"
+        title="vybrat ke smazání"></td>` : '';
+  return `<tr class="${otevrena ? 'aktivni' : ''}">${chk}
     <td style="text-align:left">${esc(z.cislo || '(bez čísla)')}</td>
     <td style="text-align:left;white-space:normal">${esc(z.nazevAkce || '—')}</td>
     <td style="text-align:left;white-space:normal">${esc(z.objednatel || '—')}</td>
-    <td style="text-align:left;white-space:normal">${esc(kdo)}</td>
     <td><span class="pill mut">${esc(druh)}</span></td>
     <td>${esc(z.datum || '')}</td>
     <td>${z.variant}</td>
     <td>${odeslane}</td>
     <td>${esc((z.upraveno || '').slice(0, 16).replace('T', ' '))}</td>
+    <td style="text-align:left;white-space:normal">${esc(kdo)}</td>
     <td><button class="mini" onclick="onlineOtevri('${escJs(z.soubor)}')">Otevřít</button></td>
   </tr>`;
 }
@@ -1575,16 +1584,102 @@ function prehledNabidky() {
   return radky.filter(z => uloDruhZakazky(z) === p.druh);
 }
 
+/* ---------- hromadný výběr a mazání (21. 8. 2026, jen administrátor) ----------
+ *
+ * Zadání J. V.: „do přehledu cenových nabídek přidej možnost hromadného
+ * vybírání a mazání pro administrátora."
+ *
+ * Výběr žije v paměti okna, ne v datech — je to volba, ne vlastnost zakázky.
+ * Maže se PO JEDNÉ (server neumí a nemá umět dávku): když jedna zakázka
+ * selže, ostatní se tím nezruší a v hlášce je vidět, která zůstala. */
+function onlineVybrano(soubor) { return (ONLINE_STAV.prehled.vybrane || []).indexOf(soubor) >= 0; }
+
+function onlineVyberPrepni(soubor, zap) {
+  const v = ONLINE_STAV.prehled.vybrane || (ONLINE_STAV.prehled.vybrane = []);
+  const i = v.indexOf(soubor);
+  if (zap && i < 0) v.push(soubor);
+  if (!zap && i >= 0) v.splice(i, 1);
+  renderPrehledHledaniTelo();
+}
+
+function onlineVyberVse(zap) {
+  const videt = prehledNabidky().map(z => z.soubor);
+  ONLINE_STAV.prehled.vybrane = zap ? videt : [];
+  renderPrehledHledaniTelo();
+}
+
+function onlineVyberZrus() { ONLINE_STAV.prehled.vybrane = []; renderPrehledHledaniTelo(); }
+
+function onlineSmazVybrane() {
+  if (!jeAdminOnline()) { onlineZprava('Mazat zakázky smí jen administrátor.', 'varovani'); render(); return; }
+  const vybrane = (ONLINE_STAV.prehled.vybrane || []).slice();
+  if (!vybrane.length) return;
+  const zaznamy = (ONLINE_STAV.rejstrik || []).filter(z => vybrane.indexOf(z.soubor) >= 0);
+  const odeslanych = zaznamy.reduce((a, z) => a + (z.odeslane || 0), 0);
+  const seznam = zaznamy.slice(0, 12).map(z => '• ' + (z.cislo || '(bez čísla)')
+    + (z.nazevAkce ? ' — ' + z.nazevAkce : '')).join('\n')
+    + (zaznamy.length > 12 ? '\n• … a další ' + (zaznamy.length - 12) : '');
+  if (!confirm('Opravdu smazat ' + vybrane.length + ' '
+    + (vybrane.length === 1 ? 'zakázku' : (vybrane.length < 5 ? 'zakázky' : 'zakázek')) + ' z databáze?\n\n'
+    + seznam + '\n\nSmazané zakázky jsou pryč i s historií cen a variant. '
+    + 'Vrátit je jde jen ze zálohy databáze.')) return;
+  /* Druhé potvrzení JEN tam, kde v zakázce leží vytištěná nabídka. */
+  let iOdeslane = false;
+  if (odeslanych) {
+    if (!confirm('Pozor: ve výběru je ' + odeslanych + ' ODESLANÁ (vytištěná) nabídka.\n\n'
+      + 'Odeslaná nabídka je doklad o tom, co odešlo zákazníkovi. Opravdu smazat i ji?')) return;
+    iOdeslane = true;
+  }
+  ONLINE_STAV.pracuje = true; render();
+  const nepovedlo = [];
+  let hotovo = 0;
+  const dalsi = (i) => {
+    if (i >= vybrane.length) return Promise.resolve();
+    const s = vybrane[i];
+    return onlineApi('/api/zakazky?soubor=' + encodeURIComponent(s)
+      + (iOdeslane ? '&ismazatOdeslane=1' : ''), null, 'DELETE')
+      .then(() => { hotovo++; })
+      .catch(e => { nepovedlo.push(s + ' (' + e.message + ')'); })
+      .then(() => dalsi(i + 1));
+  };
+  dalsi(0).then(() => {
+    ONLINE_STAV.prehled.vybrane = [];
+    /* Když jsme smazali právě otevřenou zakázku, aplikace ji v paměti drží
+     * dál — to je v pořádku, jen se už nemá tvářit, že je uložená. */
+    if (vybrane.indexOf(ONLINE_STAV.soubor) >= 0 && typeof zakOdpojUlozeni === 'function')
+      zakOdpojUlozeni();
+    return onlineNactiRejstrik();
+  }).then(() => {
+    onlineZprava(nepovedlo.length
+      ? ('Smazáno ' + hotovo + ', nepovedlo se: ' + nepovedlo.join('; '))
+      : ('Smazáno ' + hotovo + ' '
+        + (hotovo === 1 ? 'zakázka' : (hotovo < 5 ? 'zakázky' : 'zakázek')) + '.'),
+    nepovedlo.length ? 'varovani' : '');
+  }).then(() => { ONLINE_STAV.pracuje = false; render(); });
+}
+
 function renderPrehledHledaniTelo() {
   const el = document.getElementById('prehledHledaniTelo');
   if (!el) return;
   const radky = prehledNabidky();
-  el.innerHTML = radky.length
-    ? `<div class="tab-scroll"><table class="vartbl archtbl">${onlineHlavickaZakazek()}
-        ${radky.map(onlineRadekZakazky).join('')}</table></div>`
+  const vyber = jeAdminOnline();
+  const vybranych = (ONLINE_STAV.prehled.vybrane || []).length;
+  const lista = vyber
+    ? `<div class="prehled-vyber noprint">
+        <label style="display:flex;align-items:center;gap:6px">
+          <input type="checkbox" ${radky.length && vybranych === radky.length ? 'checked' : ''}
+            onchange="onlineVyberVse(this.checked)"> vybrat vše (zobrazené)</label>
+        <span class="note">${vybranych ? 'vybráno ' + vybranych : 'nic není vybráno'}</span>
+        <button class="mini" ${vybranych ? '' : 'disabled'} onclick="onlineSmazVybrane()"
+          title="smazat vybrané zakázky z databáze">Smazat vybrané…</button>
+        <button class="mini" ${vybranych ? '' : 'disabled'} onclick="onlineVyberZrus()">Zrušit výběr</button>
+      </div>` : '';
+  el.innerHTML = lista + (radky.length
+    ? `<div class="prehled-seznam"><table class="vartbl archtbl">${onlineHlavickaZakazek(vyber)}
+        ${radky.map(z => onlineRadekZakazky(z, vyber)).join('')}</table></div>`
     : `<div class="seznam-prazdno">${(ONLINE_STAV.rejstrik || []).length
       ? 'Tomuhle hledání neodpovídá žádná nabídka.'
-      : 'V databázi zatím není žádná uložená zakázka.'}</div>`;
+      : 'V databázi zatím není žádná uložená zakázka.'}</div>`);
   const p = document.getElementById('prehledHledaniPocet');
   if (p) p.textContent = radky.length + ' z ' + (ONLINE_STAV.rejstrik || []).length;
 }
@@ -1612,26 +1707,30 @@ function prehledHledaniKarta() {
       <span class="note" id="prehledHledaniPocet"></span>
     </div>
     <div id="prehledHledaniTelo"></div>
-    <div class="note">Druh se pozná podle přepínače <b>„jen projekce"</b> v zakázce; u starších
-      zakázek podle čísla nabídky (OVP = projekce). Kliknutím na <b>Otevřít</b> se zakázka načte
-      do aplikace — rozpracovanou práci si předtím uložte.</div>`);
+    <div class="note">Seznam ukazuje pět řádků a dál se roluje. Druh se pozná podle přepínače
+      <b>„jen projekce"</b> v zakázce; u starších zakázek podle čísla nabídky (OVP = projekce).
+      Kliknutím na <b>Otevřít</b> se zakázka načte do aplikace — rozpracovanou práci si předtím uložte.</div>`);
 }
 
+/* Okno „Zakázky online" (tlačítko v Nastavení → Databáze). Kreslí týž seznam
+ * jako vyhledávání v Přehledu, jen bez hromadného výběru — mazání patří na
+ * jedno místo, aby se omylem neklikalo ve dvou různých oknech. */
 function onlinePanelZakazky() {
   const radky = uloHledej(ONLINE_STAV.rejstrik, ONLINE_STAV.hledat);
   return `<div class="seznam-ovladani">
-      <input type="text" class="seznam-hledat" placeholder="Hledat číslo, akci, zákazníka…"
+      <input type="text" class="seznam-hledat" placeholder="Hledat číslo, akci, zákazníka, obchodníka…"
              value="${esc(ONLINE_STAV.hledat)}" oninput="onlineHledatSet(this.value)">
       <span class="note">${radky.length} z ${ONLINE_STAV.rejstrik.length}</span>
     </div>
     ${radky.length
-    ? `<table class="vartbl archtbl">${onlineHlavickaZakazek()}
-        ${radky.map(onlineRadekZakazky).join('')}</table>`
+    ? `<div class="tab-scroll"><table class="vartbl archtbl">${onlineHlavickaZakazek(false)}
+        ${radky.map(z => onlineRadekZakazky(z, false)).join('')}</table></div>`
     : `<div class="seznam-prazdno">${ONLINE_STAV.rejstrik.length
       ? 'Hledání „' + esc(ONLINE_STAV.hledat) + '" nic nenašlo.'
       : 'Online zatím není žádná zakázka. Uložte tu otevřenou tlačítkem „Uložit online".'}</div>`}
-    <div class="note">Seznam se čte z rejstříku na serveru. Mazání online zakázek zatím není –
-      nic se nemaže bez výslovného rozhodnutí; případné úklidy uděláme společně.</div>`;
+    <div class="note">Seznam se čte z rejstříku na serveru. <b>Mazat zakázky</b> jde od 21. 8. 2026
+      v záložce <b>Přehled cenových nabídek</b> — hromadně a jen administrátorovi; smazaná zakázka
+      je pryč i s historií cen a vrátit ji lze jen ze zálohy databáze.</div>`;
 }
 
 function onlineRadekUzivatele(u) {

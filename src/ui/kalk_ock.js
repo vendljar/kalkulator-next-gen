@@ -104,7 +104,14 @@ function atypPrepni(zap, opts) {
    * (standardAtypAutomat v common.js) ho musí respektovat — jinak by se
    * zaškrtávátko po každé změně zadání vracelo zpátky. Zapamatuje se
    * v zadání, takže putuje se zakázkou. Zapnutí značku zase maže. */
-  if (!(opts && opts.automat)) {
+  if (opts && opts.automat) {
+    /* Značka „tohle zaškrtl automat" — jen svoje vlastní zaškrtnutí smí
+     * automat později zase vypnout, až potřeba atypu pomine (21. 8. 2026
+     * večer, zadání J. V.). Ručního ATYPu se nikdy nedotkne: důvodů k němu
+     * je víc než rozměry a ty aplikace nezná. */
+    if (zap) Z.atypAutomat = true; else delete Z.atypAutomat;
+  } else {
+    delete Z.atypAutomat;
     if (zap) delete Z.atypRucneVypnut;
     else Z.atypRucneVypnut = true;
   }
@@ -660,7 +667,8 @@ function renderOutputs() {
   const pripHlava = (col.admin ? '<th title="zaškrtnuté položky se propíší do cenové nabídky">Nabídka</th>' : '')
     + '<th>Položka</th><th>Množství</th>' + (col.admin ? '<th>Jedn. cena</th>' : '')
     + (col.showCost ? '<th>Náklad</th>' : '') + '<th>Cena vč. přirážky</th>'
-    + (col.admin ? '<th class="admincol" title="viditelné pro běžného uživatele">Viditelné</th>' : '');
+    + (col.admin ? '<th class="admincol" title="viditelné pro běžného uživatele">Viditelné</th>'
+      + '<th class="admincol" title="výchozí stav sloupce Nabídka v NOVÉ zakázce">Výchozí</th>' : '');
   const pripRadek = (x) => {
     let c = '';
     if (col.admin) c += `<td style="text-align:center"><input type="checkbox" ${vynech.includes(x.key) ? '' : 'checked'}
@@ -670,18 +678,28 @@ function renderOutputs() {
     if (col.admin) c += `<td style="white-space:nowrap">${pripCena(x)}</td>`;
     if (col.showCost) c += `<td>${fmt(x.naklad)}</td>`;
     c += `<td>${fmt0(x.sMarzi)}</td>`;
-    if (col.admin) c += `<td class="admincol"><input type="checkbox" ${jeSkryta(x.key) ? '' : 'checked'} onchange="viditelnostSet('${keyAttr(x.key)}', this.checked)" title="viditelné pro běžného uživatele"></td>`;
+    if (col.admin) {
+      c += `<td class="admincol"><input type="checkbox" ${jeSkryta(x.key) ? '' : 'checked'} onchange="viditelnostSet('${keyAttr(x.key)}', this.checked)" title="viditelné pro běžného uživatele"></td>`;
+      /* Sloupec Výchozí i u příplatků (21. 8. 2026 večer, zadání J. V.):
+       * říká, jestli se příplatek v NOVÉ zakázce propíše do cenové nabídky
+       * (sloupec Nabídka vlevo). Vlastní příplatek zakázky ho nemá — ten
+       * v nové zakázce vůbec nevznikne. */
+      c += `<td class="admincol">${x.vlastni ? ''
+        : vychoziPolozkaChk(ZOBRAZENI_PRIPLATEK + x.key, true,
+          'zaškrtnuto = příplatek jde v NOVÉ zakázce do cenové nabídky (platí pro všechny); '
+          + 'otevřená zakázka se nemění')}</td>`;
+    }
     return `<tr>${c}</tr>`;
   };
   const pripRows = col.admin ? r.priplatky : r.priplatky.filter(x => !jeSkryta(x.key));
-  const pripCols = (col.admin ? 1 : 0) + 2 + (col.admin ? 1 : 0) + (col.showCost ? 1 : 0) + 1 + (col.admin ? 1 : 0);
+  const pripCols = (col.admin ? 1 : 0) + 2 + (col.admin ? 1 : 0) + (col.showCost ? 1 : 0) + 1 + (col.admin ? 2 : 0);
   const prip = `<table>
     <tr>${pripHlava}</tr>
     ${pripRows.map(pripRadek).join('')}
     ${col.admin ? `<tr class="pridat noprint"><td colspan="${pripCols}">
       <button class="mini" title="vlastní příplatek jen této zakázky" onclick="priplatekVlastniAdd()">+ přidat položku</button>
       <button class="mini" title="zapíše příplatek natrvalo do ceníku – bude ve všech nových nabídkách" onclick="priplatekVlastniAddTrvale()">+ přidat položku trvale</button></td></tr>` : ''}
-    <tr class="tot"><td colspan="${pripCols - 1 - (col.admin ? 1 : 0)}">PŘÍPLATKY CELKEM (pokud vše)</td><td>${fmt0(r.souhrn.priplatkyCena)}</td>${col.admin ? '<td class="admincol"></td>' : ''}</tr>
+    <tr class="tot"><td colspan="${pripCols - 1 - (col.admin ? 2 : 0)}">PŘÍPLATKY CELKEM (pokud vše)</td><td>${fmt0(r.souhrn.priplatkyCena)}</td>${col.admin ? '<td class="admincol"></td><td class="admincol"></td>' : ''}</tr>
   </table>
   <div class="note">Příplatkové položky jsou ceník variant pro zákazníka – do základní ceny se nezapočítávají.${col.admin ? `
   Název i jedn. cenu lze přepsat, tlačítkem lze přidat vlastní příplatek. Sloupec <b>Nabídka</b> určuje, které

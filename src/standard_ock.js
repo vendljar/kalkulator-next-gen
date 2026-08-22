@@ -43,7 +43,10 @@ const STANDARD_VYCHOZI = {
       { profil: '80x80', vyskaMaxM: 30, sirkaMaxMm: 2000, hloubkaMaxMm: 2000 },
       { profil: '100x100', vyskaMaxM: 30, sirkaMaxMm: 2000, hloubkaMaxMm: 2000 },
     ],
-    zaskleni: 'souvislé jednotypové zasklení po celém povrchu',
+    /* Povolené způsoby zasklení — stejným způsobem jako u interiéru
+     * (21. 8. 2026 večer, zadání J. V.). Do té doby tu stál jen popisný
+     * text, který se nikde nekontroloval; popisná pole z nastavení zmizela. */
+    zaskleniPovolene: ['na terče'],
   },
   /* Interiér má limity PODLE PROFILU — každý profil svou výšku a hloubku. */
   interier: {
@@ -51,7 +54,6 @@ const STANDARD_VYCHOZI = {
       { profil: '80x40', vyskaMaxM: 25, sirkaMaxMm: 1800, hloubkaMaxMm: 1800 },
       { profil: '80x50', vyskaMaxM: 30, sirkaMaxMm: 1800, hloubkaMaxMm: 2500 },
     ],
-    zaskleni: 'zasklívací terče na profily, sklo do rámečku',
     /* Povolené způsoby zasklení uvnitř budovy. Do 21. 8. 2026 se hlídaly jen
      * terče a „sklo do rámečku" (v zadání volba „mezi příčníky (lišty)")
      * hlásilo atyp — přitom je součástí standardu (nález J. V.). Hodnoty
@@ -69,6 +71,23 @@ const STANDARD_VYCHOZI = {
   jedenTypZaskleni: true,
   kdo: '', kdy: '', verze: 1,
 };
+
+/* Způsoby zasklení tak, jak se jmenují v zadání šachty, a jak se o nich
+ * mluví ve standardu. Jeden seznam pro model i pro obrazovku — kdyby si
+ * každý držel svůj, rozešly by se popisky v nálezu a v Nastavení. */
+const STANDARD_ZASKLENI = [
+  { hodnota: 'na terče', popis: 'zasklívací terče na profily' },
+  { hodnota: 'mezi příčníky', popis: 'sklo do rámečku (mezi příčníky, lišty)' },
+];
+
+/* Věta do sloupce „Standard" v nálezu. Prázdný seznam = nekontroluje se. */
+function standardZaskleniPopis(vetev) {
+  const p = ((vetev || {}).zaskleniPovolene || []).map(h => {
+    const v = STANDARD_ZASKLENI.find(x => x.hodnota === h);
+    return v ? v.popis : h;
+  });
+  return p.length ? p.join(' nebo ') : 'nekontroluje se';
+}
 
 /* „Prázdno není nula" (pravidlo #8 projektu) platí i tady: nevyplněný rozměr
  * musí vrátit null, aby se z něj stalo „nelze posoudit", ne nula, která by
@@ -126,7 +145,8 @@ function standardOciste(vstup) {
     };
     const rady = _radyOciste(e.profily, spol);
     if (rady) s.exterier.profily = rady;
-    if (typeof e.zaskleni === 'string') s.exterier.zaskleni = e.zaskleni.slice(0, 200);
+    if (Array.isArray(e.zaskleniPovolene))
+      s.exterier.zaskleniPovolene = e.zaskleniPovolene.map(x => String(x).trim()).filter(Boolean);
   }
   if (v.interier && typeof v.interier === 'object') {
     const i = v.interier;
@@ -136,7 +156,6 @@ function standardOciste(vstup) {
       hloubkaMaxMm: d.interier.profily[0].hloubkaMaxMm,
     });
     if (rady) s.interier.profily = rady;
-    if (typeof i.zaskleni === 'string') s.interier.zaskleni = i.zaskleni.slice(0, 200);
     /* Prázdný seznam povolených způsobů zasklení znamená „nekontroluje se" —
      * a to je platná volba, takže se NEPŘEPISUJE výchozím zněním. */
     if (Array.isArray(i.zaskleniPovolene))
@@ -233,16 +252,18 @@ function standardVyhodnot(z, vyskaM, std, pripl) {
       nalezy.push(_nalez('Vnitřní hloubka', 'max ' + limity.hloubkaMaxMm + ' mm', hloubkaMm + ' mm'));
   }
 
-  /* --- opláštění --- */
+  /* --- opláštění ---
+   * Od 21. 8. 2026 večer se kontroluje v OBOU větvích stejně (zadání J. V.):
+   * seznam povolených způsobů v Nastavení proti volbě „Způsob zasklení"
+   * v zadání šachty. Prázdný seznam znamená „nekontroluje se". */
   kontrol++;
   const zaskleniZad = String(zad.zaskleni || '').toLowerCase();
-  if (!ext) {
-    /* Interiér: standardem jsou zasklívací terče na profily NEBO sklo do
-     * rámečku (volba „mezi příčníky (lišty)" v zadání). Seznam povolených
-     * způsobů je v Nastavení — prázdný seznam znamená, že se nekontroluje. */
-    const povolene = (s.interier.zaskleniPovolene || []).map(x => String(x).toLowerCase());
+  {
+    const vetevZ = ext ? s.exterier : s.interier;
+    const kdeZ = ext ? 'exteriér' : 'interiér';
+    const povolene = (vetevZ.zaskleniPovolene || []).map(x => String(x).toLowerCase());
     if (zaskleniZad && povolene.length && povolene.indexOf(zaskleniZad) < 0)
-      nalezy.push(_nalez('Opláštění (interiér)', s.interier.zaskleni, zad.zaskleni));
+      nalezy.push(_nalez('Opláštění (' + kdeZ + ')', standardZaskleniPopis(vetevZ), zad.zaskleni));
   }
   /* Jednotypovost: víc druhů skla v příplatcích není standard (rozhodnutí
    * J. V. 21. 8. 2026 — „standard je jeden typ zasklení bez míchání skel"). */
@@ -301,4 +322,4 @@ function standardPopis(vysledek) {
 
 if (typeof module !== 'undefined')
   module.exports = { STANDARD_VYCHOZI, standardOciste, standardVyhodnot,
-    standardNormProfil, standardPopis };
+    standardNormProfil, standardPopis, STANDARD_ZASKLENI, standardZaskleniPopis };

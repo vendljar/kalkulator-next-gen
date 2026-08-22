@@ -14,7 +14,9 @@ function nastOtevreno() { const o = document.getElementById('nastaveni-overlay')
 function nastRefresh() {
   // změna v Nastavení = důvod zapsat do složky (se zpožděním, viz ui/nastaveni_db_ui.js)
   if (typeof nastdbZmeneno === 'function') nastdbZmeneno();
-  render(); if (nastOtevreno()) renderNastaveni();
+  /* render() si otevřené okno Nastavení překreslí sám (od 21. 8. 2026
+   * večer) — druhé volání by jen zdvojilo práci. */
+  render();
 }
 /* Vnitřní záložky Nastavení (#136). Do 5. 8. 2026 se skládaly ručně přímo
  * v renderNastaveni() a dvě z nich (Firma, Konfigurace, Slovník) měly kolem
@@ -221,13 +223,14 @@ function stdRadaSmaz(vetev, i) {
 /* Povolený způsob zasklení interiéru (terče × sklo do rámečku). Seznam,
  * ne dvě zaškrtávátka natvrdo: standard se může rozšířit o další způsob
  * a nemá se kvůli tomu vydávat nová dávka. */
-function stdZaskleniPrepni(hodnota, zapnuto) {
+function stdZaskleniPrepni(vetev, hodnota, zapnuto) {
   const s = stdData();
-  const pole = Array.isArray(s.interier.zaskleniPovolene) ? s.interier.zaskleniPovolene.slice() : [];
+  if (!s[vetev]) return;
+  const pole = Array.isArray(s[vetev].zaskleniPovolene) ? s[vetev].zaskleniPovolene.slice() : [];
   const i = pole.indexOf(hodnota);
   if (zapnuto && i < 0) pole.push(hodnota);
   if (!zapnuto && i >= 0) pole.splice(i, 1);
-  s.interier.zaskleniPovolene = pole;
+  s[vetev].zaskleniPovolene = pole;
   nastRefresh();
 }
 
@@ -250,18 +253,10 @@ function stdNehlidame(proc) {
  * `${…}` v šabloně vypadá pro kontrolu escapování (test_escape.js) jako
  * neošetřená hodnota, a ta kontrola má být přísná. */
 const STD_NEHLIDAME = {
-  oplasteni: 'Souvislost opláštění se z dat kalkulace poznat nedá — v zadání pro ni není údaj. '
-    + 'Text slouží jako popis do nálezu.',
   mustekReseni: 'Standard připouští jediné konstrukční řešení můstku a mění se u něj pouze '
     + 'hloubkový rozměr. Zadání kalkulace ani technická specifikace dnes nenesou údaj, podle '
     + 'kterého by šlo jiné řešení poznat — hlídá se proto jen hloubka a šířka.',
 };
-
-/* Volby zasklení odpovídají poli „Způsob zasklení" v Zadání šachty. */
-const STD_ZASKLENI_VOLBY = [
-  ['na terče', 'zasklívací terče na profily'],
-  ['mezi příčníky', 'sklo do rámečku (mezi příčníky, lišty)'],
-];
 
 function nastStandard() {
   if (!smiZobrazit('nastaveni.standard'))
@@ -283,12 +278,20 @@ function nastStandard() {
       <tbody>${(s[vetev].profily || []).map(radaHtml(vetev)).join('')}</tbody></table>
     <div class="btns"><button class="mini" onclick="stdRadaPridej('${vetev}')">+ přidat profil</button></div>`;
 
-  const zaskleniChk = STD_ZASKLENI_VOLBY.map(([hod, popis]) => {
-    const je = (s.interier.zaskleniPovolene || []).indexOf(hod) >= 0;
+  /* Povolené způsoby zasklení — v OBOU větvích stejně (21. 8. 2026 večer,
+   * zadání J. V.). Popisná textová pole („Opláštění", „Popis opláštění")
+   * z nastavení zmizela: nikde se nekontrolovala a jen svádělo k dojmu,
+   * že se podle nich něco hlídá. Volby odpovídají poli „Způsob zasklení"
+   * v zadání šachty — seznam je jeden, v `standard_ock.js`. */
+  const zaskleniChk = (vetev) => STANDARD_ZASKLENI.map(v => {
+    const je = (s[vetev].zaskleniPovolene || []).indexOf(v.hodnota) >= 0;
     return `<label style="display:flex;align-items:center;gap:8px;margin:4px 0">
       <input type="checkbox" ${je ? 'checked' : ''}
-        onchange="stdZaskleniPrepni('${escJs(hod)}', this.checked)"> ${esc(popis)}</label>`;
+        onchange="stdZaskleniPrepni('${vetev}', '${escJs(v.hodnota)}', this.checked)"> ${esc(v.popis)}</label>`;
   }).join('');
+  const zaskleniBlok = (vetev) => `<div class="note" style="margin:8px 0 2px"><b>Povolené způsoby
+      zasklení</b> — odpovídají volbě „Způsob zasklení" v zadání šachty. Nezaškrtnutý způsob je atyp;
+      když nezaškrtnete žádný, zasklení se nekontroluje vůbec.</div>${zaskleniChk(vetev)}`;
 
   return `<div class="note" style="margin-top:0">Podle téhle tabulky se v <b>Kalkulaci OCK</b>
       i v <b>Technické specifikaci</b> rozhoduje, jestli je šachta <b>standardní</b>, nebo <b>atyp</b>.
@@ -308,9 +311,7 @@ function nastStandard() {
 
     <div class="sec-title">Exteriér (venkovní šachta) — limity podle profilu</div>
     ${tabulka('exterier')}
-    <div class="row"><label>Opláštění ${stdNehlidame(STD_NEHLIDAME.oplasteni)}</label>
-      <input type="text" value="${esc(s.exterier.zaskleni)}"
-        onchange="stdSet('exterier.zaskleni', this.value)"><span class="u"></span></div>
+    ${zaskleniBlok('exterier')}
 
     <div class="sec-title">Můstek mezi budovou a OCK</div>
     <div class="note" style="margin-top:0">Můstek patří k venkovní šachtě — proto stojí tady
@@ -329,13 +330,7 @@ function nastStandard() {
 
     <div class="sec-title">Interiér (vnitřní šachta) — limity podle profilu</div>
     ${tabulka('interier')}
-    <div class="note" style="margin:8px 0 2px"><b>Povolené způsoby zasklení</b> — odpovídají volbě
-      „Způsob zasklení" v zadání šachty. Nezaškrtnutý způsob je atyp; když nezaškrtnete žádný,
-      zasklení se nekontroluje vůbec.</div>
-    ${zaskleniChk}
-    <div class="row"><label>Popis opláštění <span class="note">(text do nálezu)</span></label>
-      <input type="text" value="${esc(s.interier.zaskleni)}"
-        onchange="stdSet('interier.zaskleni', this.value)"><span class="u"></span></div>
+    ${zaskleniBlok('interier')}
 
     <div class="sec-title">Společná pravidla</div>
     <label style="display:flex;align-items:center;gap:8px;margin:6px 0">

@@ -498,6 +498,21 @@
      uvnitř, aby hledání i hláška o stavu složky zůstaly nad ní vidět. */
   #uloziste-panel { max-width:1180px; }
   #ulozisteTelo { overflow:auto; max-height:52vh; }
+  /* Zakázky online: širší než ostatní okna (21. 8. 2026, zadání J. V.
+     „zobrazení je třeba rozšířit, teď se tam nevejde") — přibyly sloupce
+     Obchodník a Druh a devět sloupců se do 760 px nevejde. Tabulka se
+     uvnitř roluje vodorovně i svisle, takže okno nikdy nepřeteče. */
+  #online-panel { max-width:1320px; }
+  #online-panel .tab-scroll { overflow:auto; max-height:58vh; }
+  /* Seznam nalezených nabídek v Přehledu: pět řádků a pak posuvník vpravo
+     (zadání J. V.) — karta by jinak odsunula souhrn řídící varianty pod
+     okraj obrazovky. Výška je v em, aby držela i při jiné velikosti písma. */
+  .prehled-seznam { overflow-y:auto; overflow-x:auto; max-height:17em;
+    border:1px solid var(--line); border-radius:8px; }
+  .prehled-seznam table { margin:0; }
+  .prehled-seznam thead th, .prehled-seznam tr:first-child th {
+    position:sticky; top:0; background:#f3f6fa; z-index:1; }
+  .prehled-vyber { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:8px 0 6px; }
   .archtbl th, .archtbl td { border-bottom:1px solid var(--line); vertical-align:middle; }
   .archtbl tr:hover td { background:#f7f9fe; }
   .archiv-soubory { display:flex; align-items:center; gap:6px; flex-wrap:wrap;

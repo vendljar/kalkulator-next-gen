@@ -100,7 +100,7 @@ function aresRadek(kde, sJednotkou, navic) {
    * IČO hlídá overit_lista.mjs. */
   const tlacitko = `<button class="mini noprint" style="margin-left:auto" onclick="aresHledej('${kde}')"
     title="${muze ? 'zeptat se rejstříku ARES, jaká firma pod tímto IČO je'
-                  : 'nejdřív vyplňte IČO zákazníka'}"${muze ? '' : ' disabled'}>Najít firmu v ARES</button>`;
+                  : 'nejdřív vyplňte IČO zákazníka'}"${muze ? '' : ' disabled'}>🔎 Najít firmu v ARES</button>`;
   const panel = (ARES.kde === kde) ? aresPanel(kde) : '';
   /* Prázdný sloupeček „jednotka" se kreslí jen tam, kde ho mají i řádky
    * s poli — jinak by tlačítková řada končila o 42 px JINDE než pole nad ní.
@@ -125,9 +125,9 @@ function aresRadek(kde, sJednotkou, navic) {
    * tlačítko pod ostatní, jakmile se trojice o pár pixelů nevešla — a vypadalo
    * to jako porucha. Zalamování je proto vypnuté a tlačítka se smějí zúžit
    * (`min-width:0`); místo na to vzniklo tím, že z popisků zmizely ikonky
-   * a tři tečky (zadání J. V.: „pokud se tlačítka vedle sebe nevejdou,
-   * odstraň z tlačítek ikonky"). Delší popisek se v úzkém okně zkrátí
-   * výpustkou, ale řádek zůstane jeden. */
+   * a tři tečky. Lupa u ARESu se 21. 8. večer VRÁTILA (zadání J. V.:
+   * „vrať zpátky ikonu lupy, měla by se tam vejít") — po vypnutí zalamování
+   * už řádek neroztrhne, nejvýš se popisek v úzkém okně zkrátí výpustkou. */
   return `<div class="row noprint">
       <div class="ares-tlacitka">${navic || ''}${tlacitko}</div>
       ${jednotka}</div>${panel}`;

@@ -29,7 +29,41 @@ export default async (req) => {
     return zak ? json({ ok: true, zakazka: zak })
                : json({ ok: false, chyba: 'Zakázka nenalezena: ' + soubor }, 404);
   }
-  if (req.method !== 'POST') return json({ ok: false, chyba: 'Použijte GET nebo POST.' }, 405);
+  /* DELETE /api/zakazky?soubor=X — SMAZÁNÍ ZAKÁZKY (21. 8. 2026, zadání J. V.
+   * „přidej možnost hromadného vybírání a mazání pro administrátora").
+   *
+   * Do té doby se online zakázky nemazaly vůbec — schválně, protože smazaná
+   * kalkulace je pryč i s historií cen. Teď to jde, ale jen ADMINISTRÁTOROVI
+   * a s dvěma pojistkami:
+   *   1) hromadné mazání dělá klient po jedné zakázce, takže když jedna
+   *      selže, ostatní se tím nezruší a je vidět která;
+   *   2) zakázka s UZAMČENOU (odeslanou) nabídkou se smaže jen s výslovným
+   *      `ismazatOdeslane=1` — vytištěná nabídka je doklad, ne pracovní
+   *      soubor, a smazat ji musí být vědomé rozhodnutí, ne přehlédnutí.
+   * Rejstřík se opravuje ve stejném kroku, aby v seznamu nezůstal sirotek. */
+  if (req.method === 'DELETE') {
+    if (relace.role !== 'Administrátor')
+      return json({ ok: false, chyba: 'Mazat zakázky smí jen administrátor.' }, 403);
+    const soubor = url.searchParams.get('soubor');
+    if (!soubor) return json({ ok: false, chyba: 'Chybí jméno zakázky.' }, 400);
+    const zak = await s.cti('z/' + soubor);
+    if (zak) {
+      const zamcenych = (zak.varianty || [])
+        .filter(v => globalThis.variantaUzamcena && globalThis.variantaUzamcena(v)).length;
+      if (zamcenych && url.searchParams.get('ismazatOdeslane') !== '1')
+        return json({ ok: false, zamcenych,
+          chyba: 'Zakázka obsahuje ' + zamcenych + ' odeslanou (uzamčenou) nabídku. '
+            + 'Smazání je potřeba potvrdit zvlášť.' }, 409);
+      await s.smaz('z/' + soubor);
+    }
+    const rej = (await s.cti('_rejstrik')) || { schema: 1, zakazky: [] };
+    const zbytek = ULO.uloRejstrikOdeber(Array.isArray(rej.zakazky) ? rej.zakazky : [], soubor);
+    await s.zapis('_rejstrik', { schema: 1, zakazky: ULO.uloRejstrikSerad(zbytek),
+                                 kdo: relace.email, upraveno: new Date().toISOString() });
+    return json({ ok: true, soubor, existovala: !!zak });
+  }
+
+  if (req.method !== 'POST') return json({ ok: false, chyba: 'Použijte GET, POST nebo DELETE.' }, 405);
 
   let t; try { t = await req.json(); } catch (e) { return json({ ok: false, chyba: 'Vstup není platný JSON.' }, 400); }
   /* importZakazka na nesmyslném vstupu vyhodí výjimku. Bez tohohle obalu by
@@ -84,16 +118,36 @@ export default async (req) => {
   zak.uloRazitko = razitko;
   await s.zapis('z/' + jmeno, zak);
   const rejstrik = (await s.cti('_rejstrik')) || { schema: 1, zakazky: [] };
-  /* Doplnění jména u STARŠÍCH záznamů téhož autora. Rejstřík se stejně
-   * přepisuje celý, takže je to zadarmo — a seznam se tím postupně
-   * dovyplní, jak si každý svoje zakázky jednou uloží. Cizí řádky se
-   * nikdy nedotýkají: jméno známe jen o tom, kdo je právě přihlášený. */
-  const stavajici = (Array.isArray(rejstrik.zakazky) ? rejstrik.zakazky : []).map(z => {
+  /* Doplnění jmen obchodníků u STARŠÍCH záznamů (21. 8. 2026 večer).
+   *
+   * První verze uměla doplnit jen jméno právě přihlášeného, takže seznam
+   * ukazoval u cizích zakázek e-mail, dokud si je jejich autor sám neuložil
+   * (hlášeno J. V.: „obchodník měl být uveden jménem, ne e-mailem").
+   * Teď se u chybějících jmen jednou přečtou účty a doplní se všechna.
+   *
+   * Je to bezpečně omezené: čte se JEN tehdy, když nějaké jméno chybí,
+   * a po prvním takovém uložení už rejstřík jména má, takže se to
+   * neopakuje. Účtů jsou jednotky. Nikdy se nic nevymýšlí — účet bez
+   * vyplněného jména zůstane v seznamu e-mailem. */
+  let stavajici = (Array.isArray(rejstrik.zakazky) ? rejstrik.zakazky : []).map(z => {
     if (z && !z.autorJmeno && relace.jmeno
         && String(z.autor || '').toLowerCase() === String(relace.email).toLowerCase())
       return { ...z, autorJmeno: relace.jmeno };
     return z;
   });
+  if (stavajici.some(z => z && z.autor && !z.autorJmeno)) {
+    try {
+      const u = await uloziste('uzivatele');
+      const mapa = {};
+      for (const k of await u.seznam()) {
+        const ucet = await u.cti(k);
+        if (ucet && ucet.email && ucet.jmeno)
+          mapa[String(ucet.email).toLowerCase()] = String(ucet.jmeno);
+      }
+      stavajici = stavajici.map(z => (z && !z.autorJmeno && mapa[String(z.autor || '').toLowerCase()])
+        ? { ...z, autorJmeno: mapa[String(z.autor).toLowerCase()] } : z);
+    } catch (e) { /* jména jsou pohodlí, ne podmínka uložení zakázky */ }
+  }
   const novy = ULO.uloRejstrikSloucit(stavajici,
     ULO.uloRejstrikZaznam(zak, { soubor: jmeno, razitko }));
   await s.zapis('_rejstrik', { schema: 1, zakazky: ULO.uloRejstrikSerad(novy), kdo: relace.email,

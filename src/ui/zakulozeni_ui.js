@@ -107,11 +107,11 @@ function zakTrojice() {
  *
  * Nové chování:
  *   – „změny se uloží samy" se NEUKAZUJE VŮBEC (to je normální stav práce),
- *   – „uloženo" svítí ZAKULO_OKNO milisekund po zápisu a pak zmizí,
+ *   – „uloženo" svítí ZAKULO_OKNO milisekund po zápisu (3 vteřiny) a pak zmizí,
  *   – všechno ostatní (nepřihlášen, hlavička nevyplněná, duplicitní číslo,
  *     chyba zápisu) svítí dál pořád — to jsou stavy, které se musí řešit.
  * Stav uložení je i tak vidět: tlačítko „Uložit zakázku" je zeleně. */
-const ZAKULO_OKNO = 6000;
+const ZAKULO_OKNO = 3000;   // 3 vteřiny (upřesnění J. V. 21. 8. 2026 večer)
 let _zakuloTimer = null;
 
 /* Kolik milisekund uplynulo od posledního úspěšného zápisu. Bez zápisu

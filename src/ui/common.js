@@ -618,9 +618,9 @@ function standardRozpisPrepni() { STD_ROZPIS = !STD_ROZPIS; render(); }
  * vždycky člověk" (návrh z 21. 8. ráno) — proto tři pojistky, aby se z toho
  * nestal stroj, který obchodníkovi přepisuje práci:
  *
- *  1. NIKDY NEVYPÍNÁ. Když se šachta vrátí do standardu, ATYP zůstane
- *     zaškrtnutý — důvodů k atypu je víc než rozměry a odškrtnout ho umí
- *     jen ten, kdo ty důvody zná.
+ *  1. VYPÍNÁ JEN SVOJE. Vrátí-li se šachta do standardu, automat odškrtne
+ *     ATYP, který sám zaškrtl (`Z.atypAutomat`). ATYPu zaškrtnutého ČLOVĚKEM
+ *     se nedotkne — důvodů k atypu je víc než rozměry a ty aplikace nezná.
  *  2. RUČNÍ ODŠKRTNUTÍ SE RESPEKTUJE. Kdo ATYP u nestandardní šachty vypne,
  *     řekl tím „vím o tom". Zapamatuje se to v zadání (`atypRucneVypnut`)
  *     a automat na tu zakázku už nesáhne, dokud se šachta nevrátí
@@ -643,6 +643,11 @@ function standardAtypAutomat() {
     /* Zpátky ve standardu: ruční „ne" ztrácí platnost, aby příští odchylka
      * zase zabrala. */
     if (Z.atypRucneVypnut) delete Z.atypRucneVypnut;
+    /* A pomine-li potřeba atypu, automat SVOJE zaškrtnutí zase vypne
+     * (21. 8. 2026 večer, zadání J. V.: „když pomine potřeba atyp,
+     * automaticky tlačítko zase vypni"). Ručně zaškrtnutý ATYP zůstává —
+     * ten značku `atypAutomat` nenese. */
+    if (Z.atyp && Z.atypAutomat) { atypPrepni(false, { automat: true }); return true; }
     return false;
   }
   if (Z.atyp || Z.atypRucneVypnut) return false;
@@ -1534,6 +1539,15 @@ function render() {
     /* heat mapa (#26) jede s uživatelem: každé překreslení aplikace
      * překreslí i ji — jinak by po přepnutí záložky ukazovala staré prvky */
     if (typeof heatPoRenderu === 'function') heatPoRenderu();
+    /* Otevřené okno Nastavení se překresluje SPOLU s aplikací (21. 8. 2026
+     * večer). Do té doby ho obnovoval jen `nastRefresh()` — jenže od chvíle,
+     * kdy se do Nastavení přestěhovala karta Databáze, sedí v modálním okně
+     * tlačítka („Zálohovat teď", „Uložit online", „Odhlásit"), jejichž obsluhy
+     * volají obyčejný `render()`. Ten okno neznal, takže se po kliknutí
+     * viditelně nestalo nic — hlášku i nový stav nikdo nevykreslil.
+     * Hlášeno J. V.: „tlačítko zálohovat teď databázi nefunguje." */
+    if (typeof nastOtevreno === 'function' && nastOtevreno()
+        && typeof renderNastaveni === 'function') renderNastaveni();
   } catch (e) {
     renderChybaBanner(e);
     renderPrihlaseniNejdriv();          // ať zůstane cesta k přihlášení

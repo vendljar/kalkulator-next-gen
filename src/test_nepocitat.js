@@ -102,5 +102,24 @@ const nova2 = zadani();
 Zo.zobrazeniVychoziAplikuj({}, nova2, null);
 test('bez odchylky se do nové zakázky nic nedopisuje', nova2.nepocitat.length === 0);
 
+/* ---------- 4) totéž pro PŘÍPLATKY (sloupec Nabídka) ---------- */
+/* Zadání J. V. 21. 8. 2026 večer: „přidej výchozí tlačítka i do sekce
+ * Příplatkové položky." U příplatku Výchozí neřídí cenu, ale to, jestli
+ * se propíše do cenové nabídky — v zadání je to `priplatkyVynechat`. */
+const klicP = Zo.ZOBRAZENI_PRIPLATEK + 'vsgFolie';
+let matP = {};
+Zo.zobrazeniPolozkaVychoziNastav(matP, klicP, false, true);
+test('odškrtnutý příplatek se uloží do matice', matP.vychozi && matP.vychozi[klicP] === false);
+const novaP = zadani();
+Zo.zobrazeniVychoziAplikuj(matP, novaP, null);
+test('a nová zakázka ho má mezi vynechanými z nabídky',
+  (novaP.priplatkyVynechat || []).indexOf('vsgFolie') >= 0, JSON.stringify(novaP.priplatkyVynechat));
+test('vynechaný příplatek NEMĚNÍ cenu (jde jen o nabídku)',
+  eng.vypocet(novaP, cenik(), JEKLY, true).souhrn.zakladCena === rBez.souhrn.zakladCena);
+const novaP2 = zadani();
+Zo.zobrazeniVychoziAplikuj({}, novaP2, null);
+test('bez odchylky zůstane seznam vynechaných příplatků prázdný',
+  (novaP2.priplatkyVynechat || []).length === 0);
+
 console.log('\n' + ok + ' OK, ' + fail + ' FAIL');
 process.exit(fail ? 1 : 0);

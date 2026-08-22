@@ -246,6 +246,7 @@ test('zelený pruh o uložení se ukáže po zápisu a pak zmizí',
     window.zakUlozeniStav = () => ({ stav: 'ulozeno', chybi: [], text: 'Uloženo.' });
     ONLINE_STAV.kdyUlozeno = new Date();
     const hned = /ulozeno-ok/.test(zakUlozeniRadek());
+    const okno = (typeof ZAKULO_OKNO !== 'undefined') ? ZAKULO_OKNO : 0;
     ONLINE_STAV.kdyUlozeno = new Date(Date.now() - 60000);   // minuta zpátky
     const pozdeji = zakUlozeniRadek();
     window.zakUlozeniStav = () => ({ stav: 'ceka', chybi: [], text: 'Změny se za chvíli uloží samy.' });
@@ -254,7 +255,10 @@ test('zelený pruh o uložení se ukáže po zápisu a pak zmizí',
     const varovani = zakUlozeniRadek();
     window.zakUlozeniStav = puvodni; window.zakKanal = puvodniKanal;
     ONLINE_STAV.kdyUlozeno = puvodniKdy;
-    return hned && pozdeji === '' && priZmene === '' && /Nejste přihlášeni/.test(varovani);
+    /* Tři vteřiny (upřesnění J. V. 21. 8. 2026 večer) — kdyby okno někdo
+     * omylem nastavil na minuty, pruh by zase visel pořád. */
+    return hned && okno > 0 && okno <= 5000
+      && pozdeji === '' && priZmene === '' && /Nejste přihlášeni/.test(varovani);
   }));
 test('jméno přihlášeného je v liště světle zelené a heat mapa stojí za Změnit heslo',
   await p.evaluate(() => {
