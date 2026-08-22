@@ -143,8 +143,26 @@ export default async (req) => {
    * Autor se zapisuje jen jednou, při prvním uložení. Kdyby se přepisoval
    * pokaždé, „autorem" by se stal ten, kdo si zakázku naposledy otevřel
    * a uložil — a razítko by ztratilo smysl. Kdo naposledy sáhl, je `upravil`. */
-  if (!zak.autor) zak.autor = relace.email;
+  /* Razítka při založení (audit 22. 8. 2026, nález B13). Do té doby se
+   * `autor` u NOVÉ zakázky přebíral z těla požadavku, když tam byl — obchodník
+   * mohl založit zakázku „za" vedoucího. Teď: nová zakázka (v databázi ještě
+   * není) dostane autora z relace; cizího autora smí u nové zakázky ponechat
+   * jen administrátor (obnova ze souboru/zálohy — tam je razítko doklad).
+   * U existující se autor nepřepisuje (11. 8. 2026), viz níž. */
+  if (!stara) {
+    if (!zak.autor || zak.autor === relace.email || relace.role !== 'Administrátor')
+      zak.autor = relace.email;
+  } else if (!zak.autor) zak.autor = relace.email;
   zak.upravil = relace.email;
+  /* Totéž pro razítko zámku: NOVĚ vzniklý zámek (v uložené verzi varianta
+   * zamčená nebyla) nese `kdo` z relace, ne z klienta. `kdy` se nechává —
+   * je součástí klíče zámku a klient si ho drží v rozpracované kopii. */
+  for (const v of (zak.varianty || [])) {
+    if (!v || !v.zamek || !v.zamek.zamceno) continue;
+    const sv = stara ? (stara.varianty || []).find(x => x && x.id === v.id) : null;
+    if (sv && sv.zamek && sv.zamek.zamceno) continue;           // zámek už byl — nesahat
+    v.zamek.kdo = relace.jmeno ? relace.jmeno + ' <' + relace.email + '>' : relace.email;
+  }
   /* Jméno obchodníka do rejstříku (21. 8. 2026, zadání J. V.). Bere se
    * z RELACE, ne od klienta — jméno v seznamu je stejné razítko jako autor
    * a nesmí jít podvrhnout. Zapisuje se při každém uložení, aby se

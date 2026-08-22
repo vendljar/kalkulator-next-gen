@@ -123,6 +123,44 @@ export async function pokusyNeuspech(email) {
   return z;
 }
 
+/* ---------- souběh a druhý limit na adresu (audit 22. 8. 2026, nález B4) ----
+ *
+ * Počítadlo výš je čtení–změna–zápis. Padesát požadavků najednou přečte
+ * nulu, všechny zapíšou jedničku a žádný nečeká — limit 10 pokusů platil jen
+ * pro útočníka, který posílá hesla popořadě. Dvě opatření:
+ *
+ * 1) ZÁPIS PŘED OVĚŘENÍM. Pokus se započítá hned při příchodu (pokusyZacatek),
+ *    ne až po výpočtu scryptu — okno souběhu se zúží z desítek milisekund
+ *    na dobu jednoho zápisu do Blobs. Správné heslo počítadlo vynuluje, takže
+ *    majiteli účtu se nic nemění (zásada #92 platí dál).
+ * 2) DRUHÉ POČÍTADLO NA ADRESU (x-nf-client-connection-ip). Útočník, který
+ *    zkouší jedno heslo na sto e-mailů, na počítadle e-mailu nikdy nenaroste;
+ *    na adrese ano. Strop je vyšší (kancelář sdílí adresu) a opět NIKDY
+ *    nebrání správnému heslu — jen zdržuje a odmítá špatná.
+ *
+ * Netlify Blobs neumí atomický inkrement; podmíněný zápis (etag) by tu
+ * byl správně, ale náhrada pro testy ho nemá a ostrý běh by se nedal v cloudu
+ * ověřit. Zůstává jako otevřená část nálezu B4 pro lokální ověření. */
+export const POKUSY_IP_MAX = 60;
+export function pokusyIpKlic(ip) { return 'ip:' + String(ip || '').trim().slice(0, 64); }
+export function adresaKlienta(req) {
+  try {
+    return (req.headers.get('x-nf-client-connection-ip')
+      || (req.headers.get('x-forwarded-for') || '').split(',')[0] || '').trim();
+  } catch (e) { return ''; }
+}
+/* Započítá pokus pro e-mail i adresu a vrátí stav obou. */
+export async function pokusyZacatek(email, ip) {
+  const z = await pokusyNeuspech(email);
+  let a = { n: 0, posledni: 0 };
+  if (ip) a = await pokusyNeuspech(pokusyIpKlic(ip));
+  return { email: z, adresa: a };
+}
+export async function pokusyUspech(email, ip) {
+  await pokusyReset(email);
+  if (ip) await pokusyReset(pokusyIpKlic(ip));
+}
+
 export async function pokusyReset(email) {
   const s = await uloziste(POKUSY_ULOZISTE);
   await s.zapis(pokusyKlic(email), { n: 0, posledni: 0 });
@@ -153,10 +191,21 @@ function podpis(data) {
   return createHmac('sha256', tajemstvi()).update(p ? (p + '|' + data) : data).digest('base64url');
 }
 
-export function relaceVytvor(email, role) {
-  const telo = Buffer.from(JSON.stringify({ email, role, exp: Date.now() + 12 * 3600 * 1000 }))
-    .toString('base64url');
+/* Relace nese i VERZI HESLA účtu (audit 22. 8. 2026, nález B6). Do té doby
+ * byla relace čistě podepsaný lístek na 12 hodin: změna hesla, reset správcem
+ * ani odhlášení ukradenou cookie nezneplatnily — útočník s cookie pracoval
+ * dál až do vypršení. Teď každá změna hesla zvedne `hesloVerze` v účtu
+ * a vyzadujRoli odmítne relaci s jinou verzí. Účty i cookie bez pole mají
+ * verzi 0, takže nasazení nikoho neodhlásí. */
+export function hesloVerzeUctu(ucet) { return (ucet && +ucet.hesloVerze) || 0; }
+export function relaceVytvor(email, role, hesloVerze) {
+  const telo = Buffer.from(JSON.stringify({ email, role, hv: +hesloVerze || 0,
+    exp: Date.now() + 12 * 3600 * 1000 })).toString('base64url');
   return telo + '.' + podpis(telo);
+}
+export function relaceCookie(ucet) {
+  return 'relace=' + relaceVytvor(ucet.email, ucet.role, hesloVerzeUctu(ucet))
+    + '; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=43200';
 }
 export function relaceOver(cookieHlavicka) {
   const m = /(?:^|;\s*)relace=([^;]+)/.exec(cookieHlavicka || '');
@@ -271,6 +320,9 @@ export async function vyzadujRoli(req, ...role) {
     return { chyba: json({ ok: false, chyba: 'Účet už neexistuje. Přihlaste se znovu.' }, 401) };
   if (ucet.aktivni === false)
     return { chyba: json({ ok: false, chyba: 'Účet je vypnutý. Obraťte se na správce.' }, 401) };
+  /* Verze hesla (B6): relace vydaná před změnou hesla už neplatí. */
+  if (((+r.hv) || 0) !== hesloVerzeUctu(ucet))
+    return { chyba: json({ ok: false, chyba: 'Heslo účtu bylo změněno. Přihlaste se znovu.' }, 401) };
 
   /* Profil (titul, funkce, telefon) jde s relací, protože se čte účet stejně
    * tak jako tak. Podpis ne — ten je stranou a dotahuje se jen tam, kde je

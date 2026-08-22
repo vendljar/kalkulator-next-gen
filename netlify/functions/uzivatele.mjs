@@ -25,7 +25,7 @@
  * a z nabídek by odcházel starý kontakt. Cizí profil ale nikdo přepsat
  * nesmí: s cizím podpisem by šla poslat nabídka jménem kolegy. */
 import { uloziste, otiskHesla, hesloSedi, vyzadujRoli, json, ROLE, ADMIN_EMAIL,
-         PODPIS_ULOZISTE, podpisZkontroluj } from '../lib/sdilene.mjs';
+         PODPIS_ULOZISTE, podpisZkontroluj, hesloVerzeUctu, relaceCookie } from '../lib/sdilene.mjs';
 
 /* Text z formuláře: ořízne okolní mezery a nepustí dál román. Telefon se
  * jinak NEUPRAVUJE — každý si ho píše po svém („+420 602 590 945",
@@ -76,8 +76,12 @@ export default async (req) => {
       if (!t.nove || String(t.nove).length < 8)
         return json({ ok: false, chyba: 'Nové heslo musí mít aspoň 8 znaků.' }, 400);
       ucet.heslo = otiskHesla(t.nove);
+      /* Změna hesla zneplatní všechny dosavadní relace (B6) — i tuhle,
+       * proto se hned vydá nová cookie, ať se uživatel nemusí přihlašovat. */
+      ucet.hesloVerze = hesloVerzeUctu(ucet) + 1;
+      ucet.hesloZmeneno = new Date().toISOString(); ucet.hesloZmenil = relace.email;
       await u.zapis(relace.email, ucet);
-      return json({ ok: true, email: ucet.email });
+      return json({ ok: true, email: ucet.email }, 200, { 'Set-Cookie': relaceCookie(ucet) });
     }
 
     /* --- vlastní profil a podpis: svůj každý, cizí jen administrátor ---
@@ -135,9 +139,16 @@ export default async (req) => {
     } else if (!ucet) {
       return json({ ok: false, chyba: 'Účet neexistuje.' }, 404);
     } else if (t.akce === 'heslo') {
+      /* Heslo hlavního účtu si mění jen on sám (B7, 22. 8. 2026). Pojistky
+       * kryly roli, vypnutí, archiv i smazání — ne heslo: vedlejší správce
+       * by si resetem vzal účet, který nikdo nemůže vypnout ani degradovat. */
+      if (email === ADMIN_EMAIL && relace.email !== ADMIN_EMAIL)
+        return json({ ok: false, chyba: 'Heslo hlavního administrátora si mění jen on sám.' }, 403);
       if (!t.heslo || String(t.heslo).length < 8)
         return json({ ok: false, chyba: 'Heslo musí mít aspoň 8 znaků.' }, 400);
       ucet.heslo = otiskHesla(t.heslo);
+      ucet.hesloVerze = hesloVerzeUctu(ucet) + 1;                       // B6: odhlásí dosavadní relace
+      ucet.hesloZmeneno = new Date().toISOString(); ucet.hesloZmenil = relace.email;
     } else if (t.akce === 'role') {
       if (!ROLE.includes(t.role)) return json({ ok: false, chyba: 'Neznámá role.' }, 400);
       if (email === ADMIN_EMAIL && t.role !== 'Administrátor')

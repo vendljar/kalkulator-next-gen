@@ -142,5 +142,19 @@ test('nastavení nebool hodnoty se odmítne', analytikaRezimNastav(rez, 'ne', 'x
 test('konstanta GDPR textu existuje a je zatím PRÁZDNÁ (rozhodnutí 17. 8.)',
   typeof ANALYTIKA_GDPR_TEXT === 'string' && ANALYTIKA_GDPR_TEXT === '');
 
+
+/* ---------- očista dávky od klienta (bezpečnostní audit 22. 8. 2026, B8) ---------- */
+test('B8: analytikaCislo — záporné, NaN a řetězec dávají 0', analytikaCislo(-5) === 0 && analytikaCislo('AAA') === 0 && analytikaCislo(NaN) === 0);
+test('B8: analytikaCislo — běžné číslo projde, obří se ořízne', analytikaCislo(3.4) === 3 && analytikaCislo(1e12) === ANALYTIKA_MAX_HODNOTA);
+test('B8: analytikaKlicOrez — dlouhý klíč se ořízne', analytikaKlicOrez('x'.repeat(5000)).length === ANALYTIKA_MAX_KLIC_ZNAKU);
+const oc = analytikaDavkaOcisti({ kliky: { a: 1 }, poUzivateli: { 'x@y': { chyby: 9 } }, zalozky: 'nic', cizi: 1 });
+test('B8: analytikaDavkaOcisti — poUzivateli a cizí klíče zahodí, nesmyslný typ nahradí prázdnem',
+  oc.kliky.a === 1 && !('poUzivateli' in oc) && !('cizi' in oc) && typeof oc.zalozky === 'object');
+const sl = analytikaSlij({ pocty: { chyby: 2 } }, { pocty: { chyby: -10, zakazky: 'zz' }, zalozky: Object.fromEntries(Array.from({ length: 500 }, (_, i) => ['z' + i, 1])) });
+test('B8: slití nepřičte záporné ani řetězec', sl.pocty.chyby === 2 && sl.pocty.zakazky === 0);
+test('B8: mapa záložek má strop počtu klíčů', Object.keys(sl.zalozky).length <= ANALYTIKA_MAX_KLICU + 1);
+const pu = analytikaPrictiUzivateli({ poUzivateli: {} }, 'a@b.cz', { chyby: -3, zakazky: 2 });
+test('B8: serverová atribuce také nepřičítá záporné', pu.poUzivateli['a@b.cz'].chyby === 0 && pu.poUzivateli['a@b.cz'].zakazky === 2);
+
 console.log('\nPASS=' + passes + ' FAIL=' + fails);
 process.exit(fails ? 1 : 0);
