@@ -773,7 +773,7 @@ function zakazkaHlavicka(ock) {
     <span class="nasept-wrap" style="flex:1"><input type="text" style="width:100%" autocomplete="off"
       value="${esc(get('ZAK.objednatel'))}"
       title="Při psaní se nabízejí zákazníci z databáze a z dřívějších zakázek. Výběrem se doplní prázdná pole hlavičky (kontaktní osoba, IČO, adresa); už vyplněné údaje zůstanou a celou hlavičku přepíše tlačítko „Vybrat z databáze zákazníků“."
-      onchange="set('ZAK.objednatel', this.value); if(typeof zakaznikDotahniPodleNazvu==='function')zakaznikDotahniPodleNazvu(this.value)"
+      onchange="if(typeof naseptavacZakVyber==='function')naseptavacZakVyber(this.value,'${kde}'); else set('ZAK.objednatel', this.value)"
       oninput="naseptavacZakKresli('${kde}', this.value)"
       onfocus="if(typeof zakazniciNactiProNaseptavac==='function')zakazniciNactiProNaseptavac(); naseptavacZakKresli('${kde}', this.value)"
       onblur="naseptavacZakSchovej('${kde}')"

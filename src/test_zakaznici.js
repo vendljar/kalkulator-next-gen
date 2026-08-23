@@ -143,5 +143,26 @@ test('telefon a e-mail jsou všude oddělené',
   ['smluvni', 'obchodni', 'technicky', 'faktury'].every(k =>
     ids.includes(k + 'Tel') && ids.includes(k + 'Email')));
 
+
+/* ---------- výběr firmy našeptávačem: kontakty a předvyplnění (22. 8. 2026) ---------- */
+{
+  const k1 = Z.zakaznikNovy(); k1.nazev = 'Jedna s.r.o.'; k1.ico = '12345678'; k1.kontaktOsoba = 'Jan Jediný';
+  test('kontakty: jedno jméno', Z.zakaznikKontakty(k1).length === 1 && Z.zakaznikKontakty(k1)[0].jmeno === 'Jan Jediný');
+  const k3 = Z.zakaznikNovy(); k3.nazev = 'Tři s.r.o.'; k3.ico = '87654321'; k3.dic = 'CZ87654321'; k3.sidlo = 'Ulice 1';
+  k3.kontaktOsoba = 'Karel Kontakt'; k3.smluvniJmeno = 'Karel Kontakt'; k3.smluvniTel = '+420 1'; k3.obchodniJmeno = 'Olga Obchod'; k3.technickyJmeno = 'Tomáš Technik';
+  const kk = Z.zakaznikKontakty(k3);
+  test('kontakty: tři různá jména, shodné jméno se slije s rolí', kk.length === 3 && /kontaktní osoba, ve věcech smluvních/.test(kk[0].role) && kk[0].tel === '+420 1', JSON.stringify(kk));
+  const zak1 = { objednatel: '', ico: '', dic: '', adresaObjednatele: '', kontakt: '' };
+  const v1 = Z.zakaznikPredvypln(k1, zak1);
+  test('předvyplnění: jedno jméno → kontakt se vyplní, IČO taky', zak1.kontakt === 'Jan Jediný' && zak1.ico === '12345678' && v1.kontakty.length === 0 && zak1.zakaznikId === Z.zakaznikKlic(k1));
+  const zak3 = { objednatel: '', ico: '', dic: '', adresaObjednatele: '', kontakt: '' };
+  const v3 = Z.zakaznikPredvypln(k3, zak3);
+  test('předvyplnění: více jmen → kontakt zůstane prázdný a vrátí se k výběru', zak3.kontakt === '' && v3.kontakty.length === 3 && zak3.ico === '87654321' && zak3.dic === 'CZ87654321' && zak3.adresaObjednatele === 'Ulice 1');
+  const zak4 = { objednatel: 'Jiné jméno', ico: '11111111', dic: '', adresaObjednatele: '', kontakt: 'Ručně Zadaný' };
+  Z.zakaznikPredvypln(k1, zak4);
+  test('předvyplnění: vyplněná pole hlavičky se nepřepisují (zakázka je pán)', zak4.ico === '11111111' && zak4.kontakt === 'Ručně Zadaný' && zak4.objednatel === 'Jiné jméno');
+  test('předvyplnění: bez karty nic nepadá', Z.zakaznikPredvypln(null, zak4).zmeny.length === 0);
+}
+
 console.log('\n' + ok + ' OK, ' + fail + ' FAIL');
 process.exit(fail ? 1 : 0);

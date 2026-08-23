@@ -321,6 +321,9 @@ rezim = 'limit'; limitZbyva = 2; volani = [];
 const poLimitu = await (await get(pdDealy, 'http://x/api/pd/dealy?stav=won', cObch)).json();
 test('vyčerpaný limit se přečká opakováním, ne chybou', poLimitu.ok === true, JSON.stringify(poLimitu).slice(0, 120));
 test('a opakovalo se opravdu (tři volání na jeden dotaz)', volani.length === 3, volani.length);
+volani = [];
+await get(pdDealy, 'http://x/api/pd/dealy?stav=won', cObch);
+test('B19: opakované volání téhož seznamu jde z cache, ne do Pipedrive', volani.length === 0, volani.length);
 
 /* B27 (23. 8. 2026): neplatný stav se odmítne (400), nejde do Pipedrive ani
  * nezaloží nový klíč cache — jinak by ?stav=x1,x2… obešlo cache a vyčerpalo
@@ -333,6 +336,10 @@ test('B27: neplatný stav nezaložil klíč cache',
   ![...pamet.keys()].some(k => k.startsWith('pd_cache/') && k.includes('cokoli')));
 
 rezim = 'limit'; limitZbyva = 99;
+/* Seznam dealů se od 22. 8. 2026 (B19) drží 90 s v cache `pd_cache` —
+ * pro zkoušku chybové cesty se cache vyprázdní, jinak by odpověděla místo
+ * Pipedrive (což je v provozu přesně žádoucí chování). */
+for (const k of [...pamet.keys()]) if (k.startsWith('pd_cache/')) pamet.delete(k);
 const porad = await (await get(pdDealy, 'http://x/api/pd/dealy?stav=won', cObch)).json();
 test('trvale vyčerpaný limit skončí srozumitelnou hláškou, ne prázdným seznamem',
   porad.ok === false && /limit/i.test(porad.chyba), JSON.stringify(porad));

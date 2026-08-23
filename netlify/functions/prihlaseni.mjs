@@ -7,9 +7,10 @@
  *   #93 — u neznámého e-mailu se počítá scrypt proti zástupnému otisku,
  *         aby se z času odpovědi nedalo přečíst, které adresy existují.
  */
-import { uloziste, otiskHesla, hesloSedi, relaceVytvor, json, ADMIN_EMAIL,
-         profilZUctu, podpisCti, FALESNY_OTISK, POKUSY_MAX,
-         zpozdeniMs, pockej, pokusyNeuspech, pokusyReset } from '../lib/sdilene.mjs';
+import { uloziste, otiskHesla, hesloSedi, relaceCookie, json, ADMIN_EMAIL,
+         profilZUctu, podpisCti, FALESNY_OTISK, POKUSY_MAX, POKUSY_IP_MAX,
+         zpozdeniMs, pockej, pokusyZacatek, pokusyUspech, adresaKlienta,
+         EMAIL_MAX, HESLO_MAX } from '../lib/sdilene.mjs';
 
 export default async (req) => {
   if (req.method !== 'POST') return json({ ok: false, chyba: 'Použijte POST.' }, 405);
@@ -17,6 +18,18 @@ export default async (req) => {
   try { const t = await req.json(); email = String(t.email || '').trim().toLowerCase(); heslo = String(t.heslo || ''); }
   catch (e) { return json({ ok: false, chyba: 'Vstup není platný JSON.' }, 400); }
   if (!email || !heslo) return json({ ok: false, chyba: 'Zadejte e-mail i heslo.' }, 400);
+  /* Délky (B16): nesmyslně dlouhý e-mail by založil obří klíč v počítadle
+   * pokusů, nesmyslně dlouhé heslo by zaměstnalo scrypt. Stejná hláška jako
+   * u špatného hesla — tvar vstupu nesmí prozradit, co existuje. */
+  if (email.length > EMAIL_MAX || heslo.length > HESLO_MAX)
+    return json({ ok: false, chyba: 'Nesprávný e-mail nebo heslo.' }, 401);
+
+  /* Pokus se započítá HNED — dřív než se cokoli ověřuje (B4, 22. 8. 2026).
+   * Čekání podle počítadla běží také před ověřením, aby souběžné požadavky
+   * platily stejně jako ty popořadě. Správné heslo počítadla vynuluje. */
+  const ip = adresaKlienta(req);
+  const pokusy = await pokusyZacatek(email, ip);
+  await pockej(Math.max(zpozdeniMs(pokusy.email.n), pokusy.adresa.n > POKUSY_IP_MAX ? 2000 : 0));
 
   const u = await uloziste('uzivatele');
   let ucet = await u.cti(email);
@@ -38,9 +51,8 @@ export default async (req) => {
   const pustit = !!ucet && ucet.aktivni !== false && sedi;
 
   if (pustit) {
-    await pokusyReset(email);
-    const cookie = 'relace=' + relaceVytvor(ucet.email, ucet.role)
-      + '; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=43200';
+    await pokusyUspech(email, ip);
+    const cookie = relaceCookie(ucet);                    // nese verzi hesla (B6)
     /* Profil se vrací rovnou při přihlášení (#145): aplikace jím vyplňuje blok
      * „Vypracoval" v cenové nabídce. Kdyby si ho musela dotahovat zvlášť, první
      * nabídka udělaná hned po přihlášení by odešla bez podpisu a bez telefonu. */
@@ -48,9 +60,7 @@ export default async (req) => {
       podpis: await podpisCti(ucet.email) }, 200, { 'Set-Cookie': cookie });
   }
 
-  const stav = await pokusyNeuspech(email);
-  await pockej(zpozdeniMs(stav.n));
-  if (stav.n > POKUSY_MAX)
+  if (pokusy.email.n > POKUSY_MAX || pokusy.adresa.n > POKUSY_IP_MAX)
     return json({ ok: false, chyba: 'Příliš mnoho neúspěšných pokusů. Zkuste to za '
       + 'několik minut znovu, nebo se ozvěte správci.' }, 429);
   return json({ ok: false, chyba: 'Nesprávný e-mail nebo heslo.' }, 401);

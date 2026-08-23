@@ -189,9 +189,15 @@ test('u zveřejnění se pamatuje, kdo a kdy',
  * zaškrtnutí samo doputuje na server BEZ jakéhokoli tlačítka. */
 
 const pocetZapisu = () => volani.filter(x => x === 'POST /api/zobrazeni').length;
+/* Čeká se na DOBĚHNUTÍ zápisu, ne na pevný počet milisekund — pod zátěží
+ * (šest prohlížečů naráz) se pevná prodleva občas netrefila a test padal,
+ * i když samoukládání fungovalo. */
+const cekejUlozeno = () => page.waitForFunction(
+  () => { try { return ZOBR_ULOZ.stav === 'ulozeno'; } catch (e) { return false; } },
+  null, { timeout: 15000 });
 const predSamoulozenim = pocetZapisu();
-await page.evaluate(() => zobrSet('tab.kryci', 'Vedoucí', true));
-await page.waitForTimeout(1600);
+await page.evaluate(() => { ZOBR_ULOZ.stav = ''; zobrSet('tab.kryci', 'Vedoucí', true); });
+await cekejUlozeno();
 test('zaškrtnutí se uloží samo, bez tlačítka',
   pocetZapisu() > predSamoulozenim, 'zápisů: ' + predSamoulozenim + ' → ' + pocetZapisu());
 test('server má i to, co se uložilo samo',
@@ -203,11 +209,13 @@ test('panel dá vědět, že je uloženo',
  * skládání matice poslalo na server dvacet dotazů po sobě. */
 const predDavkou = pocetZapisu();
 await page.evaluate(() => {
+  ZOBR_ULOZ.stav = '';
   zobrSet('tab.proj', 'Vedoucí', true);
   zobrSet('tab.detailproj', 'Vedoucí', true);
   zobrSet('tab.kryciproj', 'Vedoucí', true);
 });
-await page.waitForTimeout(1600);
+await cekejUlozeno();
+await page.waitForTimeout(300);   // kdyby se chystal druhý zápis, tady by se projevil
 test('rychlé proklikání víc políček je jeden zápis',
   pocetZapisu() === predDavkou + 1, 'zápisů: ' + (pocetZapisu() - predDavkou));
 test('uložilo se všechno proklikané',
@@ -544,6 +552,38 @@ test('obchodník vidí všechny NESKRYTÉ volitelné položky, ne jen zahrnuté'
     const chk = (sekce.match(/volitelneToggle/g) || []).length;
     NAST.jeAdmin = true; NAST.nahledRole = ''; render();
     return vsech > 0 && zahrnutych < pocetKatalogu && chk === pocetKatalogu;
+  }));
+/* Ukazatele Náklad / Hrubý zisk / Marže v hlavičce řídí právo `kpi.marze`,
+ * NE `sloupce.naklad` (oprava 22. 8. 2026 večer — J. V. je v náhledu
+ * obchodníka viděl, protože obchodník má sloupce nákladů kvůli přirážce). */
+test('obchodník se sloupci nákladů, ale bez kpi.marze, ukazatele v hlavičce NEVIDÍ',
+  await page.evaluate(() => {
+    try {
+      NAST.jeAdmin = true; NAST.nahledRole = '';
+      zobrSet('sloupce.naklad', 'Obchodník', true);
+      zobrSet('kpi.marze', 'Obchodník', false);
+      NAST.kpiViditelne = { naklad: false, hrubyZisk: false, sleva: false, marze: false };
+      NAST.jeAdmin = false; NAST.nahledRole = 'Obchodník'; prepniTab('kalk'); render();
+      const h = document.getElementById('page-kalk').innerText;
+      window.__kpi1 = { zakl: /Základní cena/i.test(h), hz: /Hrubý zisk/i.test(h), smiN: smiZobrazit('sloupce.naklad'), smiK: smiZobrazit('kpi.marze') };
+      return window.__kpi1.zakl && !window.__kpi1.hz && window.__kpi1.smiN && !window.__kpi1.smiK;
+    } catch (e) { window.__kpi1 = String(e); return false; }
+    finally { NAST.jeAdmin = true; NAST.nahledRole = ''; render(); }
+  }), await page.evaluate(() => JSON.stringify(window.__kpi1)));
+test('po přidělení kpi.marze obchodník ukazatele vidí; bez přidělení je zase ztratí',
+  await page.evaluate(() => {
+    try {
+      NAST.jeAdmin = true; NAST.nahledRole = '';
+      zobrSet('kpi.marze', 'Obchodník', true);
+      NAST.jeAdmin = false; NAST.nahledRole = 'Obchodník'; render();
+      const vidi = /Hrubý zisk/i.test(document.getElementById('page-kalk').innerText);
+      NAST.jeAdmin = true; NAST.nahledRole = '';
+      zobrSet('kpi.marze', 'Obchodník', false);
+      NAST.jeAdmin = false; NAST.nahledRole = 'Obchodník'; render();
+      const nevidi = !/Hrubý zisk/i.test(document.getElementById('page-kalk').innerText);
+      return vidi && nevidi;
+    } catch (e) { return false; }
+    finally { NAST.jeAdmin = true; NAST.nahledRole = ''; zobrSet('sloupce.naklad', 'Obchodník', false); render(); }
   }));
 test('a sloupce Viditelné / Výchozí u nich obchodník nemá',
   await page.evaluate(() => {
@@ -1052,7 +1092,7 @@ test('výběr z našeptávače doplní kontaktní osobu a IČO z kartotéky',
       kontaktOsoba: 'Ing. Petr Novotný', sidlo: 'Dlouhá 5, Praha' }];
     ZAK.objednatel = ''; ZAK.kontakt = ''; ZAK.ico = ''; ZAK.adresaObjednatele = '';
     render();
-    naseptavacZakVyber('Novotný stavby s.r.o.');
+    naseptavacZakVyber('Novotný stavby s.r.o.', 'ock');
     const v = ZAK.kontakt === 'Ing. Petr Novotný' && ZAK.ico === '12345678'
       && ZAK.adresaObjednatele === 'Dlouhá 5, Praha' && !!ZAK.zakaznikId;
     ZAK.objednatel = ''; ZAK.kontakt = ''; ZAK.ico = ''; ZAK.adresaObjednatele = '';
@@ -1061,21 +1101,44 @@ test('výběr z našeptávače doplní kontaktní osobu a IČO z kartotéky',
     return v;
   }));
 
-test('vyplněný údaj se výběrem nepřepíše a řekne se to',
+test('vyplněný údaj se výběrem nepřepíše (zakázka je pán)',
   await page.evaluate(() => {
     const zalohaRej = ONLINE_STAV.rejstrik;
     ZAK_DB.seznam = [{ nazev: 'SVJ Verdunská', ico: '87654321', kontaktOsoba: 'Jan Předseda' }];
     ZAK.objednatel = ''; ZAK.ico = ''; ZAK.kontakt = 'Technik na stavbě';
     render();
-    naseptavacZakVyber('SVJ Verdunská');
+    naseptavacZakVyber('SVJ Verdunská', 'ock');
     const v = ZAK.kontakt === 'Technik na stavbě'      // nepřepsáno
       && ZAK.ico === '87654321'                        // prázdné doplněno
-      && /Kontaktní osoba/.test(ZAK_DB.hlaska || '');  // a je o tom zpráva
+      && ZAK.objednatel === 'SVJ Verdunská';
     ZAK.objednatel = ''; ZAK.kontakt = ''; ZAK.ico = ''; ZAK.zakaznikId = '';
     ZAK_DB.seznam = []; ZAK_DB.hlaska = '';
     ONLINE_STAV.rejstrik = zalohaRej;
     prepniTab('zakazka'); render();
     return v;
+  }));
+
+/* Víc jmen na kartě = nabídka k výběru, ne tiché doplnění (dávka 3). */
+test('víc kontaktů na kartě se nabídne k výběru, nic se nevybere samo',
+  await page.evaluate(() => {
+    const zalohaRej = ONLINE_STAV.rejstrik;
+    ZAK_DB.seznam = [{ nazev: 'Vícehlavá s.r.o.', ico: '11111119',
+      kontaktOsoba: 'Anna Recepční', smluvniJmeno: 'Bohumil Jednatel',
+      technickyJmeno: 'Cyril Technik' }];
+    ZAK.objednatel = ''; ZAK.ico = ''; ZAK.kontakt = '';
+    prepniTab('kalk'); render();
+    naseptavacZakVyber('Vícehlavá s.r.o.', 'ock');
+    const box = document.getElementById('naseptBoxZak_ock');
+    const nabidka = box && box.style.display !== 'none' && /Kontaktní osoba/.test(box.innerHTML)
+      && /Bohumil Jednatel/.test(box.innerHTML);
+    const prazdno = ZAK.kontakt === '';
+    naseptavacZakKontaktVyber('Cyril Technik', 'ock');
+    const vybrano = ZAK.kontakt === 'Cyril Technik';
+    ZAK.objednatel = ''; ZAK.kontakt = ''; ZAK.ico = ''; ZAK.zakaznikId = '';
+    ZAK_DB.seznam = []; ZAK_DB.kontaktVolba = '';
+    ONLINE_STAV.rejstrik = zalohaRej;
+    prepniTab('zakazka'); render();
+    return nabidka && prazdno && vybrano;
   }));
 
 /* Tatáž tlačítka musejí být v OBOU kalkulacích (zadání J. V. 22. 8. 2026:
