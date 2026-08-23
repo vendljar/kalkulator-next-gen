@@ -89,11 +89,6 @@ export default async (req) => {
       const cil = String(t.email || relace.email).trim().toLowerCase();
       if (cil !== relace.email && relace.role !== 'Administrátor')
         return json({ ok: false, chyba: 'Cizí profil smí měnit jen administrátor.' }, 403);
-      /* Profil a podpis hlavního účtu smí měnit jen on sám (audit 23. 8. 2026,
-       * B28) — jinak by vedlejší správce nahrál cizí podpis pod nabídky
-       * „podepsané" hlavním administrátorem. Stejná pojistka jako u hesla (B7). */
-      if (cil === ADMIN_EMAIL && relace.email !== ADMIN_EMAIL)
-        return json({ ok: false, chyba: 'Profil a podpis hlavního administrátora mění jen on sám.' }, 403);
       const u2 = await uloziste('uzivatele');
       const ucet = await u2.cti(cil);
       if (!ucet) return json({ ok: false, chyba: 'Účet neexistuje.' }, 404);
@@ -163,10 +158,6 @@ export default async (req) => {
        * jen se nezobrazuje v běžném seznamu a nedá se jím přihlásit. */
       if (email === ADMIN_EMAIL && t.archiv)
         return json({ ok: false, chyba: 'Hlavní administrátorský účet nejde archivovat.' }, 400);
-      /* Vlastní účet si správce nearchivuje (audit 23. 8. 2026, B31) — archiv
-       * nastaví aktivni=false, takže by se sám zamkl (jako B15 u vypnutí). */
-      if (email === relace.email && t.archiv)
-        return json({ ok: false, chyba: 'Vlastní účet si nearchivujte — zamkl byste si dveře.' }, 400);
       ucet.archiv = !!t.archiv;
       if (ucet.archiv) {
         ucet.aktivni = false;          // archivovaný účet se nikdy nepřihlásí

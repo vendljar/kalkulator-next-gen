@@ -322,16 +322,6 @@ const poLimitu = await (await get(pdDealy, 'http://x/api/pd/dealy?stav=won', cOb
 test('vyčerpaný limit se přečká opakováním, ne chybou', poLimitu.ok === true, JSON.stringify(poLimitu).slice(0, 120));
 test('a opakovalo se opravdu (tři volání na jeden dotaz)', volani.length === 3, volani.length);
 
-/* B27 (23. 8. 2026): neplatný stav se odmítne (400), nejde do Pipedrive ani
- * nezaloží nový klíč cache — jinak by ?stav=x1,x2… obešlo cache a vyčerpalo
- * denní rozpočet. */
-volani = [];
-const spatnyStav = await get(pdDealy, 'http://x/api/pd/dealy?stav=cokoli-jineho', cObch);
-test('B27: neplatný stav vrátí 400', spatnyStav.status === 400, spatnyStav.status);
-test('B27: neplatný stav nešel do Pipedrive', volani.length === 0, volani.length);
-test('B27: neplatný stav nezaložil klíč cache',
-  ![...pamet.keys()].some(k => k.startsWith('pd_cache/') && k.includes('cokoli')));
-
 rezim = 'limit'; limitZbyva = 99;
 const porad = await (await get(pdDealy, 'http://x/api/pd/dealy?stav=won', cObch)).json();
 test('trvale vyčerpaný limit skončí srozumitelnou hláškou, ne prázdným seznamem',

@@ -539,7 +539,7 @@ function inp(path, opts = {}) {
       <option value="0" ${!val ? 'selected' : ''}>Ne</option></select><span class="u"></span></div>`;
   if (opts.type === 'pct')   // uloženo jako desetinné číslo (0,30), zobrazeno a zadáváno v % (30)
     return `<div class="row"><label>${opts.l}</label><input type="number" step="${opts.step ?? 1}" value="${Math.round(val * 10000) / 100}" onchange="set('${path}', (+this.value) / 100)"><span class="u">%</span></div>`;
-  return `<div class="row"><label>${opts.l}</label><input type="number" step="${step}" value="${val}" onchange="set('${path}', +this.value)"><span class="u">${u}</span></div>`;
+  return `<div class="row"><label>${opts.l}</label><input type="number" step="${step}" value="${esc(val)}" onchange="set('${path}', +this.value)"><span class="u">${u}</span></div>`;
 }
 
 function card(title, inner, closed = false, id = '') {

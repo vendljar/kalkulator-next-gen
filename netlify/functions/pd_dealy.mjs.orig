@@ -25,19 +25,13 @@ export default async (req) => {
   const { chyba } = await vyzadujRoli(req);      // stačí být přihlášen
   if (chyba) return chyba;
 
-  /* Whitelist stavu (audit 23. 8. 2026, B27) — kontroluje se PŘED napojením
-   * na Pipedrive: neověřený parametr obcházel cache (?stav=x1, x2… = nový klíč
-   * + nový dotaz) a mohl vyčerpat denní rozpočet. Neznámá hodnota → 400. */
-  const url = new URL(req.url);
-  const stav = String(url.searchParams.get('stav') || 'open');
-  if (['open', 'won', 'lost', 'vse'].indexOf(stav) < 0)
-    return json({ ok: false, chyba: 'Neplatný stav (open / won / lost / vse).' }, 400);
-
   if (!pdNastaveno())
     return json({ ok: true, nastaveno: false, dealy: [], celkem: 0,
       chyba: 'Napojení na Pipedrive zatím není nastavené.' });
 
+  const url = new URL(req.url);
   const hledat = String(url.searchParams.get('hledat') || '').trim().toLowerCase();
+  const stav = String(url.searchParams.get('stav') || 'open');
   const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 50, 1), 200);
 
   try {

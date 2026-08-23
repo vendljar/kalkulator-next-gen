@@ -1091,6 +1091,22 @@ test('databáze zákazníků je i v hlavičce Kalkulace PROJ',
       && /Vybrat z databáze zákazníků/.test(ock);
   }));
 
+/* B26 (23. 8. 2026): číselná pole zadání se do value="…" vkládají escapovaně.
+ * Uložená zakázka může nést v číselném poli řetězec (server importZakazka
+ * čísla nepřetypovává); bez escapování by „"><img onerror> spustil skript. */
+test('B26: škodlivý řetězec v číselném poli zadání se vykreslí escapovaně (žádný breakout)',
+  await page.evaluate(() => {
+    const utok = '"><img src=x onerror=window.__xss26=1>';
+    window.__xss26 = 0;
+    Z.prejezd = utok;           // číselné pole zadání (inp default number branch)
+    NAST.jeAdmin = true; NAST.nahledRole = ''; prepniTab('kalk'); render();
+    const html = document.getElementById('page-kalk').innerHTML;
+    const spusteno = window.__xss26 === 1;
+    const surovy = html.includes('<img src=x onerror');   // skutečný breakout z atributu (nezescapované <img)
+    Z.prejezd = 2.7; render();
+    return !spusteno && !surovy;
+  }));
+
 test('žádná chyba JavaScriptu', chyby.length === 0, chyby.slice(0, 2).join(' | '));
 
 await prohlizec.close();

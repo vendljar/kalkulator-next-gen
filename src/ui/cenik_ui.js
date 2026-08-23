@@ -20,7 +20,7 @@ function cenikRows(def) {
       else if (typ === 'selLak') ed = `<select style="width:130px" onchange="set('${path}', this.value)">
           <option value="tomas" ${val === 'tomas' ? 'selected' : ''}>Tomáš</option>
           <option value="lakovna" ${val === 'lakovna' ? 'selected' : ''}>lakovna</option></select>`;
-      else ed = `<input type="number" step="any" value="${val}" onchange="set('${path}', +this.value)">`;
+      else ed = `<input type="number" step="any" value="${esc(val)}" onchange="set('${path}', +this.value)">`;
       return `<tr><td>${l}</td><td>${ed}</td><td>${u}</td><td>${note}</td></tr>`;
     }).join('');
     return `<tr class="sec"><td colspan="4">${grp}</td></tr>${body}${cenikCustomRows(CENIK_GRP_SEKCE[grp])}`;

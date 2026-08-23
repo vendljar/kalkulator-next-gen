@@ -148,7 +148,13 @@ const DEFAULT_ZADANI = {
    * pak hlásí jako „nelze posoudit". */
   mustek: false, mustekHloubkaMm: '', mustekSirkaMm: '',
   volitelneVychozi: {}, // výchozí zaškrtnutí volitelných { klíč: bool }
-  priplatkyVynechat: [], // klíče příplatků, které se nemají propsat do nabídky
+  /* Skla (vsgFolie, skn) jsou ve výchozím stavu MIMO nabídku (23. 8. 2026,
+   * zadání J. V. — řeší nález N7). Šachta se počítá jako ocelová a obchodník
+   * do nabídky vloží to sklo, které zákazník chce; dokud žádné nevloží,
+   * kontrola standardu neřeší „dvě skla" a nehlásí „nelze posoudit". Jsou to
+   * PŘÍPLATKY (nepovinné), takže se tím nemění základní cena, jen výchozí
+   * obsah nabídky. Vložení skla = odškrtnutí ze sloupce Nabídka. */
+  priplatkyVynechat: ['vsgFolie', 'skn'], // klíče příplatků mimo výchozí nabídku
   /* Položky, které se v TÉTO zakázce nepočítají (21. 8. 2026, zadání J. V.:
    * „přidej ke všem položkám kalkulace OCK možnost zaškrtnout výchozí
    * počítání"). Seznam PŮVODNÍCH názvů řádků; prázdný seznam = počítá se

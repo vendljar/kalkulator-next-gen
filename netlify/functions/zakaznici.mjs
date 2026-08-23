@@ -69,6 +69,7 @@ export default async (req) => {
    * záznamu, ne z toho, co přišlo od klienta. */
   const stary = await s.cti('z/' + klic);
   if (stary) { z.autor = stary.autor || z.autor; z.zalozen = stary.zalozen || z.zalozen; }
+  else z.autor = relace.email;   // nová karta: autora píše server z relace (audit 23. 8. 2026, B29)
   await s.zapis('z/' + klic, z);
   return json({ ok: true, klic, zakaznik: z });
 };

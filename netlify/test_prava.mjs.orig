@@ -1437,57 +1437,6 @@ console.log('\n===== MAZÁNÍ ZAKÁZEK =====\n');
   test('ostrá relace platí i po přepnutí prostředí tam a zpět', !!relaceOver(cookie(ostra)));
 }
 
-console.log('\n===== AUDIT B28: PROFIL A PODPIS HLAVNÍHO ÚČTU =====\n');
-/* 4. dávka auditu (23. 8. 2026). Heslo hlavního účtu si už mění jen on sám;
- * profil a podpis ale zůstávaly otevřené každému administrátorovi — vedlejší
- * správce tak mohl nahrát cizí podpis pod nabídky „podepsané" hlavním. */
-{
-  test('B28: vedlejší administrátor nezmění profil hlavního účtu (403)',
-    (await post(uzivatele, 'http://x/api/uzivatele',
-      { akce: 'profil', email: ADMIN_EMAIL, jmeno: 'Podvrh' }, UCTY['Administrátor'].cookie)).status === 403);
-  test('B28: vedlejší administrátor nenahraje podpis hlavního účtu (403)',
-    (await post(uzivatele, 'http://x/api/uzivatele',
-      { akce: 'podpis', email: ADMIN_EMAIL, obrazek: 'data:image/png;base64,iVBORw0KGgo=' },
-      UCTY['Administrátor'].cookie)).status === 403);
-  test('B28: hlavní administrátor si vlastní profil změní',
-    (await post(uzivatele, 'http://x/api/uzivatele',
-      { akce: 'profil', jmeno: 'Jaroslav Vendl' }, cAdmin)).status === 200);
-}
-
-console.log('\n===== AUDIT B27: NEPLATNÝ STAV PIPEDRIVE =====\n');
-/* Whitelist se kontroluje PŘED napojením: neověřený parametr by jinak zakládal
- * pořád nové dotazy (a od 3. dávky i nové klíče cache) a vyčerpal denní
- * rozpočet Pipedrive. */
-{
-  const spatny = await get(pdDealy, 'http://x/api/pd/dealy?stav=cokoli', cObch);
-  test('B27: neplatný stav vrátí 400 (i bez napojení na Pipedrive)', spatny.status === 400, spatny.status);
-  const platny = await get(pdDealy, 'http://x/api/pd/dealy?stav=won', cObch);
-  test('B27: platný stav projde (bez napojení nastaveno:false)', platny.status === 200, platny.status);
-}
-
-console.log('\n===== AUDIT B29: AUTOR KARTY ZÁKAZNÍKA =====\n');
-/* Autora nové karty píše server z relace — jinak by šlo založit kartu „za"
- * kolegu a v přehledu by u ní stálo cizí jméno. */
-{
-  await post(zakazniciFn, 'http://x/api/zakaznici',
-    { zakaznik: { nazev: 'B29 s.r.o.', ico: '27074358', autor: 'kolega@example.com' } }, cObch);
-  const list = await (await get(zakazniciFn, 'http://x/api/zakaznici', cAdmin)).json();
-  const k = (list.zakaznici || []).find(z => z.ico === '27074358');
-  test('B29: autor nové karty je z relace, ne z těla požadavku',
-    !!k && k.autor === UCTY['Obchodník'].email, k && k.autor);
-}
-
-console.log('\n===== AUDIT B31: ARCHIV VLASTNÍHO ÚČTU =====\n');
-/* Archiv nastaví aktivni=false, takže archivací sebe sama by se správce zamkl
- * venku — stejná past jako vypnutí vlastního účtu. */
-{
-  const cA = UCTY['Administrátor'].cookie, eA = UCTY['Administrátor'].email;
-  test('B31: správce si nearchivuje vlastní účet',
-    (await post(uzivatele, 'http://x/api/uzivatele',
-      { akce: 'archiv', email: eA, archiv: true }, cA)).status === 400);
-  test('B31: správce po pokusu dál funguje', (await get(ja, 'http://x/api/ja', cA)).status === 200);
-}
-
 console.log(`\n${ok} prošlo, ${fail} selhalo`);
 if (fail) { console.log('\nSelhalo:\n - ' + selhalo.join('\n - ')); }
 process.exit(fail ? 1 : 0);

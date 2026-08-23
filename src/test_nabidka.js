@@ -77,8 +77,12 @@ test('lešení v základní ceně', nabidkaData(zak, v2, JEKLY).placeholders.PRI
 test('příplatky obsahují položky', d.priplatky.length >= 5, d.priplatky.length);
 test('příplatek má množství v popisu', d.priplatky.every(x => x.popis.startsWith('množství: ')));
 test('příplatek má cenu v Kč', d.priplatky.every(x => /Kč$/.test(x.cena)));
+/* Skla (vsgFolie, skn) jsou od 23. 8. 2026 mimo výchozí nabídku (N7) —
+ * ověříme to a pak testujeme vynechání dvou položek, které v nabídce JSOU. */
+test('výchozí nabídka neobsahuje skla (N7 — vloží je obchodník)',
+  !d.priplatky.some(x => /sklo/i.test(x.popis) || /sklo/i.test(x.nazev || '')), JSON.stringify(d.priplatky.map(x=>x.popis).slice(0,3)));
 const vV = JSON.parse(JSON.stringify(v));
-vV.data.ock.zadani.priplatkyVynechat = ['skn', 'ventilator'];
+vV.data.ock.zadani.priplatkyVynechat = ['vsgFolie', 'skn', 'ventilator', 'madlaBoky'];  // skla už jsou mimo (N7) + dvě další
 const dV = nabidkaData(zak, vV, JEKLY);
 test('vynechané příplatky se negenerují', dV.priplatky.length === d.priplatky.length - 2
   && !dV.priplatky.some(x => x.nazev.includes('SKN')), dV.priplatky.length);

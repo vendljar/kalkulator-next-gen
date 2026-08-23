@@ -300,7 +300,7 @@ function renderProj() {
          * a číslo v poli je dohoda pro TUHLE zakázku, ceník nechá být. */
         const sazbaEd = col.admin
           ? `<span class="pill mut" title="sazba z Ceníku nákladů PROJ – mění se tam, platí pro všechny zakázky">${esc(p.sazba)}</span>
-             <input type="number" step="50" class="prepis-ed${p.sazbaPrepsana ? ' aktivni' : ''}" style="width:86px" value="${p.sazbaPrepsana ? esc(p.sazbaKc) : ''}"
+             <input type="number" step="50" class="prepis-ed${p.sazbaPrepsana ? ' aktivni' : ''}" style="width:86px" value="${p.sazbaPrepsana ? p.sazbaKc : ''}"
                placeholder="${num(p.sazbaZCeniku)}" onchange="pjPrepis(${i},${j},'sazbaPrepis',this.value)"
                title="sjednaná sazba jen pro tuto zakázku (prázdné = ${num(p.sazbaZCeniku)} Kč z ceníku)">
              ${p.sazbaPrepsana ? `<button class="mini noprint" onclick="pjPrepis(${i},${j},'sazbaPrepis','')" title="vrátit sazbu z ceníku (${num(p.sazbaZCeniku)} Kč)">↺</button>` : ''}`
@@ -318,13 +318,13 @@ function renderProj() {
        * Teď se zapisuje přepis do zakázky; ceník se mění v záložce Ceník PROJ. */
       const fixEd = col.admin
         ? (p.fixKey
-          ? `<input type="number" step="500" class="prepis-ed${p.cenaPrepsana ? ' aktivni' : ''}" style="width:86px" value="${p.cenaPrepsana ? esc(p.cenaEfekt) : ''}"
+          ? `<input type="number" step="500" class="prepis-ed${p.cenaPrepsana ? ' aktivni' : ''}" style="width:86px" value="${p.cenaPrepsana ? p.cenaEfekt : ''}"
                placeholder="${num(p.cenaZCeniku)}" onchange="pjPrepis(${i},${j},'cenaPrepis',this.value)"
                title="cena jen pro tuto zakázku (prázdné = ${num(p.cenaZCeniku)} Kč z Ceníku nákladů PROJ)">
              ${p.cenaPrepsana ? `<button class="mini noprint" onclick="pjPrepis(${i},${j},'cenaPrepis','')" title="vrátit cenu z ceníku (${num(p.cenaZCeniku)} Kč)">↺</button>` : ''}`
-          : `<input type="number" step="500" style="width:86px" value="${esc(p.cena)}" onchange="pjSet(${i}, 'polozky.${j}.cena', +this.value)">`)
+          : `<input type="number" step="500" style="width:86px" value="${p.cena}" onchange="pjSet(${i}, 'polozky.${j}.cena', +this.value)">`)
         : (vlEd && !p.fixKey
-          ? `<input type="number" step="500" style="width:86px" value="${esc(p.cena)}" title="částka této položky (jen pro tuto zakázku)" onchange="pjSet(${i}, 'polozky.${j}.cena', +this.value)">`
+          ? `<input type="number" step="500" style="width:86px" value="${p.cena}" title="částka této položky (jen pro tuto zakázku)" onchange="pjSet(${i}, 'polozky.${j}.cena', +this.value)">`
           : num(p.cenaEfekt));
       return `${tr}<td>${nazev}</td>
         <td colspan="3" class="note" style="text-align:right">${p.fixKey
@@ -347,7 +347,7 @@ function renderProj() {
       : col.admin
         ? `<tr><td><span class="grip" style="visibility:hidden">⠿</span>Doprava (${num(PC.dopravaKmKc)} Kč/km)
              <span class="pill mut" style="margin-left:6px">bez přirážky</span></td>
-           <td><input type="number" step="1" style="width:66px" value="${esc(zdroj.doprava.km)}" onchange="pjSet(${i}, 'doprava.km', +this.value)" title="km"></td>
+           <td><input type="number" step="1" style="width:66px" value="${zdroj.doprava.km}" onchange="pjSet(${i}, 'doprava.km', +this.value)" title="km"></td>
            <td class="note">km</td>
            <td style="white-space:nowrap"><label title="příplatek mimo Prahu = km / 60 × 1000 Kč (hodina cesty à 1 000 Kč); po Praze nechte odškrtnuté">
              <input type="checkbox" ${zdroj.doprava.mimoPrahu ? 'checked' : ''} onchange="pjSet(${i}, 'doprava.mimoPrahu', this.checked)"> mimo Prahu</label></td>
@@ -387,7 +387,7 @@ function renderProj() {
      * sloupci Počítat, a je tmavě modré, ať se od položkových liší. */
     const vlastniPct = col.admin
       ? `<span class="note" style="font-weight:400;white-space:nowrap">vlastní % sekce
-           <input type="number" step="1" style="width:64px" value="${zdroj.prirazkaPct == null ? '' : esc(zdroj.prirazkaPct)}"
+           <input type="number" step="1" style="width:64px" value="${zdroj.prirazkaPct == null ? '' : zdroj.prirazkaPct}"
              placeholder="${prirGlob}" onchange="pjSet(${i}, 'prirazkaPct', this.value === '' ? null : +this.value)"
              title="vlastní % jen pro tuhle sekci: kladné číslo přirazí, záporné slevu (prázdné = ${prirPopis}). Nula znamená „u téhle sekce nepřirážíme nic“."> %</span>`
       : '';

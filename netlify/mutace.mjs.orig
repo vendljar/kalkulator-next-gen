@@ -412,27 +412,6 @@ const MUTACE = [
     nahrad: 'cas: new Date().toISOString(), beh: \'netlify\', prostredi: process.env });',
     proc: 'veřejná cesta by vydala tajemství relace i zaváděcí heslo' },
 
-  /* ---------- 4. dávka auditu (B27, B28, B29, B31), 23. 8. 2026 ---------- */
-  { nazev: 'B27: neplatný stav Pipedrive se nekontroluje', soubor: 'functions/pd_dealy.mjs',
-    hledej: "  if (['open', 'won', 'lost', 'vse'].indexOf(stav) < 0)",
-    nahrad: "  if (false)",
-    proc: '?stav=x1, x2… by zakládalo stále nové dotazy a vyčerpalo denní rozpočet Pipedrive' },
-
-  { nazev: 'B28: profil a podpis hlavního účtu smí měnit i vedlejší admin', soubor: 'functions/uzivatele.mjs',
-    hledej: "      if (cil === ADMIN_EMAIL && relace.email !== ADMIN_EMAIL)",
-    nahrad: "      if (false)",
-    proc: 'vedlejší správce by nahrál cizí podpis pod nabídky hlavního administrátora' },
-
-  { nazev: 'B29: autor nové karty zákazníka se bere od klienta', soubor: 'functions/zakaznici.mjs',
-    hledej: "  else z.autor = relace.email;   // nová karta",
-    nahrad: "  else z.autor = z.autor || relace.email;   // nová karta",
-    proc: 'obchodník by založil kartu „za" kolegu' },
-
-  { nazev: 'B31: správce si smí archivovat vlastní účet', soubor: 'functions/uzivatele.mjs',
-    hledej: "      if (email === relace.email && t.archiv)",
-    nahrad: "      if (false)",
-    proc: 'archiv účet vypne — správce by se sám zamkl venku' },
-
   { nazev: 'noční záloha dostane veřejnou cestu', soubor: 'functions/zaloha_nocni.mjs',
     hledej: 'export const config = {',
     nahrad: 'export const config = { path: \'/api/zaloha_nocni\',',

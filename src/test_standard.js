@@ -143,6 +143,15 @@ test('a nález vysvětluje, na co se ptá',
   /varianty pro zákazníka/.test(dveSkla.nalezy[0].zadano));
 test('jeden druh skla projde',
   S.standardVyhodnot(int(), 20, std(), ['Sklo VSG']).stav === 'standard');
+/* N7 (23. 8. 2026): skla jsou ve VÝCHOZÍM stavu mimo nabídku (DEFAULT_ZADANI
+ * .priplatkyVynechat je nese), takže nová zakázka přijde do kontroly BEZ skel
+ * a „nelze posoudit" se neobjeví, dokud obchodník sklo vědomě nevloží. */
+const eng7 = require('./engine.js');
+test('N7: výchozí zadání má skla mimo nabídku (vsgFolie, skn)',
+  (eng7.DEFAULT_ZADANI.priplatkyVynechat || []).includes('vsgFolie')
+  && (eng7.DEFAULT_ZADANI.priplatkyVynechat || []).includes('skn'));
+test('N7: žádné zvolené sklo → kontrola dá standard, ne „nelze posoudit"',
+  S.standardVyhodnot(int(), 20, std(), []).stav === 'standard');
 test('vypnuté pravidlo se nekontroluje', (() => {
   const s = std(); s.jedenTypZaskleni = false;
   return S.standardVyhodnot(int(), 20, s, ['Sklo VSG', 'Sklo SKN 176']).stav === 'standard';
