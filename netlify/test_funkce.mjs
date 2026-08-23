@@ -138,7 +138,7 @@ test('/api/ja zná přihlášeného', (await (await get(ja, 'http://x/api/ja', c
 const z1 = await (await post(uzivatele, 'http://x/api/uzivatele', { akce: 'zaloz', email: 'obchodnik@engineers-cz.cz', jmeno: 'Test Obchodník', role: 'Obchodník', heslo: 'ObchodHeslo1' }, cookie)).json();
 test('administrátor založí účet', z1.ok === true, JSON.stringify(z1));
 const r2 = await post(prihlaseni, 'http://x/api/prihlaseni', { email: 'obchodnik@engineers-cz.cz', heslo: 'ObchodHeslo1' });
-let cookieObch = (r2.headers.get('set-cookie') || '').split(';')[0];
+const cookieObch = (r2.headers.get('set-cookie') || '').split(';')[0];
 test('obchodník se přihlásí', (await r2.json()).role === 'Obchodník');
 test('obchodník NEspravuje uživatele', (await get(uzivatele, 'http://x/api/uzivatele', cookieObch)).status === 403);
 test('obchodník NEzaloží účet (POST admin akce)', (await post(uzivatele, 'http://x/api/uzivatele',
@@ -149,20 +149,14 @@ test('změna vlastního hesla se ŠPATNÝM starým heslem se odmítne',
   (await post(uzivatele, 'http://x/api/uzivatele', { akce: 'mojeheslo', stare: 'spatne', nove: 'NoveHeslo123' }, cookieObch)).status === 401);
 test('příliš krátké nové heslo se odmítne',
   (await post(uzivatele, 'http://x/api/uzivatele', { akce: 'mojeheslo', stare: 'ObchodHeslo1', nove: 'kratke' }, cookieObch)).status === 400);
-const mhOdp = await post(uzivatele, 'http://x/api/uzivatele', { akce: 'mojeheslo', stare: 'ObchodHeslo1', nove: 'NoveHeslo123' }, cookieObch);
-const mh = await mhOdp.json();
+const mh = await (await post(uzivatele, 'http://x/api/uzivatele', { akce: 'mojeheslo', stare: 'ObchodHeslo1', nove: 'NoveHeslo123' }, cookieObch)).json();
 test('obchodník si změní vlastní heslo', mh.ok === true, JSON.stringify(mh));
-/* Změna hesla zneplatní dosavadní relace (B6, 22. 8. 2026) — prohlížeč
- * převezme novou cookie z odpovědi, sada taky. */
-cookieObch = (mhOdp.headers.get('set-cookie') || '').split(';')[0] || cookieObch;
 test('staré heslo už neplatí', (await post(prihlaseni, 'http://x/api/prihlaseni', { email: 'obchodnik@engineers-cz.cz', heslo: 'ObchodHeslo1' })).status === 401);
 test('novým heslem se přihlásí', (await (await post(prihlaseni, 'http://x/api/prihlaseni', { email: 'obchodnik@engineers-cz.cz', heslo: 'NoveHeslo123' })).json()).ok === true);
 /* administrátorský reset zpátky (bez znalosti starého — to je jeho role) */
 test('administrátor resetuje heslo bez znalosti starého',
   (await (await post(uzivatele, 'http://x/api/uzivatele', { akce: 'heslo', email: 'obchodnik@engineers-cz.cz', heslo: 'ObchodHeslo1' }, cookie)).json()).ok === true);
-const poResetu = await post(prihlaseni, 'http://x/api/prihlaseni', { email: 'obchodnik@engineers-cz.cz', heslo: 'ObchodHeslo1' });
-test('po resetu platí heslo od administrátora', (await poResetu.clone().json()).ok === true);
-cookieObch = (poResetu.headers.get('set-cookie') || '').split(';')[0] || cookieObch;   // reset odhlásil starou relaci (B6)
+test('po resetu platí heslo od administrátora', (await (await post(prihlaseni, 'http://x/api/prihlaseni', { email: 'obchodnik@engineers-cz.cz', heslo: 'ObchodHeslo1' })).json()).ok === true);
 
 /* 4) program: zveřejnění (admin) a čtení (obchodník) */
 const pub = await (await post(program, 'http://x/api/program', { cenik: ZC.zkusebniCenik(), cenikProj: ZC.zkusebniCenikProj(), slevy: { minMarze: 0.1, maxGlobalni: 0.3, stropy: { 'Obchodník': 0.05 } }, poznamka: 'první online verze' }, cookie)).json();
@@ -326,7 +320,7 @@ const DOCX1 = 'UEsDBBQABgAIAAAAIQ' + 'A'.repeat(400);   // „soubor" verze 1 (Z
 const DOCX2 = 'UEsDBBQABgAIAAAAIQ' + 'B'.repeat(400);   // jiná data = jiný otisk
 
 {
-  const cObch2 = cookieObch;   // relace z r2 už po změnách hesla neplatí (B6)
+  const cObch2 = (r2.headers.get('set-cookie') || '').split(';')[0];
 
   test('šablony: PDF se odmítne už při zveřejnění',
     (await post(sablonyFn, 'http://x/api/sablony',

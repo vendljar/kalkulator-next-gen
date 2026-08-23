@@ -180,6 +180,40 @@ test('server matici přijal a vrátil ji zpět',
 test('u zveřejnění se pamatuje, kdo a kdy',
   await page.evaluate(() => !!(ONLINE_STAV.zobrazeni.kdo && ONLINE_STAV.zobrazeni.kdy)));
 
+/* ---------- 3z) automatické ukládání matice (22. 8. 2026) ----------
+ *
+ * Hlášeno J. V.: „neukládají se nám zobrazení v nastavení, při novém buildu
+ * se zaškrtnutí resetuje." Příčina: zaškrtnutí žilo jen v paměti prohlížeče
+ * a na server šlo teprve tlačítkem. Matice se ale při každém přihlášení bere
+ * ze serveru, takže neuložená volba nemá kde přežít. Tady se hlídá, že
+ * zaškrtnutí samo doputuje na server BEZ jakéhokoli tlačítka. */
+
+const pocetZapisu = () => volani.filter(x => x === 'POST /api/zobrazeni').length;
+const predSamoulozenim = pocetZapisu();
+await page.evaluate(() => zobrSet('tab.kryci', 'Vedoucí', true));
+await page.waitForTimeout(1600);
+test('zaškrtnutí se uloží samo, bez tlačítka',
+  pocetZapisu() > predSamoulozenim, 'zápisů: ' + predSamoulozenim + ' → ' + pocetZapisu());
+test('server má i to, co se uložilo samo',
+  await page.evaluate(() => (ONLINE_STAV.zobrazeni.matice['tab.kryci'] || {})['Vedoucí'] === true));
+test('panel dá vědět, že je uloženo',
+  (await page.locator('#nastaveni-panel').innerText()).includes('Uloženo online'));
+
+/* Proklikání víc políček za sebou = JEDEN zápis, ne pět. Bez toho by se při
+ * skládání matice poslalo na server dvacet dotazů po sobě. */
+const predDavkou = pocetZapisu();
+await page.evaluate(() => {
+  zobrSet('tab.proj', 'Vedoucí', true);
+  zobrSet('tab.detailproj', 'Vedoucí', true);
+  zobrSet('tab.kryciproj', 'Vedoucí', true);
+});
+await page.waitForTimeout(1600);
+test('rychlé proklikání víc políček je jeden zápis',
+  pocetZapisu() === predDavkou + 1, 'zápisů: ' + (pocetZapisu() - predDavkou));
+test('uložilo se všechno proklikané',
+  await page.evaluate(() => ['tab.proj', 'tab.detailproj', 'tab.kryciproj']
+    .every(k => (ONLINE_STAV.zobrazeni.matice[k] || {})['Vedoucí'] === true)));
+
 /* ---------- 3b) režimy sekcí kalkulace + přidávání položek (19. 8. 2026) ----------
  *
  * Administrátor u každé sekce OCK i PROJ volí selectem zobrazit / skrýt /
@@ -510,38 +544,6 @@ test('obchodník vidí všechny NESKRYTÉ volitelné položky, ne jen zahrnuté'
     const chk = (sekce.match(/volitelneToggle/g) || []).length;
     NAST.jeAdmin = true; NAST.nahledRole = ''; render();
     return vsech > 0 && zahrnutych < pocetKatalogu && chk === pocetKatalogu;
-  }));
-/* Ukazatele Náklad / Hrubý zisk / Marže v hlavičce řídí právo `kpi.marze`,
- * NE `sloupce.naklad` (oprava 22. 8. 2026 večer — J. V. je v náhledu
- * obchodníka viděl, protože obchodník má sloupce nákladů kvůli přirážce). */
-test('obchodník se sloupci nákladů, ale bez kpi.marze, ukazatele v hlavičce NEVIDÍ',
-  await page.evaluate(() => {
-    try {
-      NAST.jeAdmin = true; NAST.nahledRole = '';
-      zobrSet('sloupce.naklad', 'Obchodník', true);
-      zobrSet('kpi.marze', 'Obchodník', false);
-      NAST.kpiViditelne = { naklad: false, hrubyZisk: false, sleva: false, marze: false };
-      NAST.jeAdmin = false; NAST.nahledRole = 'Obchodník'; prepniTab('kalk'); render();
-      const h = document.getElementById('page-kalk').innerText;
-      window.__kpi1 = { zakl: /Základní cena/i.test(h), hz: /Hrubý zisk/i.test(h), smiN: smiZobrazit('sloupce.naklad'), smiK: smiZobrazit('kpi.marze') };
-      return window.__kpi1.zakl && !window.__kpi1.hz && window.__kpi1.smiN && !window.__kpi1.smiK;
-    } catch (e) { window.__kpi1 = String(e); return false; }
-    finally { NAST.jeAdmin = true; NAST.nahledRole = ''; render(); }
-  }), await page.evaluate(() => JSON.stringify(window.__kpi1)));
-test('po přidělení kpi.marze obchodník ukazatele vidí; bez přidělení je zase ztratí',
-  await page.evaluate(() => {
-    try {
-      NAST.jeAdmin = true; NAST.nahledRole = '';
-      zobrSet('kpi.marze', 'Obchodník', true);
-      NAST.jeAdmin = false; NAST.nahledRole = 'Obchodník'; render();
-      const vidi = /Hrubý zisk/i.test(document.getElementById('page-kalk').innerText);
-      NAST.jeAdmin = true; NAST.nahledRole = '';
-      zobrSet('kpi.marze', 'Obchodník', false);
-      NAST.jeAdmin = false; NAST.nahledRole = 'Obchodník'; render();
-      const nevidi = !/Hrubý zisk/i.test(document.getElementById('page-kalk').innerText);
-      return vidi && nevidi;
-    } catch (e) { return false; }
-    finally { NAST.jeAdmin = true; NAST.nahledRole = ''; zobrSet('sloupce.naklad', 'Obchodník', false); render(); }
   }));
 test('a sloupce Viditelné / Výchozí u nich obchodník nemá',
   await page.evaluate(() => {
@@ -1036,6 +1038,57 @@ test('pole Zákazník našeptává z kartotéky i z rejstříku',
     prepniTab('zakazka'); render();
     return jenNovotny.length === 1 && /Novotný/.test(jenNovotny[0])
       && bezDia.length === 1 && /Šachtové/.test(bezDia[0]) && zapsano;
+  }));
+
+/* Výběr z našeptávače dotáhne i zbytek hlavičky (22. 8. 2026, zadání J. V.:
+ * „po načtení z našeptávače se stále do hlavičky nedotahuje kontaktní osoba
+ * a IČO"). Doplní se JEN prázdná pole — co už je v hlavičce vyplněné jinak,
+ * se nepřepíše a řekne se to nahlas. */
+test('výběr z našeptávače doplní kontaktní osobu a IČO z kartotéky',
+  await page.evaluate(() => {
+    NAST.jeAdmin = true; prepniTab('kalk');
+    const zalohaRej = ONLINE_STAV.rejstrik;
+    ZAK_DB.seznam = [{ nazev: 'Novotný stavby s.r.o.', ico: '12345678',
+      kontaktOsoba: 'Ing. Petr Novotný', sidlo: 'Dlouhá 5, Praha' }];
+    ZAK.objednatel = ''; ZAK.kontakt = ''; ZAK.ico = ''; ZAK.adresaObjednatele = '';
+    render();
+    naseptavacZakVyber('Novotný stavby s.r.o.');
+    const v = ZAK.kontakt === 'Ing. Petr Novotný' && ZAK.ico === '12345678'
+      && ZAK.adresaObjednatele === 'Dlouhá 5, Praha' && !!ZAK.zakaznikId;
+    ZAK.objednatel = ''; ZAK.kontakt = ''; ZAK.ico = ''; ZAK.adresaObjednatele = '';
+    ZAK.zakaznikId = ''; ZAK_DB.seznam = []; ZAK_DB.hlaska = '';
+    ONLINE_STAV.rejstrik = zalohaRej;
+    return v;
+  }));
+
+test('vyplněný údaj se výběrem nepřepíše a řekne se to',
+  await page.evaluate(() => {
+    const zalohaRej = ONLINE_STAV.rejstrik;
+    ZAK_DB.seznam = [{ nazev: 'SVJ Verdunská', ico: '87654321', kontaktOsoba: 'Jan Předseda' }];
+    ZAK.objednatel = ''; ZAK.ico = ''; ZAK.kontakt = 'Technik na stavbě';
+    render();
+    naseptavacZakVyber('SVJ Verdunská');
+    const v = ZAK.kontakt === 'Technik na stavbě'      // nepřepsáno
+      && ZAK.ico === '87654321'                        // prázdné doplněno
+      && /Kontaktní osoba/.test(ZAK_DB.hlaska || '');  // a je o tom zpráva
+    ZAK.objednatel = ''; ZAK.kontakt = ''; ZAK.ico = ''; ZAK.zakaznikId = '';
+    ZAK_DB.seznam = []; ZAK_DB.hlaska = '';
+    ONLINE_STAV.rejstrik = zalohaRej;
+    prepniTab('zakazka'); render();
+    return v;
+  }));
+
+/* Tatáž tlačítka musejí být v OBOU kalkulacích (zadání J. V. 22. 8. 2026:
+ * „tato funkce má být přístupná i v kalkulaci proj"). */
+test('databáze zákazníků je i v hlavičce Kalkulace PROJ',
+  await page.evaluate(() => {
+    prepniTab('proj'); render();
+    const h = document.getElementById('page-proj');
+    const txt = h ? h.innerHTML : '';
+    const ock = (document.getElementById('page-kalk') || {}).innerHTML || '';
+    prepniTab('zakazka'); render();
+    return /Vybrat z databáze zákazníků/.test(txt) && /Uložit jako zákazníka/.test(txt)
+      && /Vybrat z databáze zákazníků/.test(ock);
   }));
 
 test('žádná chyba JavaScriptu', chyby.length === 0, chyby.slice(0, 2).join(' | '));

@@ -196,15 +196,8 @@ function renderProj() {
   const slevaProjPodil = cnp ? cnp.slevaPct : ((typeof slevaPodil === 'function') ? slevaPodil(SLP) : 0);
   const _dph = cenaSDph(projCena, PC.dph), dphKc = _dph.dphKc, celkemSDph = _dph.sDph;   // #14 krok 1
   const kv = NAST.kpiViditelne || {};
-  /* Ukazatele Náklad / Hrubý zisk / Marže řídí právo `kpi.marze` z matice
-   * zobrazení (oprava 22. 8. 2026, hlášení J. V.: obchodník je v náhledu viděl,
-   * protože se do té doby ptaly na `sloupce.naklad` — jiné právo, které má
-   * obchodník kvůli přirážce položek). Zaškrtávátko u ukazatele je ruční
-   * výjimka pro všechny („zviditelnit pro běžného uživatele") a smí ho jen
-   * skutečný administrátor — ne kdokoli se sloupci nákladů. */
-  const kpiAdmin = zobrazeniRole() === 'Administrátor';
-  const vidKpi = k => kpiAdmin || smiZobrazit('kpi.marze') || kv[k];
-  const kpiChk = k => kpiAdmin ? `<input type="checkbox" class="kpi-chk" ${kv[k] ? 'checked' : ''} onchange="kpiVidSet('${k}', this.checked)" title="zviditelnit pro běžného uživatele">` : '';
+  const vidKpi = k => col.admin || kv[k];
+  const kpiChk = k => col.admin ? `<input type="checkbox" class="kpi-chk" ${kv[k] ? 'checked' : ''} onchange="kpiVidSet('${k}', this.checked)" title="zviditelnit pro běžného uživatele">` : '';
   const kpiLine = (k, label, val) => vidKpi(k)
     ? `<div class="kpi-line"><span class="kl">${label}${kpiChk(k)}</span><span class="kv">${val}</span></div>` : '';
   const pct = x => (Math.round(x * 1000) / 10).toLocaleString('cs-CZ') + ' %';

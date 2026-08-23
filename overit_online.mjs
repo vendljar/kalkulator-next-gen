@@ -609,37 +609,6 @@ test('po potvrzení se karta doplní',
     window.confirm = puvodni;
     return ZAK_DB.seznam[0].technickyEmail === 'jiny@zkusebni.cz';
   }));
-/* ---- výběr firmy našeptávačem vyplní IČO a kontakt (22. 8. 2026 večer) ---- */
-test('výběr firmy z našeptávače vyplní do prázdné hlavičky IČO a sídlo; víc jmen → nabídka k výběru',
-  await page.evaluate(() => {
-    ZAK = novaZakazka(); syncVarianta(); prepniTab('kalk'); render();
-    ZAK_DB.seznam[0].kontaktOsoba = 'Karel Kontakt';   // lokálně: dvě jména (smluvní Sedlák + kontakt)
-    naseptavacZakVyber('Zkušební ocelárna s.r.o.', 'ock');
-    const box = document.getElementById('naseptBoxZak_ock');
-    return ZAK.objednatel === 'Zkušební ocelárna s.r.o.' && ZAK.ico === '12345679'
-      && ZAK.adresaObjednatele === 'Sídlištní 2, Zkušebín' && ZAK.kontakt === ''
-      && !!box && box.style.display !== 'none' && /Karel Kontakt/.test(box.innerHTML) && /Sedlák/.test(box.innerHTML);
-  }));
-test('kliknutí na jméno v nabídce vyplní kontaktní osobu a nabídku zavře',
-  await page.evaluate(async () => {
-    naseptavacZakKontaktVyber('Karel Kontakt', 'ock');
-    await new Promise(r => setTimeout(r, 250));
-    const box = document.getElementById('naseptBoxZak_ock');
-    return ZAK.kontakt === 'Karel Kontakt' && (!box || box.style.display === 'none');
-  }));
-test('jediné jméno se vyplní rovnou; vyplněná pole hlavičky se nepřepisují',
-  await page.evaluate(() => {
-    ZAK_DB.seznam[0].kontaktOsoba = '';
-    ZAK = novaZakazka(); syncVarianta(); ZAK.ico = '99999999'; render();
-    naseptavacZakVyber('Zkušební ocelárna s.r.o.', 'ock');
-    return ZAK.kontakt === 'Ing. Petr Sedlák' && ZAK.ico === '99999999' && ZAK.zakaznikId === '12345679';
-  }));
-test('firma jen z rejstříku (bez karty) vyplní jen název',
-  await page.evaluate(() => {
-    ZAK = novaZakazka(); syncVarianta(); render();
-    naseptavacZakVyber('Neznámá firma bez karty', 'ock');
-    return ZAK.objednatel === 'Neznámá firma bez karty' && ZAK.ico === '' && ZAK.kontakt === '';
-  }));
 test('hledání najde zákazníka podle IČO i názvu',
   await page.evaluate(() => zakazniciHledej(ZAK_DB.seznam, '1234567').length === 1
     && zakazniciHledej(ZAK_DB.seznam, 'ocelarna').length === 1));

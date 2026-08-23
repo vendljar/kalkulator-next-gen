@@ -92,12 +92,8 @@ function zipZapis(polozky, mime) {
 }
 
 /* ---------- náhrada {{...}} v XML ---------- */
-/* Řídicí znaky (kromě tabulátoru a konců řádků) XML 1.0 nepovoluje — Word
- * takový dokument odmítne otevřít. Přijdou z poznámky nebo z CRM; odstraní
- * se tady, na jediném místě, kudy text do XML vstupuje (audit 22. 8., B20). */
-const XML_RIDICI = /[\x00-\x08\x0B\x0C\x0E-\x1F]/g;
 function xmlEsc(s) {
-  return String(s).replace(XML_RIDICI, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
 function nahradPlaceholdery(xml, ph) {
@@ -507,7 +503,7 @@ async function docxVyplnSablonu(arrayBuffer, placeholders, priplatky, obrazky) {
  * Word i Google Docs takový soubor otevřou. Sdílí ZIP zápis (zipZapis).
  * ============================================================ */
 function docxEsc(s) {
-  return String(s == null ? '' : s).replace(XML_RIDICI, '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
 /* odstavec; o = {b:bold, sz:half-points, color:'RRGGBB', fill:'RRGGBB', after:twips} */

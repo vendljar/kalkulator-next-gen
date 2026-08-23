@@ -530,9 +530,26 @@ function onlineZobrazeniPopis() {
     + ' (' + (ONLINE_STAV.zobrazeni.kdo || '?') + ')';
 }
 
-/* Zveřejnění – posílá se matice tak, jak je v Nastavení. Očistu si server
- * dělá vlastní (týmž kódem), aby ani upravený prohlížeč nepřidělil prvek,
- * který server stejně nepustí. */
+/* Uložení matice BEZ PTANÍ (22. 8. 2026, hlášeno J. V.: „neukládají se nám
+ * zobrazení v nastavení, při novém buildu se zaškrtnutí resetuje").
+ *
+ * Do dneška se zaškrtnutí drželo jen v paměti prohlížeče a na server odešlo
+ * teprve tlačítkem „Zveřejnit". Kdo tlačítko nestiskl, přišel o práci hned
+ * při dalším načtení stránky — matice se totiž při každém přihlášení bere ze
+ * serveru, takže neuložené zaškrtnutí nemá kde přežít. Panel proto ukládá
+ * sám, krátce po poslední změně; tahle funkce je to samotné uložení.
+ *
+ * Očistu si server dělá vlastní (týmž kódem), aby ani upravený prohlížeč
+ * nepřidělil prvek, který server stejně nepustí. */
+function onlineUlozZobrazeniTise() {
+  if (!jeAdminOnline()) return Promise.reject(new Error('nastavení zobrazení smí ukládat jen administrátor'));
+  return onlineApi('/api/zobrazeni', { matice: NAST.zobrazeni })
+    .then(() => onlineNactiZobrazeni())
+    .then(() => true);
+}
+
+/* Zveřejnění s dotazem – zůstává pro hromadné přepsání tabulky předlohou,
+ * kde se vyplatí říct nahlas, kolik odchylek se právě posílá všem. */
 function onlineZverejniZobrazeni() {
   if (!jeAdminOnline()) {
     onlineZprava('Nastavení zobrazení smí zveřejnit jen administrátor.', 'varovani'); render();
@@ -576,12 +593,7 @@ function onlineUloz(opts) {
   // k okamžiku uložení (stejně jako ukládání do složky).
   if (typeof protokolZapisTed === 'function') protokolZapisTed();
   ONLINE_STAV.pracuje = true;
-  /* Razítko verze jde se zakázkou (B10, 22. 8. 2026): server odmítne přepsat
-   * verzi, ze které jsme nevyšli. Při kolizi se uživatel ptá a může vědomě
-   * přepsat (`prepsat: true`). */
-  const telo = { zakazka: ZAK, ocekavaneRazitko: ONLINE_STAV.razitko || '' };
-  if (opts.prepsat) telo.prepsat = true;
-  return onlineApi('/api/zakazky', telo).then(o => {
+  return onlineApi('/api/zakazky', { zakazka: ZAK }).then(o => {
     ONLINE_STAV.soubor = o.soubor; ONLINE_STAV.razitko = o.razitko || '';
     ONLINE_STAV.posledni = JSON.stringify(ZAK);
     ONLINE_STAV.kdyUlozeno = new Date();
@@ -599,13 +611,6 @@ function onlineUloz(opts) {
     }
     return onlineNactiRejstrik().then(() => true);
   }).catch(e => {
-    /* Kolize verzí (B10): při ručním uložení se zeptat a případně přepsat;
-     * automatické uložení se neptá — jen varuje, ať se nepřepisuje potichu. */
-    if (e && e.data && e.data.kolize && !opts.tiche && !opts.prepsat
-        && confirm(e.message + '\n\nPřepsat uloženou verzi mými změnami?')) {
-      ONLINE_STAV.pracuje = false;
-      return onlineUloz({ ...opts, prepsat: true });
-    }
     /* Server odmítá i pokus přepsat odeslanou (uzamčenou) nabídku – jeho
      * zdůvodnění se ukáže doslova, je z téhož kódu jako hláška u složky. */
     onlineZprava('Neuloženo online: ' + e.message, 'varovani');

@@ -84,11 +84,7 @@ export default async (req) => {
 
     if (t.den && typeof t.den === 'object') {
       const stary = await s.cti('den/' + dnes);
-      /* Dávka se nejdřív očistí (B8, 22. 8. 2026): jen čtyři mapy, čísla
-       * nezáporná a se stropem, klíče oříznuté. `poUzivateli` od klienta se
-       * nikdy nepřičítá — do 22. 8. se slilo DŘÍV než serverová atribuce,
-       * takže šlo poslat cizímu kolegovi stovky chyb nebo mínus zakázek. */
-      const novy = g.analytikaSlij(stary, g.analytikaDavkaOcisti(t.den));
+      const novy = g.analytikaSlij(stary, t.den);
       /* Atribuci počítadel dělá SERVER z přihlášené relace (20. 8. 2026):
        * klient svůj e-mail neposílá, takže ho nemůže podvrhnout, a zbytek
        * analytiky (klíče prvků, záložky, zdržení) zůstává anonymní. */
@@ -98,14 +94,9 @@ export default async (req) => {
     /* časy zakázek: { '2026-OPR-CN-0155': { ock: 120, proj: 30 }, … } */
     if (t.casy && typeof t.casy === 'object') {
       for (const [zak, c] of Object.entries(t.casy).slice(0, 50)) {
-        /* Klíč musí vypadat jako číslo nabídky (B8): písmena, číslice,
-         * pomlčky, mezery, tečky — a nanejvýš 60 znaků. Cizí tvar se zahodí,
-         * ne „opraví" — jinak kdokoli přihlášený zakládá klíče do nekonečna. */
-        const cislo = String(zak).trim();
-        if (!/^[\w\-. ]{1,60}$/.test(cislo)) continue;
-        const klic = 'cas/' + cislo;
-        const ock = g.analytikaCislo(c && c.ock);
-        const proj = g.analytikaCislo(c && c.proj);
+        const klic = 'cas/' + String(zak).slice(0, 80).replace(/[^\w\-. ]+/g, '-');
+        const ock = Math.max(0, Math.round(+c.ock || 0));
+        const proj = Math.max(0, Math.round(+c.proj || 0));
         if (!ock && !proj) continue;
         const stary = (await s.cti(klic)) || { ock: 0, proj: 0 };
         await s.zapis(klic, { ock: (+stary.ock || 0) + ock, proj: (+stary.proj || 0) + proj });

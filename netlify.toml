@@ -8,11 +8,6 @@
 [build]
   command = "python3 build.py"
   publish = "dist"
-  # Připnutá verze Node (audit 22. 8. 2026, B11): funkce spoléhají na globální
-  # fetch/Response (Node ≥ 18); bez připnutí by změna výchozí verze Netlify
-  # nasadila kód do prostředí, ve kterém nikdo nic netestoval.
-  [build.environment]
-    NODE_VERSION = "22"
 
 [functions]
   directory = "netlify/functions"

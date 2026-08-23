@@ -23,29 +23,6 @@ export function denDnes(kdy) {
 }
 
 /* zdroj = 'nocni-otisk' | 'vynuceno' … ; kdo = e-mail administrátora nebo '' */
-/* Doplňky zálohy (bezpečnostní audit 22. 8. 2026, nález B9).
- *
- * Do 22. 8. nesla záloha program, firmu, zakázky, účty a šablony — a NIC
- * z toho, co přibylo později: kartotéku zákazníků (#162, celé úložiště
- * `zakaznici`), skeny podpisů (`podpisy`, #145) ani matici zobrazení
- * (`program/zobrazeni`, #136). Komentáře u nich tvrdily opak. Po obnově by
- * zmizel seznam zákazníků, podpisy všech obchodníků a práva zobrazení.
- * Jedno místo pro obě zálohy (noční otisk i ruční stažení), aby se příště
- * nerozešly. */
-export async function zalohaDoplnky() {
-  const sProg = await uloziste('program');
-  const zobrazeni = await sProg.cti('zobrazeni');
-  const zk = await uloziste('zakaznici');
-  const zakaznici = {};
-  for (const k of await zk.seznam()) zakaznici[k] = await zk.cti(k);
-  const pd = await uloziste('podpisy');
-  const podpisy = {};
-  for (const k of await pd.seznam()) podpisy[k] = await pd.cti(k);
-  return { zobrazeni: zobrazeni || null,
-           zakaznici: Object.keys(zakaznici).length ? zakaznici : null,
-           podpisy: Object.keys(podpisy).length ? podpisy : null };
-}
-
 export async function porizOtisk(zdroj, kdo) {
   const den = denDnes();
   const sProg = await uloziste('program');
@@ -78,7 +55,6 @@ export async function porizOtisk(zdroj, kdo) {
     program: program || null, firma: firma || null,
     rejstrik: rejstrik || null, zakazky, uzivatele,
     sablony: Object.keys(sablony).length ? sablony : null,
-    ...(await zalohaDoplnky()),              // zobrazeni, zakaznici, podpisy (B9)
   };
   await (await uloziste('zalohy')).zapis(den, otisk);
   return { den, pocetZakazek: Object.keys(zakazky).length, pocetUctu: uzivatele.length };

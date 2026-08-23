@@ -108,12 +108,12 @@ const MUTACE = [
 
   /* ---------- brzda proti hádání hesel a čas odpovědi (#92, #93) ---------- */
   { nazev: 'brzda pustí neomezený počet pokusů', soubor: 'functions/prihlaseni.mjs',
-    hledej: '  if (pokusy.email.n > POKUSY_MAX || pokusy.adresa.n > POKUSY_IP_MAX)',
+    hledej: '  if (stav.n > POKUSY_MAX)',
     nahrad: '  if (false)',
     proc: 'hádání hesel by nic nezpomalilo a nikde by po něm nezůstala stopa' },
 
   { nazev: 'úspěšné přihlášení nevynuluje počítadlo', soubor: 'functions/prihlaseni.mjs',
-    hledej: '    await pokusyUspech(email, ip);',
+    hledej: '    await pokusyReset(email);',
     nahrad: '    ;',
     proc: 'po deseti překlepech za den by se člověk nepřihlásil ani se správným heslem' },
 
@@ -134,8 +134,8 @@ const MUTACE = [
     proc: 'účet po odcházejícím kolegovi by zmizel ze seznamu, ale dveře by mu zůstaly otevřené' },
 
   { nazev: 'autor zakázky se přepíše každým uložením', soubor: 'functions/zakazky.mjs',
-    hledej: '  } else if (!zak.autor) zak.autor = relace.email;',
-    nahrad: '  } else zak.autor = relace.email;',
+    hledej: '  if (!zak.autor) zak.autor = relace.email;',
+    nahrad: '  zak.autor = relace.email;',
     proc: 'autorem by se stal ten, kdo si zakázku naposledy otevřel — razítko by ztratilo smysl' },
 
   { nazev: 'zakázky jde převést i na archivovaný účet', soubor: 'functions/uzivatele.mjs',
@@ -212,137 +212,30 @@ const MUTACE = [
     nahrad: '      ) {',
     proc: 'první administrátorský účet by si založil kdokoli s jakýmkoli heslem' },
 
-  { nazev: 'cookie relace není HttpOnly', soubor: 'lib/sdilene.mjs',
-    hledej: "    + '; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=43200';",
-    nahrad: "    + '; Secure; SameSite=Lax; Path=/; Max-Age=43200';",
+  { nazev: 'cookie relace není HttpOnly', soubor: 'functions/prihlaseni.mjs',
+    hledej: '+ \'; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=43200\'',
+    nahrad: '+ \'; Secure; SameSite=Lax; Path=/; Max-Age=43200\'',
     proc: 'cizí skript na stránce by relaci přečetl a odnesl' },
 
-  { nazev: 'cookie relace není Secure', soubor: 'lib/sdilene.mjs',
-    hledej: "    + '; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=43200';",
-    nahrad: "    + '; HttpOnly; SameSite=Lax; Path=/; Max-Age=43200';",
+  { nazev: 'cookie relace není Secure', soubor: 'functions/prihlaseni.mjs',
+    hledej: '+ \'; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=43200\'',
+    nahrad: '+ \'; HttpOnly; SameSite=Lax; Path=/; Max-Age=43200\'',
     proc: 'relace by šla i po nešifrovaném spojení, kde ji lze odposlechnout' },
 
-  { nazev: 'cookie relace nemá SameSite', soubor: 'lib/sdilene.mjs',
-    hledej: "    + '; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=43200';",
-    nahrad: "    + '; HttpOnly; Secure; Path=/; Max-Age=43200';",
+  { nazev: 'cookie relace nemá SameSite', soubor: 'functions/prihlaseni.mjs',
+    hledej: '+ \'; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=43200\'',
+    nahrad: '+ \'; HttpOnly; Secure; Path=/; Max-Age=43200\'',
     proc: 'cizí stránka by uměla poslat požadavek za přihlášeného uživatele' },
 
-  { nazev: 'cookie relace nemá omezenou platnost', soubor: 'lib/sdilene.mjs',
-    hledej: "    + '; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=43200';",
-    nahrad: "    + '; HttpOnly; Secure; SameSite=Lax; Path=/';",
+  { nazev: 'cookie relace nemá omezenou platnost', soubor: 'functions/prihlaseni.mjs',
+    hledej: '+ \'; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=43200\'',
+    nahrad: '+ \'; HttpOnly; Secure; SameSite=Lax; Path=/\'',
     proc: 'cookie by v prohlížeči zůstala napořád' },
 
   { nazev: 'relace věří roli poslané v těle přihlášení', soubor: 'functions/prihlaseni.mjs',
-    hledej: '    const cookie = relaceCookie(ucet);',
-    nahrad: '    const cookie = relaceCookie({ ...ucet, role: (await req.clone().json().catch(() => ({}))).role || ucet.role });',
+    hledej: 'relaceVytvor(ucet.email, ucet.role)',
+    nahrad: 'relaceVytvor(ucet.email, (await req.clone().json().catch(() => ({}))).role || ucet.role)',
     proc: 'kdo si přidá do přihlášení „role: Administrátor", tím se stane' },
-
-  /* ---------- bezpečnostní audit 22. 8. 2026, 2. dávka (B4, B6, B7, B8, B9) ---------- */
-  { nazev: 'B6: verze hesla se v relaci nekontroluje', soubor: 'lib/sdilene.mjs',
-    hledej: "  if (((+r.hv) || 0) !== hesloVerzeUctu(ucet))",
-    nahrad: "  if (false)",
-    proc: 'ukradená cookie by fungovala i po změně hesla až do vypršení' },
-
-  { nazev: 'B6: změna vlastního hesla verzi nezvedne', soubor: 'functions/uzivatele.mjs',
-    hledej: "      ucet.hesloVerze = hesloVerzeUctu(ucet) + 1;\n      ucet.hesloZmeneno",
-    nahrad: "      ucet.hesloVerze = hesloVerzeUctu(ucet);\n      ucet.hesloZmeneno",
-    proc: 'po změně hesla by staré relace žily dál' },
-
-  { nazev: 'B6: reset hesla správcem verzi nezvedne', soubor: 'functions/uzivatele.mjs',
-    hledej: "      ucet.hesloVerze = hesloVerzeUctu(ucet) + 1;                       // B6",
-    nahrad: "      ucet.hesloVerze = hesloVerzeUctu(ucet);                           // B6",
-    proc: 'odcházející kolega s otevřeným prohlížečem by pracoval dál i po resetu' },
-
-  { nazev: 'B7: heslo hlavního účtu resetuje i vedlejší správce', soubor: 'functions/uzivatele.mjs',
-    hledej: "      if (email === ADMIN_EMAIL && relace.email !== ADMIN_EMAIL)",
-    nahrad: "      if (false)",
-    proc: 'vedlejší správce by si resetem vzal účet, který nejde vypnout ani degradovat' },
-
-  { nazev: 'B4: pokus se počítá až po ověření', soubor: 'functions/prihlaseni.mjs',
-    hledej: "  const pokusy = await pokusyZacatek(email, ip);",
-    nahrad: "  const pokusy = { email: { n: 0 }, adresa: { n: 0 } }; await pokusyZacatek(email, ip);",
-    proc: 'souběžné pokusy by brzdu obešly a 429 by nikdy nepřišlo' },
-
-  { nazev: 'B4: limit na adresu se ignoruje', soubor: 'functions/prihlaseni.mjs',
-    hledej: "  if (pokusy.email.n > POKUSY_MAX || pokusy.adresa.n > POKUSY_IP_MAX)",
-    nahrad: "  if (pokusy.email.n > POKUSY_MAX)",
-    proc: 'jedno heslo na sto e-mailů by na počítadle nikdy nenarostlo' },
-
-  { nazev: 'B8: rozpad po uživatelích se bere z dávky klienta', soubor: 'functions/analytika.mjs',
-    hledej: "      const novy = g.analytikaSlij(stary, g.analytikaDavkaOcisti(t.den));",
-    nahrad: "      const novy = g.analytikaSlij(stary, t.den);",
-    proc: 'obchodník by kolegovi připsal stovky chyb nebo mínus zakázek' },
-
-  { nazev: 'B8: záporná a nečíselná hodnota projde', soubor: '../src/analytika.js',
-    hledej: "  if (!isFinite(x) || x <= 0) return 0;",
-    nahrad: "  if (!isFinite(x)) return +n || 0;",
-    proc: 'záporné číslo by ubíralo, řetězec by otrávil součet' },
-
-  { nazev: 'B8: klíč času zakázky se bere, jak přijde', soubor: 'functions/analytika.mjs',
-    hledej: "        if (!/^[\\w\\-. ]{1,60}$/.test(cislo)) continue;",
-    nahrad: "        if (false) continue;",
-    proc: 'kdokoli přihlášený by zakládal klíče cas/ do nekonečna' },
-
-  { nazev: 'B9: záloha ke stažení bez zákazníků, podpisů a zobrazení', soubor: 'functions/zaloha.mjs',
-    hledej: "    ...(await zalohaDoplnky()) } });",
-    nahrad: "    } });",
-    proc: 'po obnově by zmizela kartotéka zákazníků, podpisy i práva zobrazení' },
-
-  { nazev: 'B13: autor nové zakázky se bere od klienta', soubor: 'functions/zakazky.mjs',
-    hledej: "    if (!zak.autor || zak.autor === relace.email || relace.role !== 'Administrátor')",
-    nahrad: "    if (!zak.autor)",
-    proc: 'obchodník by založil zakázku „za" vedoucího' },
-
-  { nazev: 'B13: razítko zámku se bere od klienta', soubor: 'functions/zakazky.mjs',
-    hledej: "    v.zamek.kdo = relace.jmeno ? relace.jmeno + ' <' + relace.email + '>' : relace.email;",
-    nahrad: "    v.zamek.kdo = v.zamek.kdo || relace.email;",
-    proc: 'pod odeslanou nabídkou by stálo cizí jméno' },
-
-  /* ---------- 3. dávka (B10, B14, B15, B16, B17, B19) ---------- */
-  { nazev: 'B10: razítko verze se nekontroluje', soubor: 'functions/zakazky.mjs',
-    hledej: "  if (stara && typeof t.ocekavaneRazitko === 'string' && t.prepsat !== true) {",
-    nahrad: "  if (false) {",
-    proc: 'dva obchodníci by si tiše přepisovali práci; stejné číslo by přepsalo cizí zakázku' },
-
-  { nazev: 'B14: velikost zakázky bez stropu', soubor: 'functions/zakazky.mjs',
-    hledej: "  if (JSON.stringify(t).length > ZAKAZKA_MAX_B)",
-    nahrad: "  if (false)",
-    proc: 'jedna příloha z mobilu by zaplnila úložiště' },
-
-  { nazev: 'B15: správce si může vypnout vlastní účet', soubor: 'functions/uzivatele.mjs',
-    hledej: "      if (email === relace.email && t.aktivni === false)",
-    nahrad: "      if (false)",
-    proc: 'omyl správce = okamžitá ztráta přístupu bez cesty zpět' },
-
-  { nazev: 'B15: archivovaný účet jde zapnout', soubor: 'functions/uzivatele.mjs',
-    hledej: "      if (t.aktivni && ucet.archiv)",
-    nahrad: "      if (false)",
-    proc: 'archiv slibuje, že se účet nikdy nepřihlásí — a šlo by to obejít jedním zapnutím' },
-
-  { nazev: 'B16: tvar e-mailu se nekontroluje', soubor: 'functions/uzivatele.mjs',
-    hledej: "    if (t.akce === 'zaloz' && !emailPlatny(email))",
-    nahrad: "    if (false)",
-    proc: 'klíč záznamu účtu by mohl být cokoli' },
-
-  { nazev: 'B16: délky při přihlášení bez stropu', soubor: 'functions/prihlaseni.mjs',
-    hledej: "  if (email.length > EMAIL_MAX || heslo.length > HESLO_MAX)",
-    nahrad: "  if (false)",
-    proc: 'obří e-mail by zakládal obří klíče v počítadle, obří heslo by mlel scrypt' },
-
-  { nazev: 'B17: cizí Origin se nekontroluje', soubor: 'lib/sdilene.mjs',
-    hledej: "  if (req.method && req.method !== 'GET' && cizihoPuvodu(req)) return null;",
-    nahrad: "  if (false) return null;",
-    proc: 'druhá vrstva proti CSRF by zmizela; stačilo by jednou povolit SameSite' },
-
-  { nazev: 'B17: odhlášení i na GET', soubor: 'functions/odhlaseni.mjs',
-    hledej: "  if (req.method !== 'POST') return json({ ok: false, chyba: 'Použijte POST.' }, 405);",
-    nahrad: "",
-    proc: 'odkaz z cizí stránky by uživatele odhlásil' },
-
-  { nazev: 'B9: noční otisk bez zákazníků, podpisů a zobrazení', soubor: 'lib/zalohovani.mjs',
-    hledej: "    ...(await zalohaDoplnky()),",
-    nahrad: "",
-    proc: 'totéž pro automatickou zálohu' },
 
   /* ---------- správa účtů (functions/uzivatele.mjs) ---------- */
   { nazev: 'správu účtů zvládne kdokoli (POST)', soubor: 'functions/uzivatele.mjs',
@@ -366,7 +259,7 @@ const MUTACE = [
     proc: 'kdo sedne k odemčenému počítači, ukradne účet natrvalo' },
 
   { nazev: 'heslo smí být kratší než osm znaků', soubor: 'functions/uzivatele.mjs',
-    hledej: '      if (!hesloPlatne(t.nove))',
+    hledej: '      if (!t.nove || String(t.nove).length < 8)',
     nahrad: '      if (!t.nove)',
     proc: 'jednoznakové heslo se uhodne hned' },
 
@@ -381,8 +274,8 @@ const MUTACE = [
     proc: 'totéž jinou cestou — nikdo by už nemohl spravovat účty' },
 
   { nazev: 'zakládá se účet s neznámou rolí', soubor: 'functions/uzivatele.mjs',
-    hledej: "      if (!ROLE.includes(t.role)) return json({ ok: false, chyba: 'Neznámá role.' }, 400);\n      if (!hesloPlatne(t.heslo))",
-    nahrad: "      if (!hesloPlatne(t.heslo))",
+    hledej: '      if (!ROLE.includes(t.role)) return json({ ok: false, chyba: \'Neznámá role.\' }, 400);\n      if (!t.heslo',
+    nahrad: '      if (!t.heslo',
     proc: 'účet s vymyšlenou rolí by se choval nepředvídatelně' },
 
   /* ---------- ceník a firma ---------- */

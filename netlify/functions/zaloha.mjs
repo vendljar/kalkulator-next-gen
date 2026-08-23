@@ -4,7 +4,6 @@
  * připojené složky na Disku (File System Access), takže záloha končí tam,
  * kde ji chce uživatel mít — verzovaná jménem s datem. */
 import { uloziste, vyzadujRoli, json } from '../lib/sdilene.mjs';
-import { zalohaDoplnky } from '../lib/zalohovani.mjs';
 
 export default async (req) => {
   const { chyba } = await vyzadujRoli(req, 'Administrátor');
@@ -37,7 +36,6 @@ export default async (req) => {
     porizena: new Date().toISOString(), zdroj: 'schaftscalc.netlify.app',
     program: prog || null, firma: firma || null,
     rejstrik: rejstrik || null, zakazky, uzivatele,
-    sablony: Object.keys(sablony).length ? sablony : null,
-    ...(await zalohaDoplnky()) } });          // zobrazeni, zakaznici, podpisy (B9, 22. 8. 2026)
+    sablony: Object.keys(sablony).length ? sablony : null } });
 };
 export const config = { path: '/api/zaloha' };

@@ -1035,11 +1035,67 @@ function zobrMatice() {
   if (!NAST.zobrazeni) NAST.zobrazeni = (typeof zobrazeniVychozi === 'function') ? zobrazeniVychozi() : {};
   return NAST.zobrazeni;
 }
+/* AUTOMATICKÉ UKLÁDÁNÍ MATICE (22. 8. 2026, hlášeno J. V.: „neukládají se
+ * nám zobrazení v nastavení, při novém buildu se zaškrtnutí resetuje").
+ *
+ * Zaškrtnutí se do dneška drželo jen v paměti prohlížeče a na server odešlo
+ * až tlačítkem „Zveřejnit". Jenže matice se při každém přihlášení znovu bere
+ * ze serveru — takže co se nestihlo odeslat, to se při dalším načtení
+ * stránky tiše přepsalo zpátky. Panel proto ukládá sám: 800 ms po poslední
+ * změně (aby proklikání dvaceti políček byl jeden zápis, ne dvacet).
+ *
+ * Stav ukládání je vidět nahoře v panelu. Beze zprávy by se opakovala táž
+ * chyba jako u ukládání zakázky (#166): uživatel neví, jestli se něco děje,
+ * a klikne znovu. */
+const ZOBR_ULOZ_PRODLEVA = 800;
+const ZOBR_ULOZ = { cas: null, stav: '', kdy: '', chyba: '' };
+
+function zobrUlozMozne() {
+  return typeof onlineUlozZobrazeniTise === 'function'
+    && typeof jeAdminOnline === 'function' && jeAdminOnline();
+}
+
+function zobrUlozBrzy() {
+  if (!jeAdmin()) return;
+  if (!zobrUlozMozne()) { ZOBR_ULOZ.stav = 'offline'; return; }
+  ZOBR_ULOZ.stav = 'ceka';
+  if (ZOBR_ULOZ.cas) clearTimeout(ZOBR_ULOZ.cas);
+  ZOBR_ULOZ.cas = setTimeout(zobrUlozHned, ZOBR_ULOZ_PRODLEVA);
+}
+
+function zobrUlozHned() {
+  if (ZOBR_ULOZ.cas) { clearTimeout(ZOBR_ULOZ.cas); ZOBR_ULOZ.cas = null; }
+  if (!jeAdmin()) return Promise.resolve(false);
+  if (!zobrUlozMozne()) { ZOBR_ULOZ.stav = 'offline'; nastRefresh(); return Promise.resolve(false); }
+  ZOBR_ULOZ.stav = 'uklada'; ZOBR_ULOZ.chyba = ''; nastRefresh();
+  return onlineUlozZobrazeniTise()
+    .then(() => {
+      ZOBR_ULOZ.stav = 'ulozeno';
+      ZOBR_ULOZ.kdy = new Date().toTimeString().slice(0, 5);
+      return true;
+    })
+    .catch(e => { ZOBR_ULOZ.stav = 'chyba'; ZOBR_ULOZ.chyba = e.message || String(e); return false; })
+    .then(v => { nastRefresh(); return v; });
+}
+
+/* Věta o stavu ukládání do panelu. */
+function zobrUlozPopis() {
+  switch (ZOBR_ULOZ.stav) {
+    case 'ceka':   return '⏳ Změna se za okamžik uloží…';
+    case 'uklada': return '⏳ Ukládám do databáze…';
+    case 'ulozeno': return '✓ Uloženo online v ' + ZOBR_ULOZ.kdy + ' — platí všem po dalším načtení stránky.';
+    case 'chyba':  return '⚠ Uložit se nepodařilo: ' + ZOBR_ULOZ.chyba + ' Zkuste „Uložit teď".';
+    case 'offline': return '⚠ Bez přihlášení k databázi se zaškrtnutí neuloží — platí jen do zavření stránky.';
+    default: return '';
+  }
+}
+
 function zobrSet(klic, role, v) {
   if (!jeAdmin()) return;
   const m = zobrMatice();
   if (!m[klic]) m[klic] = {};
   m[klic][role] = !!v;
+  zobrUlozBrzy();
   nastRefresh();
 }
 /* Hromadné přepnutí. `navrh` = doporučení sepsané u každého prvku (podklad
@@ -1058,6 +1114,7 @@ function zobrPredloha(ktera) {
       m[p.klic][r] = p.pevne ? false : !!(ktera === 'navrh' ? p.navrh : p.vychozi)[r];
     });
   });
+  zobrUlozBrzy();
   nastRefresh();
 }
 /* Náhled cizí role: administrátor si přepne, co uvidí obchodník nebo vedoucí,
@@ -1117,17 +1174,19 @@ function nastZobrazeni() {
 
     <div class="sec-title">Stav v online databázi</div>
     <div class="note" style="margin-top:0">${esc(online)}</div>
+    <div class="note"><b>${esc(zobrUlozPopis() || 'Zaškrtnutí se ukládá samo — hned po změně.')}</b></div>
     <div class="note">${zmen.length
       ? esc('Proti výchozímu rozdělení máte v tabulce ' + zmen.length + ' odchylek.')
       : 'V tabulce zatím není žádná odchylka od výchozího rozdělení.'}</div>
     <div class="btns" style="margin-top:8px">
-      ${typeof onlineZverejniZobrazeni === 'function'
-        ? `<button class="primary" onclick="onlineZverejniZobrazeni()">Zveřejnit nastavení zobrazení online</button>` : ''}
+      <button class="primary" onclick="zobrUlozHned()">Uložit teď</button>
       <button class="mini" onclick="zobrPredloha('navrh')">Použít doporučení</button>
       <button class="mini" onclick="zobrPredloha('vychozi')">Vrátit na dnešní stav</button>
     </div>
-    <div class="note">Dokud nastavení nezveřejníte, platí jen vám a po odhlášení se ztratí —
-      matice bydlí na serveru, protože obchodník ani vedoucí složku <code>_DB</code> nemapují.</div>
+    <div class="note">Zaškrtnutí se ukládá samo krátce po změně; tlačítko <b>Uložit teď</b> je jen
+      pro jistotu, když nechcete čekat. Matice bydlí na serveru, protože obchodník ani vedoucí
+      složku <code>_DB</code> nemapují — a proto se zaškrtnutí, které se neuloží, při dalším
+      načtení stránky ztratí.</div>
 
     <div class="sec-title">Náhled pohledem uživatele</div>
     <div class="kl-radio">

@@ -141,6 +141,47 @@ function zakaznikDoZakazky(z, zak) {
   return n;
 }
 
+/* Vtiskne kartu do zakázky, ale JEN DO PRÁZDNÝCH POLÍ (22. 8. 2026, zadání
+ * J. V.: „po načtení z našeptávače se stále do hlavičky nedotahuje kontaktní
+ * osoba a IČO").
+ *
+ * Proč jinak než `zakaznikDoZakazky`: tlačítko „Vybrat z databáze zákazníků"
+ * je vědomé rozhodnutí přenést kartu celou, takže smí přepsat i vyplněné
+ * pole. Výběr jména z našeptávače je ale jen dopsání jména — kdo si do
+ * hlavičky předtím zapsal vlastní kontaktní osobu (třeba technika na stavbě
+ * místo jednatele z karty), o ni přijít nesmí. Co se liší, se proto nepřepíše
+ * a vrátí se to v `kolize`, aby o tom šlo říct nahlas.
+ *
+ * Vrací { vyplneno, kolize: [label] }. Název zákazníka se sem záměrně
+ * nepočítá — ten už je v poli napsaný, jinak by se karta nenašla. */
+function zakaznikDoZakazkyPrazdne(z, zak) {
+  const out = { vyplneno: 0, kolize: [] };
+  if (!z || !zak) return out;
+  if (!zak.zastupci || typeof zak.zastupci !== 'object') zak.zastupci = {};
+  ZAKAZNIK_POLE.forEach(p => {
+    const v = _txt(z[p.id]);
+    if (!v) return;
+    const stav = _zeZakazky(zak, p);
+    if (!stav) {
+      if (p.zak) zak[p.zak] = v; else zak.zastupci[p.zast] = v;
+      out.vyplneno++;
+    } else if (stav !== v && p.id !== 'nazev') {
+      out.kolize.push(p.label);
+    }
+  });
+  zak.zakaznikId = zakaznikKlic(z);
+  return out;
+}
+
+/* Karta podle názvu — pro našeptávač, který zná jen napsané jméno.
+ * Porovnává se přes `zakaznikNormNazev`, takže nezáleží na diakritice,
+ * velikosti písmen ani na „s.r.o." × „s. r. o.". */
+function zakaznikPodleNazvu(seznam, nazev) {
+  const q = zakaznikNormNazev(nazev);
+  if (!q) return null;
+  return (seznam || []).find(z => zakaznikNormNazev(z && z.nazev) === q) || null;
+}
+
 /* Co se v zakázce liší od karty. Vrací [{ id, label, karta, zakazka }] —
  * jen pole, kde zakázka NĚCO má a karta má něco jiného (nebo nic).
  * Prázdné pole v zakázce se nehlásí: nevyplnění není změna. */
@@ -152,57 +193,6 @@ function zakaznikRozdily(z, zak) {
     if (vZak && vZak !== vKarta) out.push({ id: p.id, label: p.label, karta: vKarta, zakazka: vZak });
   });
   return out;
-}
-
-/* ---------- kontaktní osoby karty (22. 8. 2026, zadání J. V.) ----------
- * Karta nese až čtyři jména: kontaktní osobu a zástupce ve věcech smluvních,
- * obchodních a technických. Když obchodník v hlavičce vybere firmu
- * našeptávačem, chce rovnou i kontakt — a má-li firma jmen víc, chce si
- * vybrat. Tady se jména posbírají bez duplicit, s popisem role a kontakty
- * (telefon/e-mail jen jako nápověda v seznamu, do hlavičky jde jméno). */
-const ZAKAZNIK_KONTAKTY = [
-  { jmeno: 'kontaktOsoba', role: 'kontaktní osoba' },
-  { jmeno: 'smluvniJmeno', role: 've věcech smluvních', tel: 'smluvniTel', email: 'smluvniEmail' },
-  { jmeno: 'obchodniJmeno', role: 've věcech obchodních', tel: 'obchodniTel', email: 'obchodniEmail' },
-  { jmeno: 'technickyJmeno', role: 've věcech technických', tel: 'technickyTel', email: 'technickyEmail' },
-];
-function zakaznikKontakty(z) {
-  const out = [];
-  if (!z) return out;
-  ZAKAZNIK_KONTAKTY.forEach(k => {
-    const jmeno = _txt(z[k.jmeno]);
-    if (!jmeno) return;
-    const dup = out.find(o => o.jmeno.toLowerCase() === jmeno.toLowerCase());
-    if (dup) {                                   // totéž jméno v další roli: sloučit, kontakt doplnit
-      dup.role += ', ' + k.role;
-      if (!dup.tel && k.tel) dup.tel = _txt(z[k.tel]);
-      if (!dup.email && k.email) dup.email = _txt(z[k.email]);
-      return;
-    }
-    out.push({ jmeno, role: k.role, tel: _txt(k.tel ? z[k.tel] : ''), email: _txt(k.email ? z[k.email] : '') });
-  });
-  return out;
-}
-
-/* Předvyplnění hlavičky po výběru firmy našeptávačem. Vyplňuje se jen to, co
- * je v hlavičce PRÁZDNÉ (zakázka je pán — přepsané hodnoty se nepřebíjejí),
- * a kontakt jen tehdy, když je jednoznačný; víc jmen vrací k výběru.
- * Vrací { zmeny, kontakty } — `kontakty` má smysl jen při více jménech. */
-function zakaznikPredvypln(z, zak) {
-  const zmeny = [];
-  if (!z || !zak) return { zmeny, kontakty: [] };
-  const vypln = (cil, hodnota) => {
-    const v = _txt(hodnota);
-    if (v && !_txt(zak[cil])) { zak[cil] = v; zmeny.push(cil); }
-  };
-  vypln('objednatel', z.nazev);
-  vypln('ico', z.ico);
-  vypln('dic', z.dic);
-  vypln('adresaObjednatele', z.sidlo);
-  const kontakty = zakaznikKontakty(z);
-  if (kontakty.length === 1) vypln('kontakt', kontakty[0].jmeno);
-  zak.zakaznikId = zakaznikKlic(z);
-  return { zmeny, kontakty: kontakty.length > 1 ? kontakty : [] };
 }
 
 /* Přijetí rozdílů do karty (po potvrzení člověkem). */
@@ -229,6 +219,6 @@ function zakaznikOciste(vstup, kdo, kdy) {
 }
 
 if (typeof module !== 'undefined')
-  module.exports = { ZAKAZNIK_KONTAKTY, zakaznikKontakty, zakaznikPredvypln, ZAKAZNIK_SCHEMA, ZAKAZNIK_POLE, zakaznikNovy, zakaznikKlic,
+  module.exports = { ZAKAZNIK_SCHEMA, ZAKAZNIK_POLE, zakaznikNovy, zakaznikKlic,
     zakaznikNormNazev, zakazniciPodobni, zakazniciHledej, zakaznikZeZakazky,
     zakaznikDoZakazky, zakaznikRozdily, zakaznikPrevezmi, zakaznikOciste };

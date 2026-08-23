@@ -25,8 +25,16 @@ const ZAK_DB = {
  * Táž mechanika jako u vyhledávání nabídek (naseptavacFiltr v online_ui.js),
  * jen jiný zdroj: jména z KARTOTÉKY zákazníků a k tomu zákazníci z rejstříku
  * zakázek — kdo v kartotéce ještě není, ale nabídku už dostal, se má
- * napovědět taky. Vybráním se vyplní JEN název; celou hlavičku i s IČO
- * a kontakty přenese tlačítko „Vybrat z databáze zákazníků".
+ * napovědět taky.
+ *
+ * VÝBĚREM SE DOTÁHNE CELÁ HLAVIČKA (22. 8. 2026, zadání J. V.: „po načtení
+ * z našeptávače se stále do hlavičky nedotahuje kontaktní osoba a IČO").
+ * Do 22. 8. se vyplnil jen název, aby výběr nepřepsal už zapsané údaje —
+ * jenže pak se muselo klikat ještě na „Vybrat z databáze zákazníků" a nebylo
+ * poznat, proč se jednou dotáhne všechno a podruhé nic. Řeší to
+ * `zakaznikDoZakazkyPrazdne`: doplní se jen prázdná pole, a co se liší, se
+ * nechá být a řekne se to nahlas. Kdo chce hlavičku přepsat celou, má na to
+ * pořád tlačítko.
  *
  * Dvě hlavičky (OCK a PROJ) jsou v dokumentu obě, proto se box rozlišuje
  * příponou — dvě stejná id by byla chyba. */
@@ -47,10 +55,6 @@ function naseptavacZakazniciHodnoty() {
 function naseptavacZakKresli(kde, dotaz) {
   const el = document.getElementById('naseptBoxZak_' + kde);
   if (!el) return;
-  if (typeof ZAK_DB !== 'undefined' && ZAK_DB.kontaktVolba === kde) {
-    if (el.style.display !== 'none' && el.innerHTML.indexOf('Kontaktní osoba') >= 0) return;   // výběr kontaktu čeká
-    ZAK_DB.kontaktVolba = '';
-  }
   const slova = (typeof uloSlova === 'function') ? uloSlova(dotaz) : [];
   const n = !slova.length ? [] : naseptavacZakazniciHodnoty().filter(h => {
     const t = uloNorm(h);
@@ -59,61 +63,56 @@ function naseptavacZakKresli(kde, dotaz) {
   }).slice(0, 10);
   if (!n.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
   el.innerHTML = n.map(h => `<div class="nasept-radek"
-    onmousedown="naseptavacZakVyber('${escJs(h)}','${kde}')">${esc(h)}</div>`).join('');
+    onmousedown="naseptavacZakVyber('${escJs(h)}')">${esc(h)}</div>`).join('');
   el.style.display = '';
 }
 
 function naseptavacZakSchovej(kde) {
   setTimeout(() => {
-    /* Výběr kontaktní osoby čeká na kliknutí — blur políčka ho nesmí zavřít. */
-    if (typeof ZAK_DB !== 'undefined' && ZAK_DB.kontaktVolba === kde) return;
     const el = document.getElementById('naseptBoxZak_' + kde);
     if (el) el.style.display = 'none';
   }, 150);
 }
 
-/* Výběr firmy z našeptávače (22. 8. 2026 večer, zadání J. V.): vyplní se
- * název a — je-li firma v kartotéce — rovnou i IČO, DIČ, sídlo a kontaktní
- * osoba, ale JEN do prázdných polí hlavičky (zakázka je pán). Má-li karta víc
- * jmen (kontaktní osoba, zástupci smluvní/obchodní/technický), nabídne se
- * výběr v témže boxu pod polem Zákazník; do té doby zůstane pole Kontaktní
- * osoba prázdné, nic se nevybírá potichu. Firma jen z rejstříku zakázek
- * (bez karty) vyplní název sám, jako dřív. `kde` je 'ock' / 'proj'. */
-function naseptavacZakKarta(nazev) {
-  const n = String(nazev || '').trim().toLowerCase();
-  return ((typeof ZAK_DB !== 'undefined' && ZAK_DB.seznam) || [])
-    .find(z => z && String(z.nazev || '').trim().toLowerCase() === n) || null;
+/* Zápis jde přes set(), takže platí zámek varianty i zápis do protokolu
+ * stejně, jako by uživatel jméno napsal ručně. Teprve pak se z kartotéky
+ * doplní zbytek hlavičky — set() totiž překresluje, takže se nejdřív dopíše
+ * jméno a až potom sáhne na ostatní pole. */
+function naseptavacZakVyber(hodnota) {
+  set('ZAK.objednatel', hodnota);
+  zakaznikDotahniPodleNazvu(hodnota);
 }
-function naseptavacZakVyber(hodnota, kde) {
-  const karta = naseptavacZakKarta(hodnota);
-  if (!karta || typeof zakaznikPredvypln !== 'function') { set('ZAK.objednatel', hodnota); return; }
-  if (typeof zamekStop === 'function' && zamekStop()) return;
-  const v = zakaznikPredvypln(karta, ZAK);
-  if (v.zmeny.indexOf('objednatel') < 0) ZAK.objednatel = hodnota;   // název se vybral výslovně
-  set('ZAK.objednatel', ZAK.objednatel);                               // zámek, razítko, render
-  if (v.kontakty.length) naseptavacZakKontaktyNabidni(kde, v.kontakty);
+
+/* Dotažení údajů z kartotéky podle napsaného jména. Volá se z našeptávače
+ * i po ručním opuštění pole Zákazník — kdo jméno napíše celé sám, má dostat
+ * stejnou pomoc jako ten, kdo si ho vybral z nabídky. */
+function zakaznikDotahniPodleNazvu(nazev) {
+  if (typeof zakaznikPodleNazvu !== 'function') return false;
+  if (typeof zamekStop === 'function' && zamekStop()) return false;
+  if (typeof nahledStop === 'function' && nahledStop('dotažení zákazníka do hlavičky')) return false;
+  const z = zakaznikPodleNazvu(ZAK_DB.seznam, nazev);
+  if (!z) return false;
+  const v = zakaznikDoZakazkyPrazdne(z, ZAK);
+  if (!v.vyplneno && !v.kolize.length) { ZAK_DB.hlaska = ''; render(); return false; }
+  aktivniVarianta(ZAK).upraveno = new Date().toISOString();
+  ZAK_DB.hlaska = (v.vyplneno
+    ? 'Z karty zákazníka „' + (z.nazev || '?') + '" se doplnilo ' + v.vyplneno + ' údajů.'
+    : 'Z karty zákazníka „' + (z.nazev || '?') + '" nebylo co doplnit.')
+    + (v.kolize.length
+      ? ' Beze změny zůstalo, co už bylo vyplněné jinak: ' + v.kolize.join(', ')
+        + '. Celou hlavičku přepíše tlačítko „Vybrat z databáze zákazníků".'
+      : '');
+  render();
+  return true;
 }
-function naseptavacZakKontaktyNabidni(kde, kontakty) {
-  kde = kde || 'ock';
-  const el = document.getElementById('naseptBoxZak_' + kde);
-  if (!el) return;
-  ZAK_DB.kontaktVolba = kde;
-  el.innerHTML = `<div class="nasept-radek" style="font-weight:600;cursor:default">Kontaktní osoba — vyberte:
-      <span style="float:right;font-weight:400;cursor:pointer" onmousedown="naseptavacZakKontaktVyber('','${kde}')" title="nechat prázdné">✕</span></div>`
-    + kontakty.map(k => `<div class="nasept-radek" onmousedown="naseptavacZakKontaktVyber('${escJs(k.jmeno)}','${kde}')">${esc(k.jmeno)}
-      <span style="color:#64748b;font-size:.85em"> · ${esc(k.role)}${k.tel ? ' · ' + esc(k.tel) : ''}${k.email ? ' · ' + esc(k.email) : ''}</span></div>`).join('');
-  el.style.display = '';
-  /* Box žije mimo render — po překreslení hlavičky by zmizel, proto se
-   * znovu nasadí o krok později (render už proběhl v set()). */
-  setTimeout(() => {
-    const el2 = document.getElementById('naseptBoxZak_' + (kde || 'ock'));
-    if (el2 && el2 !== el) { el2.innerHTML = el.innerHTML; el2.style.display = ''; }
-  }, 0);
-}
-function naseptavacZakKontaktVyber(jmeno, kde) {
-  ZAK_DB.kontaktVolba = '';
-  if (jmeno) set('ZAK.kontakt', jmeno);
-  naseptavacZakSchovej(kde || 'ock');
+
+/* Kartotéka se stahuje, teprve když je otevřená záložka Zákazníci — jenže
+ * našeptávač v hlavičce ji potřebuje dřív. Tohle je proto tichý dotaz při
+ * prvním kliknutí do pole Zákazník: nic nekreslí, jen naplní seznam. */
+function zakazniciNactiProNaseptavac() {
+  if (typeof zakazniciMozne !== 'function' || !zakazniciMozne()) return;
+  if (ZAK_DB.nacteno || ZAK_DB.nacita) return;
+  zakazniciNacti();
 }
 
 function zakazniciMozne() {

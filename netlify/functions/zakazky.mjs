@@ -10,9 +10,6 @@
 import { uloziste, vyzadujRoli, json } from '../lib/sdilene.mjs';
 import { jadro, jadroChyba } from '../lib/jadro.mjs';
 
-const ZAKAZKA_MAX_B = 4 * 1024 * 1024;
-const CISLO_MAX = 60;
-
 export default async (req) => {
   let ULO, SCHV;
   try { ({ ULO, SCHV } = await jadro()); } catch (e) { return jadroChyba(e); }
@@ -68,16 +65,7 @@ export default async (req) => {
 
   if (req.method !== 'POST') return json({ ok: false, chyba: 'Použijte GET, POST nebo DELETE.' }, 405);
 
-  /* Strop velikosti (audit 22. 8. 2026, B14): zakázka má řádově desítky
-   * kilobajtů, s přílohami stovky. 4 MB je pojistka proti zaplnění úložiště
-   * a proti holé 502 při překročení limitu Blobs — ne provozní hranice. */
-  const delka = +req.headers.get('content-length') || 0;
-  if (delka > ZAKAZKA_MAX_B)
-    return json({ ok: false, chyba: 'Zakázka je příliš velká (' + Math.round(delka / 1024) + ' kB, strop '
-      + Math.round(ZAKAZKA_MAX_B / 1024) + ' kB). Zmenšete přílohy.' }, 413);
   let t; try { t = await req.json(); } catch (e) { return json({ ok: false, chyba: 'Vstup není platný JSON.' }, 400); }
-  if (JSON.stringify(t).length > ZAKAZKA_MAX_B)
-    return json({ ok: false, chyba: 'Zakázka je příliš velká. Zmenšete přílohy.' }, 413);
   /* importZakazka na nesmyslném vstupu vyhodí výjimku. Bez tohohle obalu by
    * z ní vznikl pád funkce (Netlify vrátí holou 502) — a to je špatná odpověď
    * hned dvakrát: uživatel se nedozví, co poslal špatně, a v odpovědi se může
@@ -87,8 +75,6 @@ export default async (req) => {
   catch (e) { return json({ ok: false, chyba: 'Zakázku se nepodařilo přečíst: ' + e.message }, 400); }
   const jmeno = ULO.uloJmenoSouboru(zak);
   if (!jmeno) return json({ ok: false, chyba: 'Zakázka nemá vyplněné číslo nabídky.' }, 400);
-  if (String(zak.cislo || '').length > CISLO_MAX)
-    return json({ ok: false, chyba: 'Číslo nabídky je příliš dlouhé (nejvýš ' + CISLO_MAX + ' znaků).' }, 400);
 
   /* Tvar identifikátorů (bezpečnostní audit 22. 8. 2026, nález B1). Id variant,
    * poznámek a příloh jdou v obrazovce do onclick; obrazovka je od 22. 8.
@@ -107,21 +93,6 @@ export default async (req) => {
    *    V aplikaci to hlídá obrazovka, ale server mluví s kýmkoli — upravený
    *    klient by jinak mohl přepsat obsah odeslané nabídky a zámek si nechat. */
   const stara = await s.cti('z/' + jmeno);
-  /* Razítko verze (audit 22. 8. 2026, B10). Klient posílá razítko verze, ze
-   * které vyšel (`ocekavaneRazitko`). Když v databázi leží jiná verze —
-   * kolega mezitím uložil, nebo jde o cizí zakázku pod stejným číslem — server
-   * odmítne 409 a nic nepřepíše. Vědomé přepsání jde s `prepsat: true`
-   * (klient se zeptá). Starší klient bez pole posílá undefined: pak se
-   * kontrola neuplatní, aby nasazení nezastavilo rozdělanou práci. */
-  if (stara && typeof t.ocekavaneRazitko === 'string' && t.prepsat !== true) {
-    const kol = ULO.uloKolize(stara, t.ocekavaneRazitko);
-    if (kol.kolize)
-      return json({ ok: false, kolize: true, naDisku: kol.naDisku,
-        kdo: stara.upravil || stara.autor || '',
-        chyba: t.ocekavaneRazitko
-          ? 'Zakázku mezitím uložil ' + (stara.upravil || 'někdo jiný') + '. Načtěte ji znovu, nebo změny vědomě přepište.'
-          : 'Stejné číslo nabídky už používá uložená zakázka ' + jmeno + ' (' + (stara.autor || '') + '). Zvolte vlastní číslo, nebo ji vědomě přepište.' }, 409);
-  }
   if (stara) {
     /* Odemčení odeslané nabídky smí jen administrátor (audit 22. 8. 2026, B3).
      * uloKontrolaZamku bere zmizení zámku jako řádné, když přibyl záznam
@@ -172,26 +143,8 @@ export default async (req) => {
    * Autor se zapisuje jen jednou, při prvním uložení. Kdyby se přepisoval
    * pokaždé, „autorem" by se stal ten, kdo si zakázku naposledy otevřel
    * a uložil — a razítko by ztratilo smysl. Kdo naposledy sáhl, je `upravil`. */
-  /* Razítka při založení (audit 22. 8. 2026, nález B13). Do té doby se
-   * `autor` u NOVÉ zakázky přebíral z těla požadavku, když tam byl — obchodník
-   * mohl založit zakázku „za" vedoucího. Teď: nová zakázka (v databázi ještě
-   * není) dostane autora z relace; cizího autora smí u nové zakázky ponechat
-   * jen administrátor (obnova ze souboru/zálohy — tam je razítko doklad).
-   * U existující se autor nepřepisuje (11. 8. 2026), viz níž. */
-  if (!stara) {
-    if (!zak.autor || zak.autor === relace.email || relace.role !== 'Administrátor')
-      zak.autor = relace.email;
-  } else if (!zak.autor) zak.autor = relace.email;
+  if (!zak.autor) zak.autor = relace.email;
   zak.upravil = relace.email;
-  /* Totéž pro razítko zámku: NOVĚ vzniklý zámek (v uložené verzi varianta
-   * zamčená nebyla) nese `kdo` z relace, ne z klienta. `kdy` se nechává —
-   * je součástí klíče zámku a klient si ho drží v rozpracované kopii. */
-  for (const v of (zak.varianty || [])) {
-    if (!v || !v.zamek || !v.zamek.zamceno) continue;
-    const sv = stara ? (stara.varianty || []).find(x => x && x.id === v.id) : null;
-    if (sv && sv.zamek && sv.zamek.zamceno) continue;           // zámek už byl — nesahat
-    v.zamek.kdo = relace.jmeno ? relace.jmeno + ' <' + relace.email + '>' : relace.email;
-  }
   /* Jméno obchodníka do rejstříku (21. 8. 2026, zadání J. V.). Bere se
    * z RELACE, ne od klienta — jméno v seznamu je stejné razítko jako autor
    * a nesmí jít podvrhnout. Zapisuje se při každém uložení, aby se

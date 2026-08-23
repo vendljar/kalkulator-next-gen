@@ -763,13 +763,19 @@ function zakazkaHlavicka(ock) {
    * zadání J. V.). `kde` je 'ock' nebo 'proj' — obě hlavičky jsou v dokumentu
    * zároveň, takže box potřebuje vlastní id. Zapisuje se přes onchange jako
    * dosud; našeptávač jen nabízí, nic nevyplňuje sám. */
+  /* Pole Zákazník s našeptávačem. Od 22. 8. 2026 se výběrem (i ručním
+   * dopsáním celého jména) dotáhnou z kartotéky i prázdné údaje hlavičky —
+   * kontaktní osoba, IČO, adresa, zástupci. Vyplněné pole se nepřepisuje,
+   * na to je tlačítko „Vybrat z databáze zákazníků". Kartotéka se při
+   * prvním kliknutí do pole doptá serveru, jinak by našeptávač nabízel jen
+   * jména z dřívějších zakázek a dotahovat by neměl z čeho. */
   const zakaznikRow = (kde) => `<div class="row"><label>Zákazník</label>
     <span class="nasept-wrap" style="flex:1"><input type="text" style="width:100%" autocomplete="off"
       value="${esc(get('ZAK.objednatel'))}"
-      title="Při psaní se nabízejí zákazníci z databáze a z dřívějších zakázek. Celou hlavičku i s IČO přenese tlačítko „Vybrat z databáze zákazníků“."
-      onchange="set('ZAK.objednatel', this.value)"
+      title="Při psaní se nabízejí zákazníci z databáze a z dřívějších zakázek. Výběrem se doplní prázdná pole hlavičky (kontaktní osoba, IČO, adresa); už vyplněné údaje zůstanou a celou hlavičku přepíše tlačítko „Vybrat z databáze zákazníků“."
+      onchange="set('ZAK.objednatel', this.value); if(typeof zakaznikDotahniPodleNazvu==='function')zakaznikDotahniPodleNazvu(this.value)"
       oninput="naseptavacZakKresli('${kde}', this.value)"
-      onfocus="naseptavacZakKresli('${kde}', this.value)"
+      onfocus="if(typeof zakazniciNactiProNaseptavac==='function')zakazniciNactiProNaseptavac(); naseptavacZakKresli('${kde}', this.value)"
       onblur="naseptavacZakSchovej('${kde}')"
       onkeydown="if(event.key==='Escape')naseptavacZakSchovej('${kde}')">
     <span class="nasept-box" id="naseptBoxZak_${kde}" style="display:none"></span></span></div>`;
@@ -827,13 +833,16 @@ function zakazkaHlavicka(ock) {
         ? ' — databáze zákazníků žije na serveru; v souboru spuštěném z disku není dostupná'
         : ' — nejdřív se přihlaste k databázi (Nastavení → Databáze)');
     const zakVyp = zakMozne ? '' : ' disabled';
-    const zakDbBtns = (kde === 'ock')
-      ? `<button class="mini noprint"${zakVyp} onclick="prepniTab('zakaznici')"
+    /* Tlačítka jsou od 22. 8. 2026 v OBOU hlavičkách (zadání J. V.: „tato
+     * funkce má být přístupná i v kalkulaci proj"). Hlavička je jedna
+     * společná — obě kalkulace čtou a píší tatáž pole ZAK.* —, takže
+     * omezení na OCK nedávalo smysl: kdo zakládal zakázku z Kalkulace PROJ,
+     * musel kvůli zákazníkovi přepnout do OCK. */
+    const zakDbBtns = `<button class="mini noprint"${zakVyp} onclick="prepniTab('zakaznici')"
            title="vybrat zákazníka z databáze — přenese hlavičku i kontakty do krycích listů${esc(zakDuvod)}"
            >Vybrat z databáze zákazníků</button>
          <button class="mini noprint"${zakVyp} onclick="zakaznikZeZakazkyUI()"
-           title="uložit údaje z téhle hlavičky jako novou kartu zákazníka${esc(zakDuvod)}">Uložit jako zákazníka</button>`
-      : '';
+           title="uložit údaje z téhle hlavičky jako novou kartu zákazníka${esc(zakDuvod)}">Uložit jako zákazníka</button>`;
     const aresBtns = (typeof aresRadek === 'function') ? aresRadek(kde, false, zakDbBtns) : zakDbBtns;
     return `<div class="row"><label>IČO zákazníka${pill}</label>
       <input type="text" value="${esc(h)}" placeholder="8 číslic"

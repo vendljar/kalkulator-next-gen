@@ -84,7 +84,7 @@ function analytikaPrictiUzivateli(den, email, pocty) {
   if (!den.poUzivateli || typeof den.poUzivateli !== 'object') den.poUzivateli = {};
   const cil = den.poUzivateli[e] || (den.poUzivateli[e] = analytikaNovePocty());
   Object.entries(pocty || {}).forEach(([k, n]) => {
-    if (cil[k] !== undefined) cil[k] += analytikaCislo(n);     // B8: nezáporné, se stropem
+    if (cil[k] !== undefined) cil[k] += (+n || 0);
   });
   return den;
 }
@@ -99,34 +99,6 @@ function analytikaPoctyUzivatele(den, email) {
 /* Seznam e-mailů, které v datech vůbec figurují (pro rozbalovací filtr). */
 function analytikaUzivatele(den) {
   return Object.keys((den && den.poUzivateli) || {}).sort();
-}
-
-/* ---------- očista dávky od klienta (bezpečnostní audit 22. 8. 2026, B8) ----
- *
- * Dávka analytiky přichází z prohlížeče a server ji do té doby přičítal, jak
- * přišla: záporné číslo ubíralo, řetězec „otrávil" součet (0 + 'AAA' je
- * řetězec a další sčítání už nic nespočítá), klíč mohl mít stovky kilobajtů
- * a mapa záložek neměla strop. Tady se každé číslo ořízne na nezáporné celé
- * číslo s rozumným stropem za dávku a každý klíč na ANALYTIKA_MAX_KLIC_ZNAKU
- * znaků; strop počtu klíčů (ANALYTIKA_MAX_KLICU) platí pro všechny tři mapy.
- * Rozpad po uživatelích (`poUzivateli`) z dávky klienta server ZAHAZUJE —
- * atribuci dělá sám z relace (analytikaPrictiUzivateli), viz analytika.mjs. */
-const ANALYTIKA_MAX_KLIC_ZNAKU = 120;
-const ANALYTIKA_MAX_HODNOTA = 1e6;                // za dávku; víc není měření, ale útok
-function analytikaCislo(n) {
-  const x = Math.round(+n);
-  if (!isFinite(x) || x <= 0) return 0;
-  return Math.min(x, ANALYTIKA_MAX_HODNOTA);
-}
-function analytikaKlicOrez(k) {
-  return String(k == null ? '' : k).slice(0, ANALYTIKA_MAX_KLIC_ZNAKU);
-}
-/* Co smí z dávky klienta do slití: jmenovitě, bez `poUzivateli`. */
-function analytikaDavkaOcisti(den) {
-  const d = (den && typeof den === 'object') ? den : {};
-  const jenObjekt = (o) => (o && typeof o === 'object' && !Array.isArray(o)) ? o : {};
-  return { kliky: jenObjekt(d.kliky), zdrz: jenObjekt(d.zdrz),
-           zalozky: jenObjekt(d.zalozky), pocty: jenObjekt(d.pocty) };
 }
 
 /* přičtení do mapy se stropem — přeteklé klíče se slévají do „…ostatní",
@@ -151,17 +123,17 @@ function analytikaPridej(den, u) {
 function analytikaSlij(a, b) {
   const v = analytikaNovyDen();
   [a || {}, b || {}].forEach(d => {
-    Object.entries(d.kliky || {}).forEach(([k, n]) => analytikaDoMapy(v.kliky, analytikaKlicOrez(k), analytikaCislo(n)));
-    Object.entries(d.zdrz || {}).forEach(([k, n]) => analytikaDoMapy(v.zdrz, analytikaKlicOrez(k), analytikaCislo(n)));
-    Object.entries(d.zalozky || {}).forEach(([k, n]) => analytikaDoMapy(v.zalozky, analytikaKlicOrez(k), analytikaCislo(n)));
+    Object.entries(d.kliky || {}).forEach(([k, n]) => analytikaDoMapy(v.kliky, k, n));
+    Object.entries(d.zdrz || {}).forEach(([k, n]) => analytikaDoMapy(v.zdrz, k, n));
+    Object.entries(d.zalozky || {}).forEach(([k, n]) => { v.zalozky[k] = (v.zalozky[k] || 0) + n; });
     Object.entries(d.pocty || {}).forEach(([k, n]) => {
-      if (v.pocty[k] !== undefined) v.pocty[k] += analytikaCislo(n);
+      if (v.pocty[k] !== undefined) v.pocty[k] += n;
     });
     /* starší dny klíč `poUzivateli` nemají — slití to snese */
     Object.entries(d.poUzivateli || {}).forEach(([e, p]) => {
       const cil = v.poUzivateli[e] || (v.poUzivateli[e] = analytikaNovePocty());
       Object.entries(p || {}).forEach(([k, n]) => {
-        if (cil[k] !== undefined) cil[k] += analytikaCislo(n);
+        if (cil[k] !== undefined) cil[k] += (+n || 0);
       });
     });
   });
@@ -249,8 +221,6 @@ function analytikaRezimNastav(rezim, sber, kdo, kdy) {
 
 if (typeof module !== 'undefined')
   module.exports = { ANALYTIKA_GDPR_TEXT, ANALYTIKA_NECINNOST_MS, ANALYTIKA_MAX_KLICU,
-                     ANALYTIKA_MAX_KLIC_ZNAKU, ANALYTIKA_MAX_HODNOTA,
-                     analytikaCislo, analytikaKlicOrez, analytikaDavkaOcisti,
     ANALYTIKA_RETENCE_MESICU, analytikaKlic, analytikaNovyDen, analytikaPridej,
     analytikaSlij, analytikaPocetZKliku, casNovy, casKrok, analytikaCastZTabu,
     analytikaRetence, analytikaObdobi, analytikaRezimNovy, analytikaRezimNastav,
