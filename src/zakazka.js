@@ -63,6 +63,8 @@ function novaZakazka() {
      * Příznak vypíná hlídání a porovnávání části OCK; data OCK zůstávají,
      * jen se nikam nepočítají. */
     jenProj: false,
+    jenOck: false,
+    obeStrany: false,
     // IČO objednatele (zadání z 30. 7. 2026). V hlavičce stojí hned za kontaktní
     // osobou. Je to jediný údaj, kterým se objednatel dá jednoznačně určit –
     // název firmy se píše pokaždé jinak („Stavby s.r.o." / „STAVBY s. r. o.").
@@ -251,6 +253,61 @@ function projCisloNabidky(zak) {
   return hlavickaVyplneno(p && p.cislo) ? p.cislo : ((zak && zak.cislo) || '');
 }
 
+/* ---------- která strana zakázky nese cenovku (23. 8. 2026) ----------
+ *
+ * Zadání J. V.: „Pokud je na projektu spočítaná CN PROJ, neměla by se už
+ * počítat CN OCK — buňky v druhé kalkulaci ať zešednou a číslo nabídky ať se
+ * drží to kalkulované, aby bylo zřejmé, kde cenovka vznikla."
+ *
+ * Rozhoduje ČÍSLO NABÍDKY, ne cena: cena se dá spočítat i omylem (výchozí
+ * šachta má nenulový základ, i když do ní nikdo nesáhl), kdežto vyplněné
+ * číslo je vědomý krok obchodníka — od něj se odvíjí i jméno souboru
+ * a záznam v rejstříku. Řada OVP patří projekci, ostatní čísla realizaci.
+ *
+ * Zámek je MĚKKÝ a vratný: `obeStrany` ho zruší (tlačítko „Počítat i …“
+ * v šedé liště), `jenProj` / `jenOck` ho naopak přikážou natvrdo. Když mají
+ * číslo obě strany, nezamyká se nic — zakázka na obojí je legitimní. */
+function stranaCislo(zak, strana) {
+  if (strana === 'proj') {
+    const p = projHlavicka(zak) || {};
+    const vlastni = String(p.cislo || '');
+    if (hlavickaVyplneno(vlastni)) return vlastni;
+    const spolecne = String((zak && zak.cislo) || '');
+    return /ovp/i.test(spolecne) ? spolecne : '';
+  }
+  const c = String((zak && zak.cislo) || '');
+  return /ovp/i.test(c) ? '' : c;
+}
+
+function stranaMaCislo(zak, strana) {
+  return hlavickaVyplneno(stranaCislo(zak, strana));
+}
+
+/* '' = nezamyká se nic (obě strany, nebo ani jedna). */
+function zakazkaVedouciStrana(zak) {
+  if (zak && zak.jenProj) return 'proj';
+  if (zak && zak.jenOck) return 'ock';
+  if (zak && zak.obeStrany) return '';
+  const o = stranaMaCislo(zak, 'ock'), p = stranaMaCislo(zak, 'proj');
+  if (o && !p) return 'ock';
+  if (p && !o) return 'proj';
+  return '';
+}
+
+function stranaZamcena(zak, strana) {
+  const v = zakazkaVedouciStrana(zak);
+  return !!v && v !== strana;
+}
+
+/* Číslo, kterým se zakázka prokazuje navenek: z počítané strany. */
+function zakazkaCisloVedouci(zak) {
+  const v = zakazkaVedouciStrana(zak);
+  if (v) return stranaCislo(zak, v);
+  return stranaMaCislo(zak, 'ock') ? stranaCislo(zak, 'ock') : stranaCislo(zak, 'proj');
+}
+
+const STRANA_NAZEV = { ock: 'Kalkulaci OCK', proj: 'Kalkulaci PROJ' };
+
 /* ---------- číslo nabídky s číslem varianty (19. 8. 2026) ----------
  * Zadání J. V.: „Pokud má kalkulace variantu (např. varianta 2), pak se
  * v čísle nabídky označí jako tečka a číslo varianty (2026 - OPR - CN -
@@ -415,6 +472,8 @@ function importZakazka(obj) {
     // dosadit ji sem by jen zopakovalo chybu, kterou tato změna odstraňuje.
     if (obj.adresaObjednatele == null) obj.adresaObjednatele = '';
     if (obj.jenProj == null) obj.jenProj = false;   // migrace: příznak jen projekce (2. 8. 2026)
+    if (obj.jenOck == null) obj.jenOck = false;     // migrace: příznak jen realizace (23. 8. 2026)
+    if (obj.obeStrany == null) obj.obeStrany = false;   // vědomé počítání obou stran naráz
     // migrace: IČO objednatele přibylo 30. 7. 2026. Zůstává PRÁZDNÉ – v žádném
     // dosavadním poli není nic, z čeho by se dalo odvodit, a odhadnuté IČO je
     // horší než žádné (skončilo by ve smlouvě).
@@ -835,6 +894,8 @@ if (typeof module !== 'undefined')
                      ZAK_HLAVICKA_POLE, zajistiProjHlavicku, projHlavicka,
                      projHlavickaEfektivni, projHlavickaZOck, projCisloNabidky,
                      cisloSVariantou, zakazkaDuplicita,
+                     stranaCislo, stranaMaCislo, zakazkaVedouciStrana, stranaZamcena,
+                     zakazkaCisloVedouci, STRANA_NAZEV,
                      ZAK_CISLO_PREDLOHA, hlavickaVyplneno,
                      icoNormalizuj, icoVyplneno, icoPlatne,
                      zakazkaKopirujHlavicku, zakazkaHlavickaKolize, zakazkaHlavickyShodne,

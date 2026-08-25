@@ -447,8 +447,13 @@ function renderProj() {
     <tr class="tot"><td colspan="4">CENA NABÍDKY PROJ</td><td><b>${fmt0(projCena)}</b></td></tr>` : ''}
   </table>`;
 
+  /* Tělo kalkulace je od 23. 8. 2026 ve vlastním kontejneru `proj-telo`:
+   * když cenovka vzniká v OCK, celé zešedne a nejde do něj psát, zatímco
+   * hlavička a šedá lišta nad ním zůstávají živé (viz zamekStranyLista). */
   document.getElementById('page-proj').innerHTML =
     zakazkaHlavicka(false) +
+    (typeof zamekStranyLista === 'function' ? zamekStranyLista('proj') : '') +
+    `<div id="proj-telo">` +
     `<div class="card"><div class="body">${hlava}
        <div class="row noprint" style="margin-top:6px"><label>Zakázka je jen projekce (bez OCK)
          <span class="note">(vypne hlídání a porovnávání části OCK)</span></label>
@@ -473,5 +478,7 @@ function renderProj() {
     (typeof slevaKarta === 'function' ? slevaKarta('proj') : '') +
     (typeof nabidkaProjKarta === 'function' ? card('Cenová nabídka (PROJ)', nabidkaProjKarta(), false, 'proj-nabidka') : '') +
     `<div class="note">Globální přirážku PROJ zadáte přímo v hlavičce nahoře (stejně jako v Kalkulaci OCK); platí pro všechny sekce a je proto započtená i u sekcí, které se u téhle stavby nepoužijí. Slevu a obchodní zaokrouhlení najdete v sekcích pod výpočtem. Sazby (projektant/statik/zaměření), fixní ceny subdodávek a sazbu dopravy nastavíte v záložce <b>Ceník nákladů PROJ</b> — ty platí pro všechny zakázky.
-     Doprava se počítá bez přirážky; sleva/přirážka sekce se počítá z ceny včetně dopravy (dle předlohy).</div>`;
+     Doprava se počítá bez přirážky; sleva/přirážka sekce se počítá z ceny včetně dopravy (dle předlohy).</div>`
+    + `</div>`;
+  if (typeof zamekStranyNasad === 'function') zamekStranyNasad('proj');
 }

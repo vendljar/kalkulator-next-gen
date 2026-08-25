@@ -67,15 +67,23 @@ const NABIDKA_PROJ_DEF = [
     popis: 'Cena ZAMĚŘENÍ zamýšleného prostoru pro umístění výtahu, stavebně technický průzkum a zpracování výstupů.' },
 
   /* ---------------- STUDIE PROVEDITELNOSTI (ST) ---------------- */
-  { typ: 'rozsah', nadpis: 'STUDIE PROVEDITELNOSTI (ST)', sekce: ['zamereni', 'studie', 'projednani'], uvod: [
+  /* ST se řídí STUDIÍ, ne zaměřením (23. 8. 2026, hlášeno J. V.: „některé části
+   * nabídky se nám propisují, i když v kalkulaci nejsou vybrané").
+   * Zaměření je ve VZORu dvakrát — jednou samostatně jako ZA a podruhé jako
+   * část 1 studie. Blok byl proto vázaný i na `zamereni`, takže zákazníkovi,
+   * který si objednal jen zaměření, se vytiskla celá hlavička STUDIE
+   * PROVEDITELNOSTI i s cenou za „část 1" — tedy nabídka na něco, co si
+   * nekoupil, a tatáž částka podruhé. Řádky části 1 proto nesou 'studie':
+   * jsou obsahem studie, ne samostatnou položkou. */
+  { typ: 'rozsah', nadpis: 'STUDIE PROVEDITELNOSTI (ST)', sekce: ['studie', 'projednani'], uvod: [
     { cz: 'Studie proveditelnosti – podoba úprav domu, umístění výtahové šachty a technologie výtahu – se zpracovává jako prvotní dokumentace, do které se zapracují veškeré požadavky investora v kombinaci s realizovatelností záměru a legislativních požadavků. Tím se docílí podkladu, který poté slouží nejen pro projednání záměru na stavebním úřadě, ale je možné ho dále rozpracovat do dalších stupňů projektových dokumentací.' },
   ], radky: [
-    ['Studie proveditelnosti – část 1', '', 'zamereni'],
-    ['Stavebně technický průzkum a zaměření', 'zajištění původní dokumentace stavby v potřebném rozsahu od investora nebo z archivu stavebního úřadu', 'zamereni'],
-    ['Stavebně technický průzkum a zaměření', 'detailní zaměření 3D skenerem dotčených částí objektu', 'zamereni'],
-    ['Stavebně technický průzkum a zaměření', 'zpracování výstupu ze zaměření', 'zamereni'],
-    ['Stavebně technický průzkum a zaměření', 'vizuální prohlídka objektu stavebně technických návazností', 'zamereni'],
-    ['Stavebně technický průzkum a zaměření', 'pořízení detailní fotodokumentace', 'zamereni'],
+    ['Studie proveditelnosti – část 1', '', 'studie'],
+    ['Stavebně technický průzkum a zaměření', 'zajištění původní dokumentace stavby v potřebném rozsahu od investora nebo z archivu stavebního úřadu', 'studie'],
+    ['Stavebně technický průzkum a zaměření', 'detailní zaměření 3D skenerem dotčených částí objektu', 'studie'],
+    ['Stavebně technický průzkum a zaměření', 'zpracování výstupu ze zaměření', 'studie'],
+    ['Stavebně technický průzkum a zaměření', 'vizuální prohlídka objektu stavebně technických návazností', 'studie'],
+    ['Stavebně technický průzkum a zaměření', 'pořízení detailní fotodokumentace', 'studie'],
     ['Studie proveditelnosti – část 2', '', 'studie'],
     ['Návrh grafické studie', 'PŮVODNÍ STAV – grafický výstup ze zaměření, průmět reality z průzkumu s původní dokumentací stavby', 'studie'],
     ['Návrh grafické studie', 'ROZSAH BOURÁNÍ – grafické naznačení možného rozsahu bourání s ohledem na statiku objektu', 'studie'],
@@ -86,8 +94,12 @@ const NABIDKA_PROJ_DEF = [
     ['Projednání STUDIE PROVEDITELNOSTI', 'příprava podkladů pro jednání s odborem památkové péče HMP', 'projednani'],
     ['Projednání STUDIE PROVEDITELNOSTI', 'zajištění závazného stanoviska od odboru památkové péče HMP k předložené STUDII PROVEDITELNOSTI', 'projednani'],
   ] },
+  /* Částka je ze zaměření (část 1 studie JE zaměření), ale řádek se ukáže jen
+   * tehdy, když se studie nabízí — jinak by v nabídce stálo totéž číslo
+   * dvakrát pod dvěma nadpisy. `jenSe` je právě na tenhle rozdíl: „počítej
+   * z téhle sekce, ale ukazuj se podle jiné". */
   { typ: 'cena', nadpis: 'CENA ZA STUDII PROVEDITELNOSTI – část 1', sekce: 'zamereni',
-    popis: 'ZAMĚŘENÍ a zpracování výstupů' },
+    jenSe: ['studie', 'projednani'], popis: 'ZAMĚŘENÍ a zpracování výstupů' },
   { typ: 'cena', nadpis: 'CENA ZA STUDII PROVEDITELNOSTI – část 2', sekce: 'studie',
     popis: 'Vypracování STUDIE PROVEDITELNOSTI' },
   { typ: 'cena', nadpis: 'CENA ZA STUDII PROVEDITELNOSTI – část 3', sekce: 'projednani',
@@ -358,7 +370,13 @@ function nabidkaProjData(zak, varianta, lang) {
    * příslušnost k sekci (b.sekce, 3. prvek řádku) — co ji nemá, je obecné
    * a zůstává vždy. */
   const vRozsahu = k => !!cenaSekce(k);
+  /* `jenSe` = podmínka VIDITELNOSTI nezávislá na tom, odkud se bere částka.
+   * Bez ní by šlo říct jen „ukaž se, když má tahle sekce cenu", což u částí
+   * jedné dokumentace nestačí (viz CENA ZA STUDII – část 1). */
+  const jenSeSplneno = b => !b.jenSe
+    || (Array.isArray(b.jenSe) ? b.jenSe : [b.jenSe]).some(vRozsahu);
   const blokVRozsahu = b => {
+    if (!jenSeSplneno(b)) return false;
     if (!b.sekce) return true;
     return (Array.isArray(b.sekce) ? b.sekce : [b.sekce]).some(vRozsahu);
   };

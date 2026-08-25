@@ -1006,7 +1006,53 @@ function renderVerzePill() {
 
 function renderKalkHlavicka() {
   const el = document.getElementById('kalk-hlavicka');
-  if (el) el.innerHTML = zakazkaHlavicka(true);   // v OCK i s přepínačem režimu výpočtu
+  if (el) el.innerHTML = zakazkaHlavicka(true) + zamekStranyLista('ock');
+  zamekStranyNasad('ock');
+}
+
+/* ---------- zámek nepočítané strany zakázky (23. 8. 2026) ----------
+ *
+ * Zadání J. V.: „Pokud je na projektu spočítaná CN PROJ, neměla by se už
+ * počítat CN OCK — buňky v druhé kalkulaci ať zešednou a číslo nabídky ať se
+ * drží to kalkulované." Pravidlo samotné (podle čeho se pozná počítaná
+ * strana) bydlí v `zakazka.js`; tady se jen kreslí lišta a přepíná třída.
+ *
+ * Hlavička ani lišta se nezamykají — číslo nabídky se musí dát vyplnit
+ * i v zamčené straně, jinak by z ní nešlo vystoupit. */
+function zamekStranyLista(strana) {
+  if (typeof stranaZamcena !== 'function' || !stranaZamcena(ZAK, strana)) return '';
+  const vedouci = zakazkaVedouciStrana(ZAK);
+  const cislo = zakazkaCisloVedouci(ZAK);
+  const kam = vedouci === 'proj' ? 'proj' : 'kalk';
+  return `<div class="zamek-lista noprint">
+    <span><b>Cenovka téhle zakázky vzniká v ${esc(STRANA_NAZEV[vedouci] || '')}</b>${cislo ? ' (' + esc(cislo) + ')' : ''}.
+      Tahle kalkulace je proto jen ke čtení, ať je zřejmé, odkud cena pochází.</span>
+    <button class="mini" onclick="prepniTab('${kam}')">Přejít do počítané kalkulace</button>
+    <button class="mini" onclick="zamekStranyPovol()">Počítat i tuhle stranu</button>
+  </div>`;
+}
+
+/* Přepnutí třídy na kontejnerech s výpočtem. Hlavička (#kalk-hlavicka)
+ * a lišta v ní zůstávají mimo — viz komentář výš. */
+function zamekStranyNasad(strana) {
+  if (typeof stranaZamcena !== 'function') return;
+  const zamceno = stranaZamcena(ZAK, strana);
+  const ids = strana === 'ock'
+    ? ['kalk-souhrn', 'inputs', 'outputs', 'kalk-nabidka']
+    : ['proj-telo'];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('strana-zamcena', zamceno);
+  });
+}
+
+/* „Počítat i tuhle stranu" — vědomé rozhodnutí, že zakázka nese obojí. */
+function zamekStranyPovol() {
+  if (typeof zamekStop === 'function' && zamekStop()) return;
+  if (typeof nahledStop === 'function' && nahledStop('odemčení druhé kalkulace')) return;
+  set('ZAK.obeStrany', true);
+  set('ZAK.jenProj', false);
+  set('ZAK.jenOck', false);
 }
 function renderNabidkaOck() {
   const el = document.getElementById('kalk-nabidka');
@@ -1387,7 +1433,12 @@ function dokPatickaHtml(prekl) {
  * jméno, funkce a kontakt PŘIHLÁŠENÉHO zpracovatele + sken podpisu s razítkem,
  * je-li nahraný v profilu (Můj profil). Ve Wordu totéž dělají symboly ZPRAC_*
  * a {{ZPRAC_PODPIS}} v šabloně — tohle je táž informace pro online tisk.
- * Bez přihlášení se blok skládá z firemních údajů (offline build). */
+ * Bez přihlášení se blok skládá z firemních údajů (offline build).
+ *
+ * Velikost skenu se 23. 8. 2026 zdvojnásobila (84 → 168 px na výšku, 250 → 500
+ * na šířku) na pokyn J. V.: razítko s podpisem bylo v tisku tak malé, že se
+ * text v razítku nedal přečíst. Jsou to STROPY, ne rozměry — sken s jiným
+ * poměrem stran se pořád vejde a nedeformuje se. */
 function dokPodpisHtml(prekl) {
   const P = typeof prekl === 'function' ? prekl : (t => t);
   const f = (typeof firmaAktualni === 'function') ? firmaAktualni() : null;
@@ -1398,7 +1449,7 @@ function dokPodpisHtml(prekl) {
   return `<div class="podpis-blok" style="margin:28px 0 10px;page-break-inside:avoid">
     <div style="font-size:11px;color:#6b7686;text-transform:uppercase;letter-spacing:.03em">${esc(P('Vypracoval'))}</div>
     ${obr.ZPRAC_PODPIS ? `<img src="${esc(obr.ZPRAC_PODPIS)}" alt=""
-      style="max-height:84px;max-width:250px;display:block;margin:6px 0 2px">` : ''}
+      style="max-height:168px;max-width:500px;display:block;margin:10px 0 4px">` : ''}
     <div style="font-weight:700">${esc(p.ZPRAC_JMENO || '')}</div>
     ${kontakt ? `<div style="font-size:12px;color:#42506b">${esc(kontakt)}</div>` : ''}
   </div>`;

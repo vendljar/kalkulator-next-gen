@@ -254,6 +254,59 @@ const KRYCI_PROJ_SEKCE = [
     { id: 'atypOsvit', label: 'Studie osvitu / denní osvětlení', verze: ['techdata'], typ: 'textarea' },
     { id: 'atypJiny', label: 'Jiný atyp nebo riziko', verze: ['techdata'], typ: 'textarea' },
   ] },
+  /* ---------- pole, která plní SMLOUVU a PLNOU MOC (23. 8. 2026) ----------
+   *
+   * Zadání J. V.: „máme všechny chybějící (žluté) položky v plné moci
+   * a smlouvě o dílo postiženy v krycím listu zakázky PROJ?" Neměli —
+   * dokumenty je proto nechávaly viditelné jako {{SYMBOL}} k ručnímu dopsání
+   * ve Wordu. Každé pole tady nese klíč `sod`, kterým se po vyplnění zaveze
+   * příslušný symbol; co zůstane prázdné, se ve Wordu dál ukáže jako {{…}}
+   * (prázdné plnění by symbol beze stopy smazalo a nikdo by si nevšiml, že
+   * ve smlouvě chybí částka).
+   *
+   * Splátky se ZÁMĚRNĚ nedopočítávají ze sekcí kalkulace: milníky smlouvy
+   * (podání na DOSS, na úřad, pravomocné povolení) se nekryjí se sekcemi
+   * jedna ku jedné a rozpočítat je za obchodníka by znamenalo vymyslet
+   * částku. U každého pole proto stojí, jaká sekce mu obsahem odpovídá. */
+  { sekce: 'Smlouva o dílo — splátky (SoD projekce)', pole: [
+    { id: 'sodpPlatba1', label: 'Platba 1 — po podpisu smlouvy', verze: ['bo'], sod: 'SODP_PLATBA1_KC',
+      src: 'záloha dle platebních podmínek' },
+    { id: 'sodpPlatba2', label: 'Platba 2 — při předání 2D výstupů ze zaměření', verze: ['bo'], sod: 'SODP_PLATBA2_KC',
+      src: c => 'odpovídá sekci ZAMĚŘENÍ: ' + kryciProjSekceKc(c, 'zamereni') },
+    { id: 'sodpPlatba3', label: 'Platba 3 — DPZ v rozsahu pro podání na dotčené orgány', verze: ['bo'], sod: 'SODP_PLATBA3_KC',
+      src: c => 'část sekce DPZ (celá: ' + kryciProjSekceKc(c, 'dpz') + ')' },
+    { id: 'sodpPlatba4', label: 'Platba 4 — DPZ v rozsahu pro podání na stavební úřad', verze: ['bo'], sod: 'SODP_PLATBA4_KC',
+      src: c => 'zbytek sekce DPZ (celá: ' + kryciProjSekceKc(c, 'dpz') + ')' },
+    { id: 'sodpPlatba5', label: 'Platba 5 — po vydání pravomocného povolení záměru', verze: ['bo'], sod: 'SODP_PLATBA5_KC',
+      src: c => 'odpovídá sekci INŽENÝRSKÁ ČINNOST: ' + kryciProjSekceKc(c, 'ic') },
+    { id: 'sodpPlatba6', label: 'Platba 6 — po předání kompletní DPS', verze: ['bo'], sod: 'SODP_PLATBA6_KC',
+      src: c => 'odpovídá sekci DPS: ' + kryciProjSekceKc(c, 'dps') },
+    { id: 'sodpPlatba7', label: 'Platba 7 — po dokončení ekonomické zadávací části', verze: ['bo'], sod: 'SODP_PLATBA7_KC',
+      src: c => 'odpovídá sekci EZC: ' + kryciProjSekceKc(c, 'ezc') },
+    { id: 'sodpPlatba8', label: 'Platba 8 — po doporučení dodavatele realizace', verze: ['bo'], sod: 'SODP_PLATBA8_KC',
+      src: 'závěrečná část výběrového řízení' },
+    { id: 'sodpSpravniPoplatky', label: 'Správní poplatky stavebnímu úřadu (nad rámec ceny)', verze: ['bo'], sod: 'SODP_SPRAVNI_POPLATKY' },
+    { id: 'sodpPokutaDenni', label: 'Pokuta za prodlení zákazníka se součinností (za den)', verze: ['bo'], sod: 'SODP_POKUTA_DENNI' },
+  ] },
+  { sekce: 'Smlouva o dílo — podpisy a kopie (SoD projekce)', pole: [
+    { id: 'objPodpisFirma', label: 'Zákazník — firma v podpisové doložce', verze: ['bo'], sod: 'OBJEDNATEL_PODPIS_FIRMA',
+      prefill: c => c.hl.objednatel, src: 'z hlavičky Kalkulace PROJ' },
+    { id: 'objPodpis2Jmeno', label: 'Druhý podepisující za zákazníka — jméno', verze: ['bo'], sod: 'OBJEDNATEL_PODPIS2_JMENO',
+      src: 'u SVJ podepisují zpravidla dva členové výboru' },
+    { id: 'objPodpis2Funkce', label: '— funkce druhého podepisujícího', verze: ['bo'], sod: 'OBJEDNATEL_PODPIS2_FUNKCE' },
+    { id: 'objKopie1', label: 'Faktury v kopii na (1)', verze: ['bo'], sod: 'OBJEDNATEL_KONTAKT_KOPIE1',
+      src: 'členové výboru SVJ' },
+    { id: 'objKopie2', label: 'Faktury v kopii na (2)', verze: ['bo'], sod: 'OBJEDNATEL_KONTAKT_KOPIE2' },
+  ] },
+  { sekce: 'Plná moc (zmocnitel)', pole: [
+    { id: 'pmZmocnitel', label: 'Zmocnitel — jméno a příjmení', verze: ['bo'], sod: 'PM_ZMOCNITEL',
+      prefill: c => (c.zak.zastupci || {}).smluvniJmeno || '', src: 've věcech smluvních (hlavička zakázky)' },
+    { id: 'pmZmocnitelNarozen', label: '— datum narození', verze: ['bo'], sod: 'PM_ZMOCNITEL_NAROZEN',
+      src: 'plná moc pro stavební úřad ho vyžaduje' },
+    { id: 'pmZmocnitelBytem', label: '— trvale bytem', verze: ['bo'], sod: 'PM_ZMOCNITEL_BYTEM' },
+    { id: 'pmJednajici', label: 'Za zhotovitele jedná (zmocněnec)', verze: ['bo'], sod: 'PM_JEDNAJICI',
+      prefill: c => firmaHodnota(c.firma, 'zastupceSmluvni'), src: 'Nastavení → Firma (ve věcech smluvních)' },
+  ] },
   /* KL-7: patička z předlohy — 20. 8. 2026 stejná úprava jako v OCK. */
   { sekce: 'Ostatní', pole: [
     { id: 'podpisDne', label: 'Dne', verze: ['bo', 'techdata'], typ: 'date',
@@ -316,6 +369,27 @@ function kryciProjMigraceSazbaDph(h) {
   return h;
 }
 
+/* Cena sekce kalkulace do nápovědy u splátek — jen informace „kolik ta část
+ * stojí", ne předvyplněná částka (viz komentář u splátek). */
+function kryciProjSekceKc(c, key) {
+  const s = c && c.sekce && c.sekce[key];
+  return s && s.celkem ? kryciProjKc(s.celkem) : 'neoceněno';
+}
+
+/* Symboly smluv a plné moci z krycího listu PROJ. Plní se JEN neprázdné
+ * hodnoty — prázdný symbol musí ve Wordu zůstat vidět jako {{…}}. */
+function kryciProjSodSymboly(zak, varianta, placeholders) {
+  const P = placeholders || {};
+  const c = kryciProjCtx(zak, varianta);
+  const kl = (varianta && varianta.data && varianta.data.kryciProj) || { hodnoty: {} };
+  KRYCI_PROJ_SEKCE.forEach(s => s.pole.forEach(p => {
+    if (!p.sod) return;
+    const v = String(kryciProjHodnota(p, kl, c) || '').trim();
+    if (v) P[p.sod] = v;
+  }));
+  return P;
+}
+
 /* hodnota pole: ruční přepis (data.kryciProj.hodnoty) > prefill > '' */
 function kryciProjHodnota(pole, kl, c) {
   /* `dphBind` je totéž provázání jako `bind`, jen mířené do sazby DPH
@@ -376,4 +450,5 @@ function kryciProjPodminkoveSymboly(zak, varianta, P) {
 
 if (typeof module !== 'undefined')
   module.exports = { KRYCI_PROJ_SEKCE, KRYCI_POKUTY_SAZBY, KRYCI_PROJ_NABIDKA_SEKCE, KRYCI_PROJ_CINNOSTI, kryciProjCtx,
-    kryciProjHodnota, kryciProjData, kryciProjMigraceSazbaDph, kryciProjPodminkoveSymboly };
+    kryciProjHodnota, kryciProjData, kryciProjMigraceSazbaDph, kryciProjPodminkoveSymboly,
+    kryciProjSekceKc, kryciProjSodSymboly };

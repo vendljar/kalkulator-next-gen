@@ -303,6 +303,16 @@
   .kalk-lista a.dv-kotva:hover { background:var(--acc); color:#fff; border-color:var(--acc); }
   /* cíl kotvy nesmí zajet pod přilepenou lištu */
   #page-kalk [id], #page-proj [id] { scroll-margin-top:64px; }
+  /* Zamčená (nepočítaná) strana zakázky — 23. 8. 2026. Buňky zešednou
+     a nejdou do nich klikat; hlavička a lišta zůstávají živé, protože
+     číslo nabídky a přepnutí zámku se musí dát vyplnit i tady. */
+  .strana-zamcena { opacity:.62; filter:grayscale(.55); }
+  .strana-zamcena input, .strana-zamcena select, .strana-zamcena textarea,
+  .strana-zamcena button { pointer-events:none; background:#f1f3f7; }
+  .zamek-lista { display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    background:#fff7ed; border:1px solid #fdba74; border-left:4px solid #ea580c;
+    border-radius:6px; padding:8px 12px; margin:6px 0 10px; font-size:13px; }
+  .zamek-lista b { color:#9a3412; }
   /* Lišta detailu je o řádek vyšší (přepínač a tisk stojí nad kotvami),
      proto má cíl kotvy větší odstup než v kalkulacích. */
   #page-detail [id], #page-detailproj [id] { scroll-margin-top:96px; }

@@ -522,5 +522,57 @@ test('úložiště se hlásí jako souborové', zk.StorageAdapter.typ === 'file'
   test('bez rejstříku se nic nehlásí', zk.zakazkaDuplicita(z, null, '').cislo === '');
 }
 
+/* ---------- která strana zakázky nese cenovku (23. 8. 2026) ----------
+ * Zadání J. V.: „Pokud je na projektu spočítaná CN PROJ, neměla by se už
+ * počítat CN OCK — buňky v druhé kalkulaci ať zešednou a číslo nabídky ať se
+ * drží to kalkulované." Rozhoduje vyplněné číslo nabídky, ne cena: výchozí
+ * šachta má nenulový základ, i když do ní nikdo nesáhl. */
+{
+  const z = zk.novaZakazka();
+  test('čerstvá zakázka nezamyká nic (číslo nemá ani jedna strana)',
+    zk.zakazkaVedouciStrana(z) === '' && !zk.stranaZamcena(z, 'ock') && !zk.stranaZamcena(z, 'proj'));
+
+  z.cislo = '2026 - OPR - CN - 0501';
+  test('vyplněné číslo OCK zamkne projekci',
+    zk.zakazkaVedouciStrana(z) === 'ock' && zk.stranaZamcena(z, 'proj') && !zk.stranaZamcena(z, 'ock'));
+  test('vedoucí číslo je to z počítané strany',
+    zk.zakazkaCisloVedouci(z) === '2026 - OPR - CN - 0501');
+
+  const p = zk.novaZakazka();
+  p.cislo = zk.ZAK_CISLO_PREDLOHA;                 // předloha = nevyplněno
+  zk.zajistiProjHlavicku(p);
+  p.projHlavicka.cislo = '2026-OVP-CN-0357';
+  test('vyplněné číslo PROJ zamkne realizaci',
+    zk.zakazkaVedouciStrana(p) === 'proj' && zk.stranaZamcena(p, 'ock') && !zk.stranaZamcena(p, 'proj'));
+  test('vedoucí číslo je číslo projekce', zk.zakazkaCisloVedouci(p) === '2026-OVP-CN-0357');
+
+  /* Řada OVP ve SPOLEČNÉM čísle taky znamená projekci — od 19. 8. 2026 je
+   * hlavička jedna a obchodník píše číslo tam. */
+  const p2 = zk.novaZakazka();
+  p2.cislo = '2026-OVP-CN-0400';
+  test('řada OVP ve společném čísle znamená projekci',
+    zk.zakazkaVedouciStrana(p2) === 'proj' && zk.stranaZamcena(p2, 'ock'));
+
+  const ob = zk.novaZakazka();
+  ob.cislo = '2026 - OPR - CN - 0502';
+  zk.zajistiProjHlavicku(ob);
+  ob.projHlavicka.cislo = '2026-OVP-CN-0502';
+  test('zakázka s oběma čísly nezamyká nic (obojí je legitimní)',
+    zk.zakazkaVedouciStrana(ob) === '' && !zk.stranaZamcena(ob, 'ock') && !zk.stranaZamcena(ob, 'proj'));
+
+  const od = zk.novaZakazka();
+  od.cislo = '2026 - OPR - CN - 0503';
+  od.obeStrany = true;
+  test('„počítat i druhou stranu" zámek zruší', !zk.stranaZamcena(od, 'proj'));
+
+  const jp = zk.novaZakazka();
+  jp.jenProj = true;
+  test('příznak „jen projekce" zamkne OCK i bez čísel',
+    zk.zakazkaVedouciStrana(jp) === 'proj' && zk.stranaZamcena(jp, 'ock'));
+  const jo = zk.novaZakazka();
+  jo.jenOck = true;
+  test('příznak „jen realizace" zamkne PROJ', zk.stranaZamcena(jo, 'proj'));
+}
+
 console.log('\n' + ok + ' prošlo, ' + fail + ' selhalo');
 process.exit(fail ? 1 : 0);

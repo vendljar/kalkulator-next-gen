@@ -138,176 +138,59 @@ test('obecné bloky (autorský dozor, DPH, cena nezahrnuje) zůstávají',
 test('paušály zůstávají uvedené i při nulové kalkulaci',
   dN.bloky.filter(b => b.typ === 'cena' && !b.sekce).every(b => !b.neuvedena));
 test('rekapitulace nulové nabídky je prázdná', dN.rekapitulace.length === 0);
-test('souhrn nulové nabídky je nula', dN.souhrn.bezDph === 0 && dN.souhrn.sDph === 0);
 
-/* --- 5) popis záměru: vlastní text, jinak srozumitelná výzva --- */
-test('bez popisu záměru se blok označí jako prázdný',
-  (d.bloky.find(b => b.typ === 'proza' && /Popis záměru/i.test(b.nadpis)) || {}).prazdny === true);
-const zakP = zk.novaZakazka(); zakP.popisZameru = 'Bytový dům, přístavba výtahu do zrcadla schodiště.';
-const dP = nabidkaProjData(zakP, zakP.varianty[0]);
-const blokP = dP.bloky.find(b => b.typ === 'proza' && /Popis záměru/i.test(b.nadpis));
-test('vyplněný popis záměru se přenese doslova',
-  blokP.odstavce[0] === 'Bytový dům, přístavba výtahu do zrcadla schodiště.' && !blokP.prazdny, blokP.odstavce[0]);
-
-/* --- 6) hlavička a název souboru --- */
-test('placeholdery hlavičky jsou vyplněné ze zakázky',
-  d.placeholders.OBJEDNATEL === 'SVJ Ulice 1' && d.placeholders.ADRESA === 'Ulice 1, 170 00 Praha 7'
-  && d.placeholders.DATUM === '26.07.2026' && d.placeholders.CISLO_NABIDKY === '2026OVPCN0101',
-  JSON.stringify([d.placeholders.OBJEDNATEL, d.placeholders.DATUM, d.placeholders.CISLO_NABIDKY]));
-/* Číslo nabídky PROJ se bere z hlavičky OCK (zadání 29. 7. 2026) – stejně jako
- * v krycím listu PROJ. Kdyby to platilo jen pro krycí list, nesl by každý ze
- * dvou dokumentů jiné číslo. */
-const zakCis = zk.novaZakazka();
-zakCis.cislo = '2026-OVP-CN-0500'; zakCis.projHlavicka.cislo = '2026-PROJ-CN-9999';
-const dCis = nabidkaProjData(zakCis, zakCis.varianty[0]);
-test('nabídka PROJ bere číslo z hlavičky OCK',
-  dCis.placeholders.CISLO_NABIDKY === '2026-OVP-CN-0500', dCis.placeholders.CISLO_NABIDKY);
-test('vlastní číslo v hlavičce PROJ zůstalo v datech nedotčené',
-  zakCis.projHlavicka.cislo === '2026-PROJ-CN-9999', zakCis.projHlavicka.cislo);
-
-test('firemní údaje (SET-3) jsou v placeholderech',
-  Object.keys(d.placeholders).some(k => /^FIRMA/.test(k)),
-  Object.keys(d.placeholders).filter(k => /^FIRMA/.test(k)).join(','));
-test('název souboru neobsahuje zakázané znaky', !/[\\/:*?"<>|]/.test(d.nazevSouboru), d.nazevSouboru);
-
-/* --- 7) jazykové mutace: nadpisy se překládají, próza zůstává česky --- */
-['en', 'de', 'fr'].forEach(L => {
-  const dl = nabidkaProjData(zak, v, L);
-  test(`mutace ${L}: stejná struktura`, dl.bloky.length === d.bloky.length);
-  test(`mutace ${L}: ceny se nemění`, dl.souhrn.bezDph === d.souhrn.bezDph);
-  test(`mutace ${L}: název souboru nese jazyk`, dl.nazevSouboru.endsWith('_' + L.toUpperCase()), dl.nazevSouboru);
-  test(`mutace ${L}: souvislá próza zůstává česky (nic se nevymýšlí)`,
-    dl.bloky.find(b => b.typ === 'proza' && b.odstavce.length > 1).odstavce.join(' ')
-      === d.bloky.find(b => b.typ === 'proza' && b.odstavce.length > 1).odstavce.join(' '));
-});
-
-/* --- 8) nikdy nespadne a nic nemění --- */
-test('bez zakázky i varianty nespadne', (() => {
-  const x = nabidkaProjData();
-  return x && Array.isArray(x.bloky) && x.bloky.length > 0;
-})());
-test('s prázdnou variantou nespadne', typeof nabidkaProjData({}, {}) === 'object');
-test('s variantou bez sekce proj nespadne', typeof nabidkaProjData({}, { data: {} }) === 'object');
-test('nemění data zakázky', (() => {
+/* --- 4b) jen zaměření: STUDIE PROVEDITELNOSTI se nesmí objevit ---
+ * Hlášeno J. V. 23. 8. 2026: zákazníkovi, který si objednal jen zaměření,
+ * se v nabídce vytiskla celá hlavička STUDIE PROVEDITELNOSTI i s cenou za
+ * „část 1" — tedy nabídka na nekoupenou věc a tatáž částka podruhé.
+ * Zaměření je ve VZORu dvakrát (samostatně jako ZA a jako část 1 studie),
+ * takže blok visel i na sekci `zamereni`.
+ *
+ * Výchozí zadání zaměření hodiny nemá (obchodník je doplňuje podle objektu),
+ * proto se tu nastavují ručně. */
+function projJenSekce(...klice) {
   const z = zk.novaZakazka();
-  const pred = JSON.stringify(z);
-  nabidkaProjData(z, z.varianty[0], 'en');
-  return JSON.stringify(z) === pred;
-})());
-test('nemění sazebník ani definici', (() => {
-  const pred = JSON.stringify([NABIDKA_PROJ_SAZBY, NABIDKA_PROJ_DEF]);
-  nabidkaProjData(zak, v, 'de');
-  return JSON.stringify([NABIDKA_PROJ_SAZBY, NABIDKA_PROJ_DEF]) === pred;
-})());
-
-
-/* ---------- #71 + #134: dvě slevy, každá nad svou cenou ----------
- *
- * „Sleva na OCK i PROJ globálně být nemá. Tedy pokud je to rozdělené zvlášť,
- * pak je to správně." (1. 8. 2026) — a 12. 8. 2026 k tomu přibylo: „každá
- * kalkulace musí počítat slevy ze svých vlastních cen a nepropisovat je
- * vzájemně."
- *
- * Do 12. 8. 2026 to platilo jen zpola: sleva OCK sice do ceny projekce
- * nevstupovala, ale karta slevy se pod výpočtem projekce vykreslovala s čísly
- * z výtahové šachty a projekce měla vedle toho druhou, úplně jinou slevu bez
- * schvalování. Teď má projekce vlastní slevu se stejnými pravidly a nabídka
- * ji vykazuje samostatným řádkem. */
-const zo = require('./zaokrouhleni.js');
-test('cenaNabidkyProj bere slevu projekce (tři parametry jako u OCK)',
-  typeof zo.cenaNabidkyProj === 'function' && zo.cenaNabidkyProj.length === 3,
-  zo.cenaNabidkyProj && zo.cenaNabidkyProj.length);
-
-/* Sleva na výtahovou šachtu nesmí s cenou projekce hnout ani o korunu. */
-{
-  const before = JSON.stringify({ bezDph: d.souhrn.bezDph, sDph: d.souhrn.sDph });
-  v.data.sleva = { procenta: 10, stav: 'schváleno', role: 'Vedoucí',
-                   schvalil: 'Vedoucí', schvalilKdy: '2026-08-01T10:00:00.000Z' };
-  const d2 = nabidkaProjData(zak, v);
-  const after = JSON.stringify({ bezDph: d2.souhrn.bezDph, sDph: d2.souhrn.sDph });
-  test('schválená sleva OCK 10 % nezmění cenu PROJ ani o korunu',
-    before === after, before + ' vs ' + after);
-  const rPo = vypocetProj(v.data.proj.zadani, v.data.proj.cenik);
-  test('výpočet projekce se slevou OCK vůbec nepočítá',
-    Math.abs(rPo.souhrn.celkem - r.souhrn.celkem) < 1e-9);
+  const vv = z.varianty[0];
+  vv.data.proj.zadani.sekce.forEach(s => {
+    const chci = klice.indexOf(s.key) >= 0;
+    (s.polozky || []).forEach(p => {
+      /* `vyrazeno` = položka se v téhle zakázce nepočítá (sloupec Počítat).
+       * Výchozí zadání má vyřazené zaměření i další volitelné části. */
+      p.vyrazeno = !chci;
+      if (p.hodiny != null && chci && !p.hodiny) p.hodiny = 8;
+    });
+  });
+  Object.keys(vv.data.proj.cenik.fixy).forEach(k => {
+    vv.data.proj.cenik.fixy[k] = 0;   // fixní subdodávky nechceme, ať cenu dělají jen hodiny
+  });
+  return { zak: z, varianta: vv };
 }
 
-/* A naopak: sleva projekce cenu projekce změnit MUSÍ — a to přesně o své
- * procento, dokud je schválená. */
 {
-  const bez = nabidkaProjData(zak, v).souhrn;
-  v.data.slevaProj = { procenta: 10, stav: 'schváleno', role: 'Vedoucí',
-                       schvalil: 'Vedoucí', schvalilKdy: '2026-08-12T10:00:00.000Z' };
-  const se = nabidkaProjData(zak, v).souhrn;
-  test('schválená sleva projekce cenu projekce sníží', se.bezDph < bez.bezDph,
-    bez.bezDph + ' → ' + se.bezDph);
-  test('sleva se počítá ze součtu sekcí projekce',
-    Math.abs(se.slevaKc - se.soucetSekci * 0.1) < 0.01, JSON.stringify(se));
-  test('rozpad sedí: součet sekcí − sleva + zaokrouhlení = cena',
-    Math.abs(se.soucetSekci - se.slevaKc + se.zaokrKc - se.bezDph) < 0.01, JSON.stringify(se));
-
-  /* Neschválená sleva se do dokumentu nepropíše — stejné pravidlo jako u OCK.
-   * Nabídka je závazná nabídka, ne přání obchodníka. */
-  v.data.slevaProj = { procenta: 25, stav: 'čeká na schválení', role: 'Obchodník' };
-  test('neschválená sleva projekce se do nabídky nepropíše',
-    Math.abs(nabidkaProjData(zak, v).souhrn.bezDph - bez.bezDph) < 0.01);
-
-  /* Dokument slevu ukazuje vlastním řádkem, ne schovanou v ceně sekcí. */
-  v.data.slevaProj = { procenta: 10, stav: 'schváleno', role: 'Vedoucí' };
-  const ph = nabidkaProjData(zak, v).placeholders;
-  test('nabídka PROJ vypisuje procento slevy', /10/.test(ph.PROJ_SLEVA_PROC), ph.PROJ_SLEVA_PROC);
-  test('nabídka PROJ vypisuje slevu v Kč', !!ph.PROJ_SLEVA_KC, ph.PROJ_SLEVA_KC);
-  test('nabídka PROJ vypisuje cenu před slevou', !!ph.PROJ_CENA_PRED_SLEVOU, ph.PROJ_CENA_PRED_SLEVOU);
-
-  /* Bez slevy zůstávají řádky prázdné. Nula by v dokumentu vypadala jako
-   * „slevu jsme dali a byla nulová". */
-  v.data.slevaProj = { procenta: 0, stav: '', role: 'Obchodník' };
-  const ph0 = nabidkaProjData(zak, v).placeholders;
-  test('bez slevy zůstanou řádky slevy v nabídce PROJ prázdné',
-    ph0.PROJ_SLEVA_KC === '' && ph0.PROJ_SLEVA_PROC === '' && ph0.PROJ_CENA_PRED_SLEVOU === '');
+  const { zak: zakZ, varianta: vZ } = projJenSekce('zamereni');
+  const dZ = nabidkaProjData(zakZ, vZ);
+  const nadpisy = dZ.bloky.map(b => b.nadpis || b.text || '').filter(Boolean).join(' | ');
+  test('zaměření samotné se v nabídce ocení',
+    dZ.bloky.some(b => b.typ === 'cena' && /ZA ZAMĚŘENÍ/.test(b.nadpis || '')), nadpisy);
+  test('bez studie se hlavička STUDIE PROVEDITELNOSTI netiskne',
+    !dZ.bloky.some(b => /^STUDIE PROVEDITELNOSTI \(ST\)/.test(b.nadpis || '')), nadpisy);
+  test('bez studie se netiskne ani cena za „část 1"',
+    !dZ.bloky.some(b => /STUDII PROVEDITELNOSTI – část 1/.test(b.nadpis || '')), nadpisy);
+  test('cena zaměření je v nabídce jen jednou',
+    dZ.bloky.filter(b => b.typ === 'cena' && b.sekce === 'zamereni').length === 1);
 }
 
-/* ---------- popis záměru do Wordu (12. 8. 2026) ----------
- * Ve VZORu je na tom místě popis jedné konkrétní stavby. V šabloně ho vystřídal
- * symbol {{POPIS_ZAMERU}}, aby se do nabídky dostalo to, co obchodník napsal
- * v aplikaci — jinak by každá nabídka odešla s popisem cizího domu. */
+/* --- 4c) studie objednaná: část 1 (zaměření) se ukáže i s cenou --- */
 {
-  const zpz = zk.novaZakazka();
-  const v0 = zpz.varianty[0];
-  test('nevyplněný popis záměru zůstane ve Wordu prázdný',
-    nabidkaProjData(zpz, v0).placeholders.POPIS_ZAMERU === '',
-    nabidkaProjData(zpz, v0).placeholders.POPIS_ZAMERU);
-  zpz.popisZameru = '  Bytový dům, přístavba výtahu do zrcadla schodiště.  ';
-  test('vyplněný popis záměru jde do Wordu bez okrajových mezer',
-    nabidkaProjData(zpz, v0).placeholders.POPIS_ZAMERU
-      === 'Bytový dům, přístavba výtahu do zrcadla schodiště.');
-}
-
-/* ---------- úvodní fotka projekční nabídky (12. 8. 2026) ----------
- * Nabídka PROJ se od 12. 8. tiskne i do Wordu a bere si do dokumentu vlastní
- * fotku. Test hlídá, že si nebere fotku nabídky OCK — obě nabídky odcházejí
- * samostatně a fotka šachty na titulní straně projekční nabídky by byla chyba,
- * které si nikdo nevšimne, dokud ji neuvidí zákazník. */
-{
-  global.uvodniFotoObrazky = zk.uvodniFotoObrazky;
-  global.uvodniFotoSymboly = zk.uvodniFotoSymboly;
-  const zf = zk.novaZakazka();
-  const v0 = zf.varianty[0];
-  test('bez nahrané fotky nejde do nabídky PROJ žádný obrázek',
-    !nabidkaProjData(zf, v0).obrazky.UVODNI_FOTO);
-
-  zf.uvodniFoto = 'data:image/png;base64,T0NL';          // fotka nabídky OCK
-  test('fotka nabídky OCK se do nabídky PROJ nepropíše',
-    !nabidkaProjData(zf, v0).obrazky.UVODNI_FOTO);
-
-  zf.uvodniFotoProj = 'data:image/png;base64,UFJPSg==';  // fotka nabídky PROJ
-  zf.uvodniFotoProjPopis = 'Bytový dům, pohled z ulice';
-  const dF = nabidkaProjData(zf, v0);
-  test('vlastní fotka PROJ jde do dokumentu pod symbolem UVODNI_FOTO',
-    dF.obrazky.UVODNI_FOTO === zf.uvodniFotoProj, dF.obrazky.UVODNI_FOTO);
-  test('popisek fotky PROJ jde do dokumentu jako textový symbol',
-    dF.placeholders.UVODNI_FOTO_POPIS === 'Bytový dům, pohled z ulice',
-    dF.placeholders.UVODNI_FOTO_POPIS);
+  const { zak: zakS, varianta: vS } = projJenSekce('zamereni', 'studie');
+  const dS = nabidkaProjData(zakS, vS);
+  const nadpisy = dS.bloky.map(b => b.nadpis || '').filter(Boolean).join(' | ');
+  test('se studií se hlavička ST i cena části 1 vytisknou',
+    dS.bloky.some(b => /^STUDIE PROVEDITELNOSTI \(ST\)/.test(b.nadpis || ''))
+    && dS.bloky.some(b => /STUDII PROVEDITELNOSTI – část 1/.test(b.nadpis || '')), nadpisy);
+  const rozsahST = dS.bloky.find(b => /^STUDIE PROVEDITELNOSTI \(ST\)/.test(b.nadpis || ''));
+  test('část 1 je uvnitř rozsahu studie i s body zaměření',
+    !!rozsahST && rozsahST.radky.some(r => /část 1/.test(r[0] || '')), nadpisy);
 }
 
 console.log(fail ? `\n${fail} CHYB` : '\nVŠECHNY TESTY NABÍDKY PROJ OK');

@@ -105,6 +105,10 @@ function sodProjData(zak, varianta, lang) {
     + (varianta && varianta.zakaznik ? '_' + varianta.zakaznik : '')
     + (L !== 'cz' ? '_' + L.toUpperCase() : ''));
   sodObjednatelDoplna(d.placeholders, zak);
+  /* Splátky, správní poplatky, druhý podepisující a kopie faktur žijí
+   * v krycím listu PROJ (23. 8. 2026) — smlouva si je odtud vyzvedne.
+   * Co obchodník nevyplnil, zůstane ve Wordu vidět jako {{…}}. */
+  if (typeof kryciProjSodSymboly === 'function') kryciProjSodSymboly(zak, varianta, d.placeholders);
   return Object.assign({}, d,
     { nazevSouboru: nazev.replace(/[\\/:*?"<>|]+/g, '-') });
 }
@@ -121,6 +125,10 @@ function plnaMocData(zak, varianta) {
   placeholders.ADRESA = h.adresa || zak.adresa || '';
   placeholders.NAZEV_AKCE = h.nazevAkce || zak.nazevAkce || '';
   placeholders.DATUM = (typeof datumCz === 'function') ? datumCz(zak.datum) : (zak.datum || '');
+  /* Údaje zmocnitele (jméno, datum narození, bytem) a jednající osoba
+   * zhotovitele se od 23. 8. 2026 berou z krycího listu PROJ — do té doby
+   * je musel obchodník dopisovat ve Wordu do žlutě podbarvených míst. */
+  if (typeof kryciProjSodSymboly === 'function') kryciProjSodSymboly(zak, varianta, placeholders);
   const cislo = ((h.cislo || zak.cislo || '') + '').replace(/\s+/g, '');
   return { placeholders, jazyk: 'cz', obrazky: {},
     nazevSouboru: ('PLNA_MOC' + (cislo ? '_' + cislo : ''))

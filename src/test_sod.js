@@ -119,8 +119,43 @@ test('plná moc nese firemní údaje ({{FIRMA_*}})',
   'FIRMA_NAZEV' in pm.placeholders && 'FIRMA_SIDLO' in pm.placeholders && 'FIRMA_ICO' in pm.placeholders);
 test('plná moc nese adresu stavby z hlavičky PROJ', pm.placeholders.ADRESA === 'Zkušební 9, Praha');
 test('plná moc má vlastní jméno souboru', pm.nazevSouboru.indexOf('PLNA_MOC') === 0, pm.nazevSouboru);
-test('symboly PM_* (zmocnitel) se neplní — doplní se ručně',
-  !('PM_ZMOCNITEL' in pm.placeholders));
+test('prázdné pole plné moci se neplní — ve Wordu zůstane {{…}} k dopsání',
+  !('PM_ZMOCNITEL_NAROZEN' in pm.placeholders));
+
+/* Od 23. 8. 2026 mají zmocnitel i jednající osoba pole v krycím listu PROJ
+ * (zadání J. V.: „máme všechny žluté položky plné moci a smlouvy postiženy
+ * v krycím listu?"). Vyplněné se do dokumentu propíšou, prázdné zůstanou
+ * viditelné jako {{…}} — prázdné plnění by symbol beze stopy smazalo. */
+{
+  const zakPM = novaZakazka();
+  zakPM.adresa = 'Pod Kavalírkou 38, Praha 5';
+  const vPM = zakPM.varianty[0];
+  vPM.data.kryciProj = { hodnoty: {
+    pmZmocnitel: 'Jan Novák', pmZmocnitelNarozen: '1. 1. 1970',
+    pmZmocnitelBytem: 'Pod Kavalírkou 38, Praha 5', pmJednajici: 'Ing. Jiří Skovajsa, jednatel',
+  } };
+  const pm2 = plnaMocData(zakPM, vPM);
+  test('zmocnitel z krycího listu PROJ jde do plné moci',
+    pm2.placeholders.PM_ZMOCNITEL === 'Jan Novák'
+    && pm2.placeholders.PM_ZMOCNITEL_NAROZEN === '1. 1. 1970'
+    && pm2.placeholders.PM_ZMOCNITEL_BYTEM === 'Pod Kavalírkou 38, Praha 5',
+    JSON.stringify(pm2.placeholders.PM_ZMOCNITEL));
+  test('jednající osoba zhotovitele jde do plné moci',
+    pm2.placeholders.PM_JEDNAJICI === 'Ing. Jiří Skovajsa, jednatel');
+
+  vPM.data.kryciProj.hodnoty.sodpPlatba1 = '95 880 Kč';
+  vPM.data.kryciProj.hodnoty.sodpSpravniPoplatky = '5 000 Kč';
+  vPM.data.kryciProj.hodnoty.objPodpis2Jmeno = 'Petra Dvořáková';
+  vPM.data.kryciProj.hodnoty.objKopie1 = 'vybor1@svj.cz';
+  const sodP = sodProjData(zakPM, vPM);
+  test('splátky a doplňky z krycího listu jdou do SoD projekce',
+    sodP.placeholders.SODP_PLATBA1_KC === '95 880 Kč'
+    && sodP.placeholders.SODP_SPRAVNI_POPLATKY === '5 000 Kč'
+    && sodP.placeholders.OBJEDNATEL_PODPIS2_JMENO === 'Petra Dvořáková'
+    && sodP.placeholders.OBJEDNATEL_KONTAKT_KOPIE1 === 'vybor1@svj.cz');
+  test('nevyplněná splátka zůstane ve smlouvě vidět jako {{…}}',
+    !('SODP_PLATBA5_KC' in sodP.placeholders));
+}
 /* Když hlavička PROJ adresu nemá, bere se adresa stavby z hlavičky OCK —
  * plná moc se vyřizuje pro OBJEKT, ne pro konkrétní kalkulaci. */
 const zakBez = novaZakazka(); zakBez.adresa = 'Náhradní 1, Brno';
