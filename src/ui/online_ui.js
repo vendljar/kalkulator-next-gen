@@ -212,6 +212,7 @@ function onlinePoPrihlaseni(ja) {
                       onlineNactiSablony(),
                       /* analytika (#27): zjistit, jestli je sběr zapnutý, a nastartovat ho */
                       typeof analytikaPoPrihlaseni === 'function' ? analytikaPoPrihlaseni() : Promise.resolve()])
+    .then(() => onlineObnovPosledni())
     .then(() => { if (jeAdminOnline()) onlineZalohaAuto(); });
 }
 
@@ -226,6 +227,7 @@ function onlineOdhlas() {
     ONLINE_STAV.zobrazeni = null; onlineZobrazeniNasad(null);
     if (typeof NAST !== 'undefined') NAST.nahledRole = '';
     ONLINE_STAV.rejstrik = []; ONLINE_STAV.soubor = ''; ONLINE_STAV.razitko = ''; ONLINE_STAV.posledni = '';
+    onlinePoslednizapamatuj('');   // po odhlášení se nikam nevracíme
     ONLINE_STAV.kdyUlozeno = null;
     ONLINE_STAV.uzivatele = []; ONLINE_STAV.uzivateleNacteno = false; ONLINE_STAV.formHeslo = '';
     /* Náhled cizího uživatele se odhlášením ruší — po přihlášení nikdy
@@ -604,6 +606,7 @@ function onlineUloz(opts) {
   if (opts.prepsat) telo.prepsat = true;
   return onlineApi('/api/zakazky', telo).then(o => {
     ONLINE_STAV.soubor = o.soubor; ONLINE_STAV.razitko = o.razitko || '';
+    onlinePoslednizapamatuj(o.soubor);   // po refreshi se sem vrátíme
     ONLINE_STAV.posledni = JSON.stringify(ZAK);
     ONLINE_STAV.kdyUlozeno = new Date();
     onlineZprava('Uloženo online jako ' + o.soubor + ' (' + new Date().toLocaleTimeString('cs-CZ') + ').');
@@ -634,6 +637,49 @@ function onlineUloz(opts) {
   }).then(v => { ONLINE_STAV.pracuje = false; render(); return v; });
 }
 
+/* ---------- naposledy otevřená zakázka (31. 8. 2026) ----------
+ *
+ * Hlášeno J. V.: „globální přirážka se resetuje i při refreshi stránky."
+ * Přirážka se neresetovala — obnovení stránky prostě začalo NOVOU prázdnou
+ * zakázkou a ta má přirážku z ceníku. Rozdělaná práce zůstala v pořádku
+ * uložená na serveru, jen se k ní nikdo nevrátil.
+ *
+ * Aplikace si proto pamatuje, na které zakázce se naposledy pracovalo, a po
+ * přihlášení ji sama otevře. Ukládá se jen JMÉNO souboru, nic z obsahu —
+ * data zůstávají na serveru. Když zakázka mezitím zmizela nebo úložiště
+ * prohlížeče není k dispozici, nic se neděje a začíná se prázdnou. */
+const ONLINE_POSLEDNI_KLIC = 'kng_posledni_zakazka_v1';
+
+function onlinePoslednizapamatuj(soubor) {
+  try {
+    if (typeof Uloziste === 'undefined' || !Uloziste.kDispozici()) return;
+    if (soubor) Uloziste.zapis(ONLINE_POSLEDNI_KLIC, String(soubor));
+    else Uloziste.smaz(ONLINE_POSLEDNI_KLIC);
+  } catch (e) {}
+}
+
+function onlinePosledniZapamatovana() {
+  try {
+    if (typeof Uloziste === 'undefined' || !Uloziste.kDispozici()) return '';
+    return Uloziste.cti(ONLINE_POSLEDNI_KLIC) || '';
+  } catch (e) { return ''; }
+}
+
+/* Po přihlášení: vrátit se tam, kde uživatel skončil. Otevírá se jen do
+ * PRÁZDNÉ zakázky — kdyby už měl rozdělanou práci (obnovená záloha z historie),
+ * měla by přednost a nikdo o ni nesmí přijít. */
+function onlineObnovPosledni() {
+  const soubor = onlinePosledniZapamatovana();
+  if (!soubor || ONLINE_STAV.soubor) return Promise.resolve(false);
+  const jeVRejstriku = (ONLINE_STAV.rejstrik || []).some(z => z.soubor === soubor);
+  if (!jeVRejstriku) { onlinePoslednizapamatuj(''); return Promise.resolve(false); }
+  if (typeof historieNeulozeno === 'function' && historieNeulozeno()) return Promise.resolve(false);
+  return onlineOtevri(soubor).then(v => {
+    if (v) onlineZprava('Otevřena zakázka, na které jste naposledy pracoval: ' + soubor + '.');
+    return v;
+  }).catch(() => false);
+}
+
 function onlineOtevri(soubor) {
   if (!ONLINE_STAV.ja) return Promise.resolve(false);
   if (typeof historieNeulozeno === 'function' && historieNeulozeno()
@@ -644,6 +690,7 @@ function onlineOtevri(soubor) {
     ZAK = importZakazka(o.zakazka);
     syncVarianta();
     ONLINE_STAV.soubor = soubor;
+    onlinePoslednizapamatuj(soubor);
     ONLINE_STAV.razitko = (typeof uloRazitko === 'function') ? uloRazitko(ZAK) : '';
     ONLINE_STAV.posledni = JSON.stringify(ZAK);
     ONLINE_STAV.kdyUlozeno = null;

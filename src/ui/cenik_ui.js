@@ -132,7 +132,20 @@ function renderCenik() {
      <div class="body">
        ${cenikStariLista()}
        ${cenikVerzeLista()}
-       <div class="note">Globální přirážku a sazbu DPH nastavíš v hlavičce Kalkulace OCK. Tlačítkem
+       <!-- Globální přirážka a sazba DPH v ceníku OCK (31. 8. 2026, zadání J. V.:
+            „vlož globální přirážku do ceníku OCK, stejně jako je tomu v ceníku PROJ,
+            a z ceníků ji natahuj do odpovídajících kalkulací"). Je to TÁŽ hodnota
+            jako v hlavičce kalkulace — jedno úložiště (ceník varianty), dvě místa
+            k zadání, přesně jako u projekce. Zveřejněním se z ní stává výchozí
+            přirážka pro každou NOVOU zakázku. -->
+       <div class="row" style="max-width:420px">
+         ${inp('C.marze', { type: 'pct', l: 'GLOBÁLNÍ PŘIRÁŽKA OCK' })}
+       </div>
+       <div class="note" style="margin-top:0">Táž hodnota jako v hlavičce Kalkulace OCK —
+         změna se projeví na obou místech. <b>Zveřejněním ceníku</b> se z ní stane výchozí
+         přirážka každé <b>nové</b> zakázky; rozpracovaným ani odeslaným nabídkám ji nikdo
+         nepřepíše (přirážka je rozhodnutí k zakázce, viz #177).</div>
+       <div class="note">Sazbu DPH nastavíš v hlavičce Kalkulace OCK. Tlačítkem
          „+ přidat <b>trvalou</b> položku do sekce" založíš položku, která je od té chvíle součástí
          <b>každé nové cenové nabídky</b> (žije mimo zakázku, v katalogu). Položka přidaná přímo v Kalkulaci OCK
          platí jen pro danou zakázku – natrvalo ji uložíš tlačítkem 📌 u řádku. Výchozí zaškrtnutí volitelných

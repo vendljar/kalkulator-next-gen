@@ -110,5 +110,31 @@ const ZAHR = () => ({
     rCr.rada === undefined && cenikRazitkoRada(rCr) === '');
 }
 
+/* ---------- přirážka se natahuje z ceníku (31. 8. 2026) ----------
+ * Zadání J. V.: „vlož globální přirážku do ceníku OCK, stejně jako je tomu
+ * v ceníku PROJ, a z ceníků ji natahuj do odpovídajících kalkulací."
+ * Přirážka je součástí ceníku (`C.marze` / `PC.marze`), takže NOVÁ zakázka ji
+ * dostane ze zveřejněného ceníku — a rozpracované si tu svou nechají
+ * (to hlídá test_cenik_stari.js, protože je to zakázková hodnota). */
+{
+  const zk = require('./zakazka.js');
+  global.DEFAULT_CENIK = CR();
+  global.DEFAULT_CENIK.marze = 0.42;
+  /* Pozor na čísla: hlídač v test_proj_vzhled.js hledá ve zdrojácích zápis
+   * skutečné ceníkové marže (i v komentáři!) a bere ho jako únik ceníku.
+   * Zkušební hodnoty proto schválně vypadají jinak než ta ostrá. */
+  global.DEFAULT_CENIK_PROJ = { marze: 0.55, sazby: {}, fixy: {}, dph: 0.21 };
+  global.DEFAULT_ZADANI_PROJ = { sekce: [] };
+  global.DEFAULT_TECHSPEC = {};
+  const d = zk.novaVariantaData();
+  test('nová zakázka bere přirážku OCK z ceníku', d.cenik.marze === 0.42, d.cenik.marze);
+  test('nová zakázka bere přirážku PROJ z ceníku', d.proj.cenik.marze === 0.55, d.proj.cenik.marze);
+  test('a je to kopie, ne odkaz — změna v zakázce nesahá na ceník', (() => {
+    d.cenik.marze = 0.40;
+    return DEFAULT_CENIK.marze === 0.42;
+  })());
+  test('nová zakázka je tuzemská', d.cenikRada === 'cr');
+}
+
 console.log('\n' + ok + ' OK, ' + fail + ' FAIL');
 process.exit(fail ? 1 : 0);

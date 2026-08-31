@@ -252,6 +252,8 @@ function zakNactiUI() {
  * „vyplnit" a čeká na hlavičku – přesně jak je zadáno. */
 function zakOdpojUlozeni() {
   ONLINE_STAV.soubor = ''; ONLINE_STAV.razitko = ''; ONLINE_STAV.posledni = ''; ONLINE_STAV.kdyUlozeno = null;
+  /* Nová zakázka = od téhle chvíle se po refreshi vracet není kam (31. 8. 2026). */
+  if (typeof onlinePoslednizapamatuj === 'function') onlinePoslednizapamatuj('');
   if (ONLINE_STAV.timer) { clearTimeout(ONLINE_STAV.timer); ONLINE_STAV.timer = null; }
   ULO_STAV.soubor = ''; ULO_STAV.razitko = ''; ULO_STAV.posledni = ''; ULO_STAV.kdyUlozeno = null;
   if (ULO_STAV.timer) { clearTimeout(ULO_STAV.timer); ULO_STAV.timer = null; }
