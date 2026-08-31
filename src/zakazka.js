@@ -19,6 +19,10 @@ function novaVariantaData() {
      * VŽDY tuzemské (rozhodnutí J. V.); na zahraniční se přepíná vědomě
      * v hlavičce a přepnutí se nejdřív zeptá. */
     cenikRada: 'cr',
+    /* Zakázkové hodnoty, které obchodník sám nastavil (31. 8. 2026). Nová
+     * zakázka nemá nastaveno nic — přirážka i sazba DPH se proto berou
+     * z platného ceníku, dokud se jich někdo nedotkne (viz cenik_stari.js). */
+    cenikRucni: {},
     proj: { zadani: JSON.parse(JSON.stringify(DEFAULT_ZADANI_PROJ)),
             cenik: JSON.parse(JSON.stringify(DEFAULT_CENIK_PROJ)) },
     techspec: JSON.parse(JSON.stringify(DEFAULT_TECHSPEC)),
@@ -480,6 +484,11 @@ function importZakazka(obj) {
     /* Zakázky uložené před 31. 8. 2026 řadu ceníku nemají — jsou tuzemské. */
     (obj.varianty || []).forEach(v => {
       if (v && v.data && !v.data.cenikRada) v.data.cenikRada = 'cr';
+      /* Zakázky uložené před 31. 8. 2026 nevědí, co v nich obchodník nastavil
+       * ručně. Berou se proto všechny zakázkové hodnoty jako ruční — přepsat
+       * přirážku ve starší nabídce by bylo horší než ji nechat být (#177). */
+      if (v && v.data && !v.data.cenikRucni && typeof cenikRucniVsechny === 'function')
+        v.data.cenikRucni = cenikRucniVsechny();
     });
     if (obj.obeStrany == null) obj.obeStrany = false;   // vědomé počítání obou stran naráz
     // migrace: IČO objednatele přibylo 30. 7. 2026. Zůstává PRÁZDNÉ – v žádném

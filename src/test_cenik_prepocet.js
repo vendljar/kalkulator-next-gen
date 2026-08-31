@@ -162,8 +162,11 @@ const STARA = () => DEFAULT_CENIK.powertechExt / 1.25;
     }
     /* …ale globální přirážka projekce je od 31. 8. 2026 ZAKÁZKOVÁ hodnota:
      * obchodník ji nastavuje pro konkrétní zakázku (jiná země, jiná dohoda)
-     * a automatika ji nesmí vrátit na ceníkovou. */
+     * a automatika ji nesmí vrátit na ceníkovou. Chráněná je od večera
+     * téhož dne jen tehdy, když ji obchodník opravdu nastavil — v aplikaci
+     * to zaznamená `set()`, tady se to dělá ručně. */
     v1.data.proj.cenik.marze = 0.1;
+    cenikRucniZnac(v1.data, 'PC.marze');
     cenikPrepoctiRozpracovane(zak, DNES(), { dnes: '2026-07-31', verze: 4 });
     test('vlastní přirážka projekce zůstává (PC.marze je zakázková)',
       cenikHodnota(v1.data, 'PC.marze') === 0.1, cenikHodnota(v1.data, 'PC.marze'));

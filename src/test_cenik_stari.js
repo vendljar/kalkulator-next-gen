@@ -75,6 +75,11 @@ function staraVarianta() {
   v.data.cenik.skloBokyNazev = DEFAULT_CENIK.skloBokyNazev + ' – starší text';
   v.data.cenik.spojovaci.nordlock = stara(DEFAULT_CENIK.spojovaci.nordlock, POSUN_NORDLOCK);
   v.data.proj.cenik.marze = stara(DEFAULT_CENIK_PROJ.marze, POSUN_PROJ_MARZE);
+  /* Přirážka projekce ve fixtuře je hodnota, kterou si obchodník NASTAVIL —
+   * v aplikaci ji zapisuje `set()` a ta si zároveň poznamená, že je ruční
+   * (31. 8. 2026). Bez značky by šlo o hodnotu, které se nikdo nedotkl,
+   * a ta se dnes z ceníku správně natahuje. */
+  cenikRucniZnac(v.data, 'PC.marze');
   return { zak, v };
 }
 
@@ -231,6 +236,7 @@ test('vlastní přirážka projekce přepočet přežije',
   const { v: vz } = staraVarianta();
   vz.data.cenik.marze = 0.40;                       // přirážka pro Německo
   vz.data.cenik.dph = 0.21;                         // jiný režim DPH
+  cenikRucniZnac(vz.data, 'C.marze'); cenikRucniZnac(vz.data, 'C.dph');
   const r = cenikPrepocti(vz, DNES(), { dnes: '2026-08-31' });
   test('přirážka 40 % pro Německo přepočet přežije', vz.data.cenik.marze === 0.40, vz.data.cenik.marze);
   test('ručně zvolená sazba DPH přepočet přežije', vz.data.cenik.dph === 0.21, vz.data.cenik.dph);
@@ -241,6 +247,7 @@ test('vlastní přirážka projekce přepočet přežije',
   /* A hlavně: pouhá odlišná přirážka nesmí přepočet vůbec spustit. */
   const zak2 = zajistiZamek(novaZakazka());
   zak2.varianty[0].data.cenik.marze = 0.40;
+  cenikRucniZnac(zak2.varianty[0].data, 'C.marze');
   const rr = cenikPrepoctiRozpracovane(zak2, DNES(), { dnes: '2026-08-31' });
   test('zakázka, která se liší jen přirážkou, se nepřepočítává',
     rr.prepocteno === 0, JSON.stringify(rr.varianty));
@@ -249,8 +256,50 @@ test('vlastní přirážka projekce přepočet přežije',
   /* Na výslovný pokyn (výběr položek) se přepsat dá — to je vědomý krok. */
   const { v: vy } = staraVarianta();
   vy.data.cenik.marze = 0.40;
+  cenikRucniZnac(vy.data, 'C.marze');
   cenikPrepocti(vy, DNES(), { cesty: ['C.marze'], dnes: '2026-08-31' });
   test('na výslovný pokyn se přirážka přepsat dá', vy.data.cenik.marze === DEFAULT_CENIK.marze);
+}
+
+/* ---------- a naopak: čeho se nikdo nedotkl, to se z ceníku natáhne ----------
+ * Hlášeno J. V. 31. 8. 2026: „globální přirážka se maže a z ceníku se
+ * nenačítá, na rozdíl od nákladů, které se načtou." Prázdná zakázka, kterou
+ * aplikace otevře při startu, dostávala z ceníku náklady, ale přirážku ne —
+ * ta byla plošně vyňatá z přepočtu. Vyňatá je nově jen tehdy, když ji
+ * obchodník sám nastavil. */
+{
+  const { v: vn } = staraVarianta();
+  vn.data.cenik.marze = 0.40;          // hodnota z dřívějška, NIKDO ji nenastavil
+  delete vn.data.cenikRucni;
+  const r = cenikPrepocti(vn, DNES(), { dnes: '2026-08-31' });
+  test('nedotčená přirážka se srovná s ceníkem',
+    vn.data.cenik.marze === DEFAULT_CENIK.marze, vn.data.cenik.marze);
+  test('a jde to spolu s cenami, jedním přepočtem', r.zmen >= 4, r.zmen);
+
+  /* Prázdná zakázka po startu: ceník dorazí až s přihlášením. */
+  const zak3 = zajistiZamek(novaZakazka());
+  const d3 = zak3.varianty[0].data;
+  test('nová zakázka nemá nastaveno nic ručně',
+    !!d3.cenikRucni && Object.keys(d3.cenikRucni).length === 0, JSON.stringify(d3.cenikRucni));
+  d3.cenik.marze = 0.30; d3.cenik.montazHodKc = 111;   // stav ze sestavení
+  const rr3 = cenikPrepoctiRozpracovane(zak3, DNES(), { dnes: '2026-08-31', verze: 4 });
+  test('do prázdné zakázky se přirážka z ceníku natáhne',
+    d3.cenik.marze === DEFAULT_CENIK.marze, d3.cenik.marze);
+  test('a náklady s ní (jsou to dvě strany téhož přepočtu)',
+    d3.cenik.montazHodKc === DEFAULT_CENIK.montazHodKc && rr3.prepocteno === 1);
+
+  /* Migrace: u starší zakázky nevíme nic, takže se chrání všechno. */
+  const stara2 = { varianty: [{ id: 'x', data: { cenik: { marze: 0.40 } } }], aktivni: 'x' };
+  const mig = cenikRucniVsechny();
+  test('migrace označí všechny zakázkové hodnoty jako ruční',
+    mig['C.marze'] && mig['C.dph'] && mig['PC.marze'] && mig['PC.dph']);
+  stara2.varianty[0].data.cenikRucni = mig;
+  test('a chráněná hodnota se pak nepřepisuje',
+    cenikChranena(stara2.varianty[0].data, 'C.marze') === true);
+  test('nechráněná (nedotčená) hodnota chráněná není',
+    cenikChranena({ cenikRucni: {} }, 'C.marze') === false);
+  test('cena nikdy chráněná není, ani se značkou',
+    cenikChranena({ cenikRucni: { 'C.montazHodKc': true } }, 'C.montazHodKc') === false);
 }
 test('přepočet se nedotkl zadání – to je to, co uživatel spočítal',
   JSON.stringify(vp.data.ock.zadani) === zadaniPred);

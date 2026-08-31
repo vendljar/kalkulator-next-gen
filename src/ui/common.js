@@ -513,6 +513,14 @@ function set(path, v) {
   const ks = path.split('.'); const last = ks.pop();
   ks.reduce((o, k) => o[k], rootObj())[last] = v;
   aktivniVarianta(ZAK).upraveno = new Date().toISOString();
+  /* Zakázkové hodnoty (globální přirážka, sazba DPH): ruční změna se
+   * poznamená. Poznámka slouží OBĚMA směry — zveřejnění ceníku nepřepíše to,
+   * co obchodník sám nastavil (#177), a naopak do hodnoty, které se nikdo
+   * nedotkl, se ceník natáhnout SMÍ (31. 8. 2026, „přirážka se z ceníku
+   * nenačítá"). Platí to i pro pole v ceníku — je to totéž pole nad týmiž daty. */
+  if (typeof cenikPatriZakazce === 'function' && cenikPatriZakazce(path)
+    && typeof cenikRucniZnac === 'function')
+    cenikRucniZnac(aktivniVarianta(ZAK).data, path);
   /* Změna zadání může posunout šachtu mimo standard — ATYP se pak zaškrtne
    * sám (zadání J. V. 21. 8. 2026 večer). Stojí to TADY, ne v render():
    * render se volá i z míst, kde se nic nemění, a zápis do dat uvnitř
