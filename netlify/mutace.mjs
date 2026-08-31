@@ -268,10 +268,17 @@ const MUTACE = [
     nahrad: "  if (pokusy.email.n > POKUSY_MAX)",
     proc: 'jedno heslo na sto e-mailů by na počítadle nikdy nenarostlo' },
 
+  /* Kotva upravena 31. 8. 2026: očištěná dávka se drží v proměnné, protože
+   * se z ní kromě slití plní i rozpad po uživatelích (#180). */
   { nazev: 'B8: rozpad po uživatelích se bere z dávky klienta', soubor: 'functions/analytika.mjs',
-    hledej: "      const novy = g.analytikaSlij(stary, g.analytikaDavkaOcisti(t.den));",
-    nahrad: "      const novy = g.analytikaSlij(stary, t.den);",
+    hledej: "      const cista = g.analytikaDavkaOcisti(t.den);",
+    nahrad: "      const cista = t.den || {};",
     proc: 'obchodník by kolegovi připsal stovky chyb nebo mínus zakázek' },
+
+  { nazev: 'atribuce záložek a prvků se bere od klienta', soubor: 'functions/analytika.mjs',
+    hledej: "      g.analytikaPrictiUzivateli(novy, relace && relace.email, cista.pocty, cista);",
+    nahrad: "      g.analytikaPrictiUzivateli(novy, (t.den || {}).kdo, cista.pocty, cista);",
+    proc: 'kdo si upraví klienta, připsal by svoje klikání kolegovi' },
 
   { nazev: 'B8: záporná a nečíselná hodnota projde', soubor: '../src/analytika.js',
     hledej: "  if (!isFinite(x) || x <= 0) return 0;",

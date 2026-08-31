@@ -149,6 +149,33 @@ test('po překreslení aplikace se zapnutá mapa nakreslí znovu',
     await new Promise(r => setTimeout(r, 200));
     return document.querySelectorAll('.heat-badge').length > 0;
   }));
+/* Bublina se drží svého tlačítka i po odrolování (31. 8. 2026, hlášeno J. V.:
+ * „data z heat mapy se nám neposouvají po stránce, vidím jen první
+ * obrazovku"). S position:fixed zůstávala viset u horního okraje okna. */
+test('bublina heat mapy je ukotvená ke stránce, ne k oknu',
+  await p.evaluate(async () => {
+    ANL.heat = true; ANL.heatData = analytikaNovyDen(); render();
+    await new Promise(r => setTimeout(r, 250));
+    const b = document.querySelector('.heat-badge');
+    if (!b) return false;
+    return getComputedStyle(b).position === 'absolute';
+  }));
+
+test('po odrolování bublina zůstane u svého prvku',
+  await p.evaluate(async () => {
+    const prvek = [...document.querySelectorAll('button')].find(x => x.offsetParent !== null);
+    if (!prvek) return false;
+    const bubliny = [...document.querySelectorAll('.heat-badge')];
+    if (!bubliny.length) return false;
+    /* poloha bubliny vůči prvku se odrolováním nesmí změnit */
+    const pred = bubliny[0].getBoundingClientRect().top - prvek.getBoundingClientRect().top;
+    window.scrollTo(0, 400);
+    await new Promise(r => setTimeout(r, 120));
+    const po = bubliny[0].getBoundingClientRect().top - prvek.getBoundingClientRect().top;
+    window.scrollTo(0, 0);
+    return Math.abs(pred - po) < 2;
+  }));
+
 await p.evaluate(() => { ANL.heat = false; heatSmaz(); heatPanelSmaz(); });
 
 test('aplikace nehlásila chybu do konzole', konzole.length === 0, konzole.slice(0, 3).join(' | '));

@@ -1170,6 +1170,47 @@ test('B26: škodlivý řetězec v číselném poli zadání se vykreslí escapov
     return !spusteno && !surovy;
   }));
 
+/* Rozepsaná hodnota přežije překreslení (31. 8. 2026, hlášeno J. V.:
+ * „uživatelé musejí zadávat data do buňky několikrát, protože se ručně
+ * přepsaná hodnota neuloží napoprvé"). Aplikace překresluje celé záložky
+ * přes innerHTML — dokud se rozepsaná hodnota nevracela, každé doběhnuté
+ * uložení nebo načtení ji smazalo i s kurzorem. */
+test('rozepsaná hodnota v poli přežije překreslení aplikace',
+  await page.evaluate(async () => {
+    NAST.jeAdmin = true; prepniTab('kalk'); render();
+    await new Promise(r => setTimeout(r, 100));
+    const pole = [...document.querySelectorAll('#page-kalk input[type=number]')]
+      .find(x => x.getAttribute('onchange'));
+    if (!pole) return false;
+    pole.focus();
+    pole.value = '12345';                    // uživatel píše, change ještě nebyl
+    render();                                // mezitím doběhne autosave
+    await new Promise(r => setTimeout(r, 50));
+    const a = document.activeElement;
+    const ok = a && a.value === '12345' && a.getAttribute('onchange') === pole.getAttribute('onchange');
+    if (a) { a.blur(); }
+    prepniTab('zakazka'); render();
+    return !!ok;
+  }));
+
+test('pole bez rozepsané hodnoty se překreslením jen znovu zaostří',
+  await page.evaluate(async () => {
+    prepniTab('kalk'); render();
+    await new Promise(r => setTimeout(r, 100));
+    const pole = [...document.querySelectorAll('#page-kalk input[type=number]')]
+      .find(x => x.getAttribute('onchange'));
+    if (!pole) return false;
+    const puvodni = pole.value;
+    pole.focus();
+    render();
+    await new Promise(r => setTimeout(r, 50));
+    const a = document.activeElement;
+    const ok = a && a.value === puvodni;
+    if (a) a.blur();
+    prepniTab('zakazka'); render();
+    return !!ok;
+  }));
+
 test('žádná chyba JavaScriptu', chyby.length === 0, chyby.slice(0, 2).join(' | '));
 
 await prohlizec.close();

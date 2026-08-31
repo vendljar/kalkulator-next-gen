@@ -200,8 +200,11 @@ function nastAnalytika() {
     ? analytikaPoctyUzivatele(p.celkem, kdo) : p.celkem.pocty;
   const uzivatele = (typeof analytikaUzivatele === 'function') ? analytikaUzivatele(p.celkem) : [];
   const sber = p.rezim && p.rezim.sber !== false;
-  const zalozky = Object.entries(p.celkem.zalozky || {}).sort((a, b) => b[1] - a[1]);
-  const top = Object.entries(p.celkem.kliky || {}).filter(([k]) => k !== '…ostatni')
+  /* Od 31. 8. 2026 se filtrem řídí i záložky a prvky — dřív u nich filtr nic
+   * nedělal a vypadalo to, že nefunguje (hlášeno J. V.). Starší dny rozpad
+   * nemají, u nich zůstane po výběru uživatele prázdno. */
+  const zalozky = Object.entries((kdo ? c.zalozky : p.celkem.zalozky) || {}).sort((a, b) => b[1] - a[1]);
+  const top = Object.entries((kdo ? c.kliky : p.celkem.kliky) || {}).filter(([k]) => k !== '…ostatni')
     .sort((a, b) => b[1] - a[1]).slice(0, 12);
   const casy = Object.entries(p.casy || {}).sort((a, b) => (b[1].ock + b[1].proj) - (a[1].ock + a[1].proj));
 
@@ -209,8 +212,9 @@ function nastAnalytika() {
     <div class="note">Sběr je ${sber ? '<b>zapnutý</b>' : '<b style="color:#b91c1c">vypnutý</b>'}${p.rezim && p.rezim.kdy
       ? ' (naposledy změnil ' + esc(p.rezim.kdo || '?') + ' ' + esc(String(p.rezim.kdy).slice(0, 10)) + ')' : ''}.
       Ukládají se <b>součty za den</b>. Od 20. 8. 2026 se u <b>šesti počítadel</b> (zakázky, kalkulace,
-      tisky, přihlášení, chyby) ukládá i rozpad <b>po uživatelích</b> — dá se tedy filtrovat, kdo kolik.
-      Klíče prvků, otevřené záložky, heat mapa ani čas nad kalkulacemi se ke jménům <b>nepřiřazují</b>.
+      tisky, přihlášení, chyby) ukládá i rozpad <b>po uživatelích</b>; od 31. 8. 2026 i u <b>otevřených
+      záložek a kliknutých prvků</b> — dá se tedy filtrovat, kdo co používá. <b>Heat mapa (zdržení)
+      a čas nad kalkulacemi zůstávají anonymní</b>: čas se váže k zakázce, ne k účtu.
       Denní souhrny se drží 24 měsíců, starší se mažou. Analytika se nezálohuje.</div>
     <div class="btns"><button class="mini" onclick="analytikaVypinac(${sber ? 'false' : 'true'})">
       ${sber ? 'Vypnout sběr' : 'Zapnout sběr'}</button></div>
@@ -228,9 +232,10 @@ function nastAnalytika() {
         ${uzivatele.map(e => `<option value="${esc(e)}" ${kdo === e ? 'selected' : ''}>${esc(e)}</option>`).join('')}
       </select><span class="u"></span>
     </div>
-    ${kdo ? `<div class="note" style="margin-bottom:6px">Filtr <b>${esc(kdo)}</b> platí jen pro šest
-      počítadel v tabulce níže. <b>Záložky, prvky, heat mapa i čas nad kalkulacemi zůstávají
-      anonymní</b> — u nich se neukládá, kdo je způsobil.</div>` : ''}
+    ${kdo ? `<div class="note" style="margin-bottom:6px">Filtr <b>${esc(kdo)}</b> platí pro tabulku
+      počítadel, pro <b>záložky</b> i pro <b>prvky</b>. <b>Heat mapa a čas nad kalkulacemi zůstávají
+      anonymní</b> — u nich se neukládá, kdo je způsobil. Dny před 31. 8. 2026 rozpad záložek
+      a prvků nemají, takže u nich zůstane prázdno.</div>` : ''}
     ${uzivatele.length ? '' : `<div class="note" style="margin-bottom:6px">Rozpad po uživatelích se
       začal ukládat 20. 8. 2026 — starší dny ho nemají a ve filtru se neobjeví.</div>`}
     <div class="kl-radio">
@@ -249,9 +254,9 @@ function nastAnalytika() {
     </table>
     <div class="note" style="font-weight:600;margin-top:8px">Vývoj po měsících (srovnání měsíc/měsíc, rok/rok):</div>
     ${analytikaSrovnani(p.poMesicich)}
-    <div class="note" style="font-weight:600;margin-top:8px">Nejotevíranější záložky:</div>
+    <div class="note" style="font-weight:600;margin-top:8px">Nejotevíranější záložky${kdo ? ' — ' + esc(kdo) : ''}:</div>
     <div class="note">${zalozky.length ? zalozky.map(([t, n]) => esc(t) + ' (' + n + '×)').join(', ') : 'zatím nic'}</div>
-    <div class="note" style="font-weight:600;margin-top:8px">Nejpoužívanější prvky:</div>
+    <div class="note" style="font-weight:600;margin-top:8px">Nejpoužívanější prvky${kdo ? ' — ' + esc(kdo) : ''}:</div>
     <div class="note">${top.length ? top.map(([k, n]) => esc(k.split('|').pop()) + ' (' + n + '×)').join(', ') : 'zatím nic'}</div>
 
     <div class="sec-title">Čas nad kalkulacemi (#25)</div>
@@ -356,9 +361,17 @@ function heatKresli() {
     badge.style.cssText = 'position:absolute;transform:translate(-14px,-9px);z-index:99;'
       + 'background:' + (v === 0 ? '#8a94a3' : '#1a2332') + ';color:#fff;font-size:10px;'
       + 'font-weight:600;padding:0 6px;border-radius:8px;pointer-events:none;white-space:nowrap';
+    /* Bublina se počítá k STRÁNCE, ne k oknu (31. 8. 2026, hlášeno J. V.:
+     * „data z heat mapy se nám neposouvají po stránce, vidím jen první
+     * obrazovku"). S `position:fixed` zůstávaly čísla viset u horního okraje
+     * okna, takže po odrolování ukazovala na úplně jiné prvky. Absolutní
+     * poloha + odrolování stránky drží bublinu u svého tlačítka pořád. */
     const r = el.getBoundingClientRect();
-    badge.style.position = 'fixed';
-    badge.style.left = (r.right) + 'px'; badge.style.top = (r.top) + 'px';
+    const posunX = window.pageXOffset || document.documentElement.scrollLeft || 0;
+    const posunY = window.pageYOffset || document.documentElement.scrollTop || 0;
+    badge.style.position = 'absolute';
+    badge.style.left = (r.right + posunX) + 'px';
+    badge.style.top = (r.top + posunY) + 'px';
     badge.style.transform = 'none';
     document.body.appendChild(badge);
   });
@@ -399,3 +412,12 @@ function heatObdobi(dni) { ANL.heatObdobi = +dni; heatNacti(); }
 /* mapa jede s uživatelem: po každém překreslení aplikace se překreslí i ona
  * (render() volá heatPoRenderu — viz zapojení v ui/common.js) */
 function heatPoRenderu() { if (ANL.heat && ANL.heatData) setTimeout(heatKresli, 60); }
+
+/* Změna šířky okna posune tlačítka, ale ne bubliny — ty se počítají jednou
+ * při kreslení. Po přerovnání layoutu se proto překreslí (31. 8. 2026). */
+if (typeof window !== 'undefined' && !window.__heatResize) {
+  window.__heatResize = true;
+  window.addEventListener('resize', () => {
+    if (typeof ANL !== 'undefined' && ANL.heat && ANL.heatData) heatPoRenderu();
+  });
+}

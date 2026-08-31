@@ -151,11 +151,22 @@ const STARA = () => DEFAULT_CENIK.powertechExt / 1.25;
 {
   const { zak, v1 } = zakazkaSeStarymCenikem();
   if (v1.data.proj && v1.data.proj.cenik) {
-    v1.data.proj.cenik.marze = 0.1;                 // dnes platí jiná globální přirážka
+    /* CENY projekce se srovnávají stejně jako ceny OCK… */
+    const sazba = Object.keys(v1.data.proj.cenik.sazby || {})[0];
+    if (sazba) {
+      v1.data.proj.cenik.sazby[sazba] = 1;
+      cenikPrepoctiRozpracovane(zak, DNES(), { dnes: '2026-07-31', verze: 4 });
+      test('přepočet se týká i ceníku projekce (sazby)',
+        v1.data.proj.cenik.sazby[sazba] === DEFAULT_CENIK_PROJ.sazby[sazba],
+        v1.data.proj.cenik.sazby[sazba]);
+    }
+    /* …ale globální přirážka projekce je od 31. 8. 2026 ZAKÁZKOVÁ hodnota:
+     * obchodník ji nastavuje pro konkrétní zakázku (jiná země, jiná dohoda)
+     * a automatika ji nesmí vrátit na ceníkovou. */
+    v1.data.proj.cenik.marze = 0.1;
     cenikPrepoctiRozpracovane(zak, DNES(), { dnes: '2026-07-31', verze: 4 });
-    test('přepočet se týká i ceníku projekce (PC.marze)',
-      cenikHodnota(v1.data, 'PC.marze') === DEFAULT_CENIK_PROJ.marze,
-      cenikHodnota(v1.data, 'PC.marze'));
+    test('vlastní přirážka projekce zůstává (PC.marze je zakázková)',
+      cenikHodnota(v1.data, 'PC.marze') === 0.1, cenikHodnota(v1.data, 'PC.marze'));
   }
 }
 

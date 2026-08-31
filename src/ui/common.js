@@ -1624,10 +1624,61 @@ function renderChybaBanner(e) {
   el.style.display = 'block';
 }
 
+/* ---------- ROZEPSANÁ HODNOTA PŘEŽIJE PŘEKRESLENÍ (31. 8. 2026) ----------
+ *
+ * Hlášeno J. V.: „uživatelé musejí zadávat data do buňky několikrát, protože
+ * se ručně přepsaná hodnota neuloží napoprvé."
+ *
+ * Příčina: aplikace překresluje celé záložky přes `innerHTML`. Když mezitím
+ * doběhne cokoli, co volá `render()` — automatické uložení, načtený rejstřík,
+ * odpověď serveru —, políčko se vymění za nové s PŮVODNÍ hodnotou. Co měl
+ * uživatel rozepsané, zmizí i s kurzorem, a protože `change` se nikdy
+ * nespustil, do dat se nic nezapsalo. Vypadá to, jako by aplikace zápis
+ * spolkla; ve skutečnosti ho nikdy nedostala.
+ *
+ * Řešení: před překreslením si zapamatovat zaostřené políčko a po něm ho
+ * najít znovu a vrátit do něj rozepsanou hodnotu i kurzor. Políčko se pozná
+ * podle své obsluhy (`onchange`/`oninput`) — ta je pro každou buňku jiná
+ * a překreslení ji nemění. Rozepsanost se pozná z `defaultValue`: to je
+ * hodnota, se kterou se pole vykreslilo, takže `value !== defaultValue`
+ * znamená „uživatel do toho psal a ještě to nepotvrdil".
+ *
+ * Číselná pole nemají výběr (setSelectionRange na nich vyhodí výjimku),
+ * proto se kurzor vrací jen tam, kde to jde. */
+function renderKlicPole(el) {
+  if (!el || !el.getAttribute) return '';
+  const t = (el.tagName || '').toUpperCase();
+  if (t !== 'INPUT' && t !== 'TEXTAREA' && t !== 'SELECT') return '';
+  const typ = String(el.type || 'text').toLowerCase();
+  if (['checkbox', 'radio', 'button', 'submit', 'file'].indexOf(typ) >= 0) return '';
+  const obsluha = (el.getAttribute('onchange') || '') + '\u0000' + (el.getAttribute('oninput') || '');
+  if (!obsluha.replace(/\u0000/g, '').trim()) return '';   // pole bez obsluhy nemá co obnovovat
+  return t + '\u0000' + typ + '\u0000' + obsluha;
+}
+
+function renderSFokusem(kresli) {
+  const a = document.activeElement;
+  const klic = renderKlicPole(a);
+  if (!klic) { kresli(); return; }
+  const rozepsano = a.value !== a.defaultValue;
+  const hodnota = a.value;
+  let zac = null, kon = null;
+  try { zac = a.selectionStart; kon = a.selectionEnd; } catch (e) {}
+  kresli();
+  const cil = [...document.querySelectorAll('input, textarea, select')]
+    .find(x => renderKlicPole(x) === klic);
+  if (!cil) return;
+  if (rozepsano) cil.value = hodnota;
+  try {
+    cil.focus({ preventScroll: true });
+    if (rozepsano && zac != null && cil.setSelectionRange) cil.setSelectionRange(zac, kon);
+  } catch (e) {}
+}
+
 function render() {
   renderPrihlaseniNejdriv();
   try {
-    renderTelo();
+    renderSFokusem(renderTelo);
     const b = document.getElementById('render-chyba');
     if (b) b.style.display = 'none';
     /* heat mapa (#26) jede s uživatelem: každé překreslení aplikace

@@ -70,30 +70,61 @@ function analytikaNovyDen() {
   };
 }
 
-/* Prázdná sada počítadel pro jednoho uživatele. */
+/* Prázdná sada počítadel pro jednoho uživatele.
+ *
+ * Od 31. 8. 2026 nese uživatel i ZÁLOŽKY a PRVKY (zadání J. V.: „analytika na
+ * uživatele nefunguje, zobrazují se souhrnné informace"). Do té doby byly
+ * obojí jen v anonymním souhrnu, takže filtr uživatele u nich nic nezměnil.
+ * Je to vědomé rozšíření toho, co se o zaměstnancích ukládá — patří k němu
+ * informační text pro zaměstnance (#160). */
 function analytikaNovePocty() {
-  return { zakazky: 0, kalkulace: 0, tiskyWord: 0, tiskyNahled: 0, prihlaseni: 0, chyby: 0 };
+  return { zakazky: 0, kalkulace: 0, tiskyWord: 0, tiskyNahled: 0, prihlaseni: 0, chyby: 0,
+           zalozky: {}, kliky: {} };
+}
+
+/* Přičtení mapy klíč→počet (záložky, prvky) do cílové mapy uživatele. */
+function analytikaPrictiMapu(cil, zdroj) {
+  if (!cil || !zdroj || typeof zdroj !== 'object') return cil;
+  Object.entries(zdroj).forEach(([k, n]) => {
+    const klic = String(k).slice(0, ANALYTIKA_MAX_KLIC_ZNAKU);
+    if (!klic) return;
+    cil[klic] = (+cil[klic] || 0) + analytikaCislo(n);
+  });
+  return cil;
 }
 
 /* Přičte počty jedné dávky konkrétnímu uživateli. Volá SERVER, který jediný
  * ví, kdo je přihlášený (viz poznámka výše). E-mail se ořízne, ať do klíče
  * nemůže proniknout nic dlouhého. */
-function analytikaPrictiUzivateli(den, email, pocty) {
+function analytikaPrictiUzivateli(den, email, pocty, davka) {
   const e = String(email || '').trim().toLowerCase().slice(0, 120);
   if (!e || !den) return den;
   if (!den.poUzivateli || typeof den.poUzivateli !== 'object') den.poUzivateli = {};
   const cil = den.poUzivateli[e] || (den.poUzivateli[e] = analytikaNovePocty());
+  if (!cil.zalozky || typeof cil.zalozky !== 'object') cil.zalozky = {};   // starší záznamy
+  if (!cil.kliky || typeof cil.kliky !== 'object') cil.kliky = {};
   Object.entries(pocty || {}).forEach(([k, n]) => {
-    if (cil[k] !== undefined) cil[k] += analytikaCislo(n);     // B8: nezáporné, se stropem
+    if (typeof cil[k] === 'number') cil[k] += analytikaCislo(n);   // B8: nezáporné, se stropem
   });
+  /* Záložky a prvky z TÉŽE dávky. Bere se očištěná dávka (B8), ne to, co
+   * poslal klient v `poUzivateli` — atribuci dělá pořád jen server. */
+  if (davka && typeof davka === 'object') {
+    analytikaPrictiMapu(cil.zalozky, davka.zalozky);
+    analytikaPrictiMapu(cil.kliky, davka.kliky);
+  }
   return den;
 }
 
 /* Souhrn pro jednoho uživatele (nebo pro všechny, když je e-mail prázdný). */
 function analytikaPoctyUzivatele(den, email) {
-  if (!email) return (den && den.pocty) || analytikaNovePocty();
+  if (!email) {
+    const p = (den && den.pocty) || analytikaNovePocty();
+    /* Bez filtru se ukazuje souhrn — záložky a prvky má den vlastní. */
+    return Object.assign({}, analytikaNovePocty(), p,
+      { zalozky: (den && den.zalozky) || {}, kliky: (den && den.kliky) || {} });
+  }
   const u = den && den.poUzivateli && den.poUzivateli[String(email).toLowerCase()];
-  return u || analytikaNovePocty();
+  return u ? Object.assign(analytikaNovePocty(), u) : analytikaNovePocty();
 }
 
 /* Seznam e-mailů, které v datech vůbec figurují (pro rozbalovací filtr). */
@@ -160,8 +191,11 @@ function analytikaSlij(a, b) {
     /* starší dny klíč `poUzivateli` nemají — slití to snese */
     Object.entries(d.poUzivateli || {}).forEach(([e, p]) => {
       const cil = v.poUzivateli[e] || (v.poUzivateli[e] = analytikaNovePocty());
+      analytikaPrictiMapu(cil.zalozky, p && p.zalozky);
+      analytikaPrictiMapu(cil.kliky, p && p.kliky);
       Object.entries(p || {}).forEach(([k, n]) => {
-        if (cil[k] !== undefined) cil[k] += analytikaCislo(n);
+        /* jen čísla — mapy záložek a prvků se slily o dva řádky výš */
+        if (typeof cil[k] === 'number') cil[k] += analytikaCislo(n);
       });
     });
   });
@@ -254,4 +288,5 @@ if (typeof module !== 'undefined')
     ANALYTIKA_RETENCE_MESICU, analytikaKlic, analytikaNovyDen, analytikaPridej,
     analytikaSlij, analytikaPocetZKliku, casNovy, casKrok, analytikaCastZTabu,
     analytikaRetence, analytikaObdobi, analytikaRezimNovy, analytikaRezimNastav,
-    analytikaNovePocty, analytikaPrictiUzivateli, analytikaPoctyUzivatele, analytikaUzivatele };
+    analytikaNovePocty, analytikaPrictiUzivateli, analytikaPoctyUzivatele, analytikaUzivatele,
+    analytikaPrictiMapu };

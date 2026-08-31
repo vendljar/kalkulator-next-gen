@@ -213,9 +213,45 @@ test('zamčená varianta se nehlídá – její cena už odešla', (() => {
 const { v: vp } = staraVarianta();
 const zadaniPred = JSON.stringify(vp.data.ock.zadani);
 const vysl = cenikPrepocti(vp, DNES(), { dnes: '2026-07-29', build: 'v29.7.21' });
-test('přepočet přepsal všech pět položek', vysl.zmen === 5, vysl.zmen);
-test('po přepočtu je ceník shodný s dnešním',
-  cenikRozdily(vp.data, DNES()).length === 0);
+/* Od 31. 8. 2026 se přepisují jen CENY. Pátá odchylka ve fixtuře je globální
+ * přirážka projekce (PC.marze) — zakázková hodnota, které se automatika
+ * nedotkne (viz CENIK_ZAKAZKOVE). */
+test('přepočet přepsal čtyři ceny, přirážku nechal být', vysl.zmen === 4, vysl.zmen);
+test('po přepočtu se liší už jen zakázková hodnota',
+  cenikRozdily(vp.data, DNES()).every(r => cenikPatriZakazce(r.cesta)),
+  cenikRozdily(vp.data, DNES()).map(r => r.cesta).join(', '));
+test('vlastní přirážka projekce přepočet přežije',
+  vp.data.proj.cenik.marze !== DEFAULT_CENIK_PROJ.marze, vp.data.proj.cenik.marze);
+
+/* ---------- zakázkové hodnoty se nepřepisují (nález 31. 8. 2026) ----------
+ * Hlášeno J. V.: „globální přirážka, kterou mám pro Německo na 40 %, se
+ * vrátila zpět na 30 %." Stalo se to při otevření zakázky, které srovnává
+ * rozpracované varianty s platným ceníkem. */
+{
+  const { v: vz } = staraVarianta();
+  vz.data.cenik.marze = 0.40;                       // přirážka pro Německo
+  vz.data.cenik.dph = 0.21;                         // jiný režim DPH
+  const r = cenikPrepocti(vz, DNES(), { dnes: '2026-08-31' });
+  test('přirážka 40 % pro Německo přepočet přežije', vz.data.cenik.marze === 0.40, vz.data.cenik.marze);
+  test('ručně zvolená sazba DPH přepočet přežije', vz.data.cenik.dph === 0.21, vz.data.cenik.dph);
+  test('ceny se přesto srovnaly', r.zmen >= 3, r.zmen);
+  test('varianta si i tak nese číslo verze ceníku (přirážka ho nebere)',
+    !!vz.data.cenikRazitko && vz.data.cenikRazitko.otisk === cenikOtisk(vz.data));
+
+  /* A hlavně: pouhá odlišná přirážka nesmí přepočet vůbec spustit. */
+  const zak2 = zajistiZamek(novaZakazka());
+  zak2.varianty[0].data.cenik.marze = 0.40;
+  const rr = cenikPrepoctiRozpracovane(zak2, DNES(), { dnes: '2026-08-31' });
+  test('zakázka, která se liší jen přirážkou, se nepřepočítává',
+    rr.prepocteno === 0, JSON.stringify(rr.varianty));
+  test('a přirážka v ní zůstává', zak2.varianty[0].data.cenik.marze === 0.40);
+
+  /* Na výslovný pokyn (výběr položek) se přepsat dá — to je vědomý krok. */
+  const { v: vy } = staraVarianta();
+  vy.data.cenik.marze = 0.40;
+  cenikPrepocti(vy, DNES(), { cesty: ['C.marze'], dnes: '2026-08-31' });
+  test('na výslovný pokyn se přirážka přepsat dá', vy.data.cenik.marze === DEFAULT_CENIK.marze);
+}
 test('přepočet se nedotkl zadání – to je to, co uživatel spočítal',
   JSON.stringify(vp.data.ock.zadani) === zadaniPred);
 test('přepočet zapsal razítko s datem i sestavením',

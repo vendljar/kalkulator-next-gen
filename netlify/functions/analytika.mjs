@@ -88,11 +88,15 @@ export default async (req) => {
        * nezáporná a se stropem, klíče oříznuté. `poUzivateli` od klienta se
        * nikdy nepřičítá — do 22. 8. se slilo DŘÍV než serverová atribuce,
        * takže šlo poslat cizímu kolegovi stovky chyb nebo mínus zakázek. */
-      const novy = g.analytikaSlij(stary, g.analytikaDavkaOcisti(t.den));
-      /* Atribuci počítadel dělá SERVER z přihlášené relace (20. 8. 2026):
-       * klient svůj e-mail neposílá, takže ho nemůže podvrhnout, a zbytek
-       * analytiky (klíče prvků, záložky, zdržení) zůstává anonymní. */
-      g.analytikaPrictiUzivateli(novy, relace && relace.email, (t.den || {}).pocty);
+      const cista = g.analytikaDavkaOcisti(t.den);
+      const novy = g.analytikaSlij(stary, cista);
+      /* Atribuci dělá SERVER z přihlášené relace (20. 8. 2026): klient svůj
+       * e-mail neposílá, takže ho nemůže podvrhnout. Od 31. 8. 2026 se
+       * uživateli přiřazují i OTEVŘENÉ ZÁLOŽKY a KLIKNUTÉ PRVKY (zadání
+       * J. V.) — do té doby zůstávaly jen v anonymním souhrnu a filtr
+       * uživatele u nich nic neukázal. Zdržení (heat mapa „čas nad prvkem")
+       * dál anonymní zůstává. Přičítá se OČIŠTĚNÁ dávka, ne to, co přišlo. */
+      g.analytikaPrictiUzivateli(novy, relace && relace.email, cista.pocty, cista);
       await s.zapis('den/' + dnes, novy);
     }
     /* časy zakázek: { '2026-OPR-CN-0155': { ock: 120, proj: 30 }, … } */
