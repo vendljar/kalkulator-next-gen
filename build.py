@@ -27,7 +27,7 @@ CORE = ['build_info.js',
         'preklad.js', 'format.js', 'engine.js', 'engine_proj.js', 'techspec.js', 'zakazka.js', 'uloziste.js', 'zamek.js', 'seznam.js', 'archiv.js',
         'docxgen.js', 'xlsx.js',
         'dokumenty.js', 'sleva.js', 'schvalovani.js', 'zaokrouhleni.js', 'marze.js', 'kontroly.js', 'ares.js', 'poznamky.js', 'protokol.js', 'firma.js', 'zpracovatel.js', 'nabidka.js', 'nabidka_proj.js', 'sod.js', 'kryci.js', 'kryci_proj.js',
-        'cenik.js', 'cenik_stari.js', 'katalog.js', 'prepisy.js', 'slovnik.js',
+        'cenik.js', 'cenik_stari.js', 'cenik_rady.js', 'katalog.js', 'prepisy.js', 'slovnik.js',
         'konfigurace.js', 'sablony_online.js', 'analytika.js', 'nastaveni_db.js', 'program.js', 'ukazkove.js', 'prava.js', 'zobrazeni.js', 'zakaznici.js', 'standard_ock.js']
 UI = ['ui/common.js', 'ui/zakulozeni_ui.js', 'ui/kalk_ock.js', 'ui/detail_ui.js', 'ui/techspec_ui.js', 'ui/specdata_ui.js',
       'ui/kryci_ui.js', 'ui/kryci_proj_ui.js', 'ui/kalk_proj.js', 'ui/detail_proj_ui.js', 'ui/nabidka_proj_ui.js', 'ui/sod_ui.js',

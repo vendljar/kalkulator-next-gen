@@ -64,6 +64,9 @@ const CENIK_DEF = [
     ['C.rezieKancelareKc', 'Režie kanceláře', 'Kč', ''],
     ['C.stavbyvedouciHod', 'Stavbyvedoucí – hodin', 'hod', ''],
     ['C.stavbyvedouciKc', 'Stavbyvedoucí – sazba', 'Kč/hod', ''],
+    /* Zahraniční zakázky (#181, 31. 8. 2026). V tuzemské kalkulaci se
+     * položka nezobrazuje vůbec — nese značku „jen pro zahraničí". */
+    ['C.prekladyKc', 'Překlady CZ→DE (smlouvy, zprávy)', 'Kč', 'jen zahraniční zakázky'],
   ]],
   ['SPOJOVACÍ MATERIÁL', [
     ['C.spojovaci.riplockM10', 'Riplock M10', 'Kč/ks', ''],
@@ -230,6 +233,13 @@ function cenikDiffZeSheets(sheets, C, PC) {
          * U ostatních čísel prázdno chyba je: tichá nula v ceníku znamená
          * položku zdarma. „Prázdno není nula" platí oběma směry. */
         const prazdno = nova == null || String(nova).trim() === '';
+        /* Položka, kterou ceník ještě nezná, přijde v listu prázdná —
+         * nově přidaný klíč ve starším zveřejněném ceníku prostě není
+         * (31. 8. 2026, překlady CZ→DE). Prázdná buňka u položky, která
+         * ani dnes hodnotu nemá, se proto přeskočí: není to chyba a není
+         * to ani změna. Prázdno u položky, která hodnotu MÁ, chyba
+         * zůstává — „prázdno není nula" platí dál. */
+        if (prazdno && cenikGet(t.obj, klic) == null) continue;
         if (prazdno && CENIK_SMI_BYT_PRAZDNY.has(klic)) { nova = null; }
         else {
           if (typeof nova === 'string') nova = parseFloat(nova.replace(/\s/g, '').replace(',', '.'));

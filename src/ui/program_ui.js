@@ -46,6 +46,7 @@ const PROG_STAV = {
 const PROG_BUILD = {
   cenik: JSON.parse(JSON.stringify(typeof DEFAULT_CENIK !== 'undefined' ? DEFAULT_CENIK : {})),
   cenikProj: JSON.parse(JSON.stringify(typeof DEFAULT_CENIK_PROJ !== 'undefined' ? DEFAULT_CENIK_PROJ : {})),
+  zahranicni: { ceny: {}, jenZahr: {} },
   katalog: (typeof katalogPrazdny === 'function') ? katalogPrazdny() : null,
   slevy: JSON.parse(JSON.stringify((typeof NAST !== 'undefined' && NAST.slevy) || {})),
 };
@@ -96,6 +97,11 @@ function progPouzij(zaznam) {
   if (!zaznam) return;
   konfigNahradVMiste(DEFAULT_CENIK, zaznam.cenik || {});
   konfigNahradVMiste(DEFAULT_CENIK_PROJ, zaznam.cenikProj || {});
+  /* Zahraniční odchylky (#181) jdou se stejnou verzí — jsou součástí téhož
+   * záznamu, takže se nemůžou rozejít s tuzemským ceníkem. */
+  if (typeof CENIK_ZAHR !== 'undefined')
+    konfigNahradVMiste(CENIK_ZAHR, (typeof cenikZahrOciste === 'function')
+      ? cenikZahrOciste(zaznam.zahranicni) : (zaznam.zahranicni || { ceny: {}, jenZahr: {} }));
   /* Zveřejněný ceník je zmrazená kopie – ceník zveřejněný před 11. 8. 2026
    * nese tři fixní částky lešení místo jedné. Převedeme je hned po načtení,
    * jinak by fixní část lešení v celé aplikaci byla nula (viz engine.js). */
@@ -117,6 +123,7 @@ function progPouzij(zaznam) {
 function progZpetNaBuild() {
   konfigNahradVMiste(DEFAULT_CENIK, PROG_BUILD.cenik);
   konfigNahradVMiste(DEFAULT_CENIK_PROJ, PROG_BUILD.cenikProj);
+  if (typeof CENIK_ZAHR !== 'undefined') konfigNahradVMiste(CENIK_ZAHR, PROG_BUILD.zahranicni);
   if (PROG_BUILD.katalog && typeof katalogImport === 'function') katalogImport(KATALOG, PROG_BUILD.katalog);
   if (typeof NAST !== 'undefined' && NAST.slevy) konfigNahradVMiste(NAST.slevy, PROG_BUILD.slevy);
   /* Sestavení žádné číslo zveřejnění nemá – po odpojení složky se tedy
@@ -188,6 +195,9 @@ function progKontext(poznamka) {
   return {
     cenik: bez(d.cenik || {}),
     cenikProj: bez((d.proj && d.proj.cenik) || {}),
+    /* Zahraniční odchylky nejsou ceníkem VARIANTY (ta má jen jednu řadu),
+     * ale samostatnou tabulkou, kterou spravuje administrátor v Ceníku. */
+    zahranicni: (typeof CENIK_ZAHR !== 'undefined') ? CENIK_ZAHR : { ceny: {}, jenZahr: {} },
     katalog: (typeof katalogExport === 'function') ? katalogExport(KATALOG) : null,
     slevy: bez((typeof NAST !== 'undefined' && NAST.slevy) || null),
     build: (typeof buildVerze === 'function') ? buildVerze() : '',

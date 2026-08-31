@@ -317,6 +317,14 @@ function uloRejstrikZaznam(zak, opts) {
     datum: String((zak && zak.datum) || ''),
     /* Druh zakázky pro filtr OCK × PROJ v přehledu nabídek. */
     jenProj: !!(zak && zak.jenProj),
+    /* Řada ceníku řídící varianty (#181, 31. 8. 2026): v přehledu se ukáže
+     * štítkem, aby šly zahraniční zakázky poznat i vypsat zvlášť. Tuzemská
+     * se nezapisuje — je výchozí a starší rejstříky ji nemají. */
+    rada: (() => {
+      const rid = (typeof ridiciVarianta === 'function') ? ridiciVarianta(zak) : (varianty[0] || null);
+      const r = (typeof cenikRadaVarianty === 'function' && rid) ? cenikRadaVarianty(rid.data) : 'cr';
+      return r === 'zahr' ? 'zahr' : '';
+    })(),
     variant: varianty.length,
     odeslane: varianty.filter(zamcena).length,
     upraveno,
@@ -342,6 +350,7 @@ function uloRejstrikNormalizuj(x) {
       objednatel: String(z.objednatel || ''),
       datum: String(z.datum || ''),
       jenProj: !!z.jenProj,
+      rada: z.rada === 'zahr' ? 'zahr' : '',      // #181: řada ceníku, prázdno = tuzemsko
       variant: cislo(z.variant),
       odeslane: cislo(z.odeslane),
       upraveno: String(z.upraveno || ''),

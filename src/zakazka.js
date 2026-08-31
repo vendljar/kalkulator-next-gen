@@ -15,6 +15,10 @@ function novaVariantaData() {
   return {
     ock: { zadani: JSON.parse(JSON.stringify(DEFAULT_ZADANI)), fixes: false },   // výchozí režim: 1:1 jako Excel
     cenik: JSON.parse(JSON.stringify(DEFAULT_CENIK)),
+    /* Řada ceníku (#181, 31. 8. 2026): nová zakázka i nová varianta jsou
+     * VŽDY tuzemské (rozhodnutí J. V.); na zahraniční se přepíná vědomě
+     * v hlavičce a přepnutí se nejdřív zeptá. */
+    cenikRada: 'cr',
     proj: { zadani: JSON.parse(JSON.stringify(DEFAULT_ZADANI_PROJ)),
             cenik: JSON.parse(JSON.stringify(DEFAULT_CENIK_PROJ)) },
     techspec: JSON.parse(JSON.stringify(DEFAULT_TECHSPEC)),
@@ -473,6 +477,10 @@ function importZakazka(obj) {
     if (obj.adresaObjednatele == null) obj.adresaObjednatele = '';
     if (obj.jenProj == null) obj.jenProj = false;   // migrace: příznak jen projekce (2. 8. 2026)
     if (obj.jenOck == null) obj.jenOck = false;     // migrace: příznak jen realizace (23. 8. 2026)
+    /* Zakázky uložené před 31. 8. 2026 řadu ceníku nemají — jsou tuzemské. */
+    (obj.varianty || []).forEach(v => {
+      if (v && v.data && !v.data.cenikRada) v.data.cenikRada = 'cr';
+    });
     if (obj.obeStrany == null) obj.obeStrany = false;   // vědomé počítání obou stran naráz
     // migrace: IČO objednatele přibylo 30. 7. 2026. Zůstává PRÁZDNÉ – v žádném
     // dosavadním poli není nic, z čeho by se dalo odvodit, a odhadnuté IČO je

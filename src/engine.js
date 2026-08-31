@@ -88,6 +88,7 @@ const DEFAULT_CENIK = {  // HODNOTY VYNULOVÁNY pro GitHub (pripravit_github.py)
   sken3dKc: 0, vystupZamereniKc: 0, engineeringKc: 0,
   projekceHodKc: 0, statikaKc: 0, statikaHod: 0, rezieKancelareKc: 0,
   stavbyvedouciHod: 0, stavbyvedouciKc: 0,
+  prekladyKc: 0,                  // překlady CZ→DE, jen zahraniční zakázky (#181)
   atypPrirazka: 0,                // ATYP: přirážka k nákladu režie (viz zadání #22)
   zamecnikAtypKc: 0,              // ATYP: sazba za atypickou zámečnickou práci (#7) – viz Z.zamecnikAtypKc
   spojovaci: { riplockM10: 0, riplockM8: 0, nordlock: 0, nytM10: 0, nytM8: 0,
@@ -545,6 +546,9 @@ function vypocet(zadani, cenik, jekly, fixes = true) {
     mkItem('STATICKÉ POSOUZENÍ', c.statikaHod, c.statikaKc, { cenaPath: 'C.statikaKc' }),
     mkItem('REŽIE KANCELÁŘE', 1, c.rezieKancelareKc, { cenaPath: 'C.rezieKancelareKc' }),
     mkItem('PRÁCE STAVBYVEDOUCÍHO', c.stavbyvedouciHod, c.stavbyvedouciKc, { cenaPath: 'C.stavbyvedouciKc' }),
+    /* `|| 0`: starší ceníky (a zkušební sady) položku nemají a bez toho by
+     * z nedefinované ceny vzniklo NaN, které by rozbilo celý součet. */
+    mkItem('PŘEKLADY CZ→DE', 1, +c.prekladyKc || 0, { cenaPath: 'C.prekladyKc' }),
     ...vlastniProSekci('rezie'),
   ].filter(Boolean);
 
@@ -575,10 +579,20 @@ function vypocet(zadani, cenik, jekly, fixes = true) {
    * ty mají vlastní, starší zaškrtávátko „počítat do základní ceny".
    * Prázdný seznam nedělá nic, takže starší zakázky počítají beze změny. */
   const nepocitat = Array.isArray(z.nepocitat) ? z.nepocitat.map(String) : [];
-  const jenPocitane = rows => nepocitat.length
-    ? rows.filter(r => nepocitat.indexOf(String(r.origNazev || r.nazev)) < 0) : rows;
+  /* POLOŽKY JEN PRO ZAHRANIČÍ (#181, 31. 8. 2026, zadání J. V.: „pokud
+   * nějaká položka v tuzemsku není, tak ji v kalkulaci nezobrazuj").
+   * Cestovní náklady s logistikou nebo překlady CZ→DE nemají v tuzemské
+   * zakázce co dělat — a ukázat je s nulou není totéž jako neukázat je:
+   * nulový řádek v kalkulaci pořád svádí k tomu něco do něj napsat.
+   * Značky nese ceník varianty (`cenik.jenZahr`), řadu `cenik.rada`. */
+  const jenZahr = (c.jenZahr && typeof c.jenZahr === 'object') ? c.jenZahr : {};
+  const zahranicni = String(c.rada) === 'zahr';
+  const jenTetoRady = rows => (zahranicni || !Object.keys(jenZahr).length) ? rows
+    : rows.filter(r => !(r.cenaPath && jenZahr[r.cenaPath]));
+  const jenPocitane = rows => jenTetoRady(nepocitat.length
+    ? rows.filter(r => nepocitat.indexOf(String(r.origNazev || r.nazev)) < 0) : rows);
   const sekce = { hrubaOck: jenPocitane(hrubaOck), oplasteni: jenPocitane(oplasteni),
-                  volitelne, rezie: jenPocitane(rezie) };
+                  volitelne: jenTetoRady(volitelne), rezie: jenPocitane(rezie) };
   const sum = rows => ({
     naklad: rows.reduce((a, r) => a + r.naklad, 0),
     marze: rows.reduce((a, r) => a + r.marze, 0),

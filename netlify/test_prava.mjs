@@ -1704,6 +1704,27 @@ console.log('\n===== MAZÁNÍ ZAKÁZEK =====\n');
   test('ostrá relace platí i po přepnutí prostředí tam a zpět', !!relaceOver(cookie(ostra)));
 }
 
+console.log('\n===== ZAHRANIČNÍ CENÍK (#181) =====\n');
+/* Zveřejnit ceník — obě řady najednou — smí jen administrátor; obchodník ani
+ * vedoucí ne. Odchylky se navíc očistí: cizí klíč se do databáze nedostane. */
+{
+  const cenik = { profilasKgKc: 80, montazHodKc: 750 };
+  const zahranicni = { ceny: { 'C.montazHodKc': 1000, 'X.podvrh': 999 },
+                       jenZahr: { 'C.prekladyKc': true } };
+  test('zahraniční ceník nezveřejní obchodník',
+    (await post(program, 'http://x/api/program', { cenik, zahranicni }, cObch)).status === 403);
+  test('ani vedoucí',
+    (await post(program, 'http://x/api/program', { cenik, zahranicni }, UCTY['Vedoucí'].cookie)).status === 403);
+  const r = await post(program, 'http://x/api/program', { cenik, zahranicni }, cAdmin);
+  test('administrátor zveřejní obě řady najednou', r.status === 200, r.status);
+  const db = await (await get(program, 'http://x/api/program', cObch)).json();
+  const z = db && db.db && db.db.platny && db.db.platny.zahranicni;
+  test('zahraniční odchylky se uložily se stejnou verzí',
+    !!z && z.ceny['C.montazHodKc'] === 1000, JSON.stringify(z));
+  test('cizí klíč server zahodil', !!z && z.ceny['X.podvrh'] === undefined);
+  test('značka „jen pro zahraničí" se uložila', !!z && z.jenZahr['C.prekladyKc'] === true);
+}
+
 console.log(`\n${ok} prošlo, ${fail} selhalo`);
 if (fail) { console.log('\nSelhalo:\n - ' + selhalo.join('\n - ')); }
 process.exit(fail ? 1 : 0);

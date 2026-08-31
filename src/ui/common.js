@@ -868,6 +868,30 @@ function zakazkaHlavicka(ock) {
    * dřívější třída `admin-only` uměla jen „admin / neadmin", ne přidělení roli. */
   const prirazkaRow = !smiZobrazit('pole.prirazka') ? '' : `<div class="row"><label>Globální přirážka</label>
     <span class="pct-wrap"><input type="number" step="1" value="${Math.round(C.marze * 10000) / 100}" onchange="set('C.marze', (+this.value) / 100)"> %</span></div>`;
+
+  /* ---------- řada ceníku: ČR / Zahraničí (#181, 31. 8. 2026) ----------
+   * Zadání J. V.: „v pravém rohu hlavičky přepínač ČR / Zahraničí, který se
+   * bude jemně podbarvovat a definovat výpočet v tuzemských nebo zahraničních
+   * cenách." Stojí vedle režimu výpočtu a globální přirážky — je to volba
+   * k zakázce, ne nastavení programu. Zahraniční režim podbarví celou
+   * hlavičku, aby se zakázka poznala i letmým pohledem.
+   *
+   * Volba patří VARIANTĚ: jde tak postavit tuzemskou a zahraniční variantu
+   * téže nabídky vedle sebe. Nová zakázka i nová varianta začínají tuzemsky. */
+  const radaTed = (typeof cenikRadaVarianty === 'function')
+    ? cenikRadaVarianty(akt.data) : 'cr';
+  const radaRow = (typeof CENIK_RADY === 'undefined') ? '' : `<div class="row"><label>Ceník</label>
+    <span class="rada-prep">${CENIK_RADY.map(r => `<button type="button"
+      class="${radaTed === r.id ? 'on' : ''}${r.id === 'zahr' ? ' zahr' : ''}"
+      title="${esc(r.popis)} — přepnutí se nejdřív zeptá a ukáže, čeho se dotkne"
+      onclick="cenikRadaPrepniUI('${r.id}')">${esc(r.nazev)}</button>`).join('')}</span></div>`;
+  /* Kurz je společný pro obě řady (rozhodnutí J. V.), u zahraniční zakázky
+   * se ale ukazuje — ať je vidět, s čím se bude počítat cizojazyčná nabídka. */
+  const kurzRow = (radaTed !== 'zahr' || !smiZobrazit('pole.prirazka')) ? ''
+    : `<div class="row"><label>Kurz pro nabídku</label>
+       <span class="pct-wrap"><input type="number" step="0.01" value="${esc(C.kurzEurKc || 0)}"
+         title="kurz z ceníku; v dokumentu se neukazuje, jen se jím převádí"
+         onchange="set('C.kurzEurKc', +this.value)"> Kč/€</span></div>`;
   const dphRow = `<div class="row"><label>Sazba DPH</label>
     <select onchange="set('C.dph', +this.value)">
       <option value="0.12" ${C.dph === 0.12 ? 'selected' : ''}>12 % snížená</option>
@@ -921,7 +945,10 @@ function zakazkaHlavicka(ock) {
         ${archivBtn}
         <button class="mini" onclick="prepniTab('zakazka')">Přehled cenových nabídek →</button>
       </div>${zakUlozeniRadek()}`;
-    return `<div class="card zak-bar"><div class="zak-bar-h">Zakázka a varianta</div><div class="body">${inner}</div></div>`
+    return `<div class="card zak-bar${radaTed === 'zahr' ? ' rada-zahr' : ''}">
+        <div class="zak-bar-h">Zakázka a varianta${radaTed === 'zahr'
+          ? ' <span class="rada-stitek">zahraniční ceník</span>' : ''}</div>
+        <div class="body">${inner}</div></div>`
       + kalkLista(false);
   }
 
@@ -933,7 +960,7 @@ function zakazkaHlavicka(ock) {
         ${zakaznikRow('ock')}${txt('ZAK.kontakt', 'Kontaktní osoba')}${icoRow('ZAK.ico')}${dphRow}
       </div>
       <div class="zak-head-col">
-        ${variantaRow}${ridiciBtn}${rezimRow}${prirazkaRow}
+        ${variantaRow}${ridiciBtn}${rezimRow}${prirazkaRow}${radaRow}${kurzRow}
       </div>
     </div>${puvodRadek}
     <div class="zak-cena noprint">
@@ -943,7 +970,10 @@ function zakazkaHlavicka(ock) {
       ${archivBtn}
       <button class="mini" onclick="prepniTab('zakazka')">Přehled cenových nabídek →</button>
     </div>${zakUlozeniRadek()}`;
-  return `<div class="card zak-bar"><div class="zak-bar-h">Zakázka a varianta</div><div class="body">${inner}</div></div>`
+  return `<div class="card zak-bar${radaTed === 'zahr' ? ' rada-zahr' : ''}">
+      <div class="zak-bar-h">Zakázka a varianta${radaTed === 'zahr'
+        ? ' <span class="rada-stitek">zahraniční ceník</span>' : ''}</div>
+      <div class="body">${inner}</div></div>`
     + kalkLista(true);
 }
 
@@ -1008,6 +1038,50 @@ function renderKalkHlavicka() {
   const el = document.getElementById('kalk-hlavicka');
   if (el) el.innerHTML = zakazkaHlavicka(true) + zamekStranyLista('ock');
   zamekStranyNasad('ock');
+}
+
+/* ---------- přepnutí řady ceníku (#181, 31. 8. 2026) ----------
+ *
+ * Přepnutí MĚNÍ CENY otevřené varianty, takže se nejdřív zeptá a ukáže,
+ * kolika položek se to dotkne a co to udělá s nákladem. Tiché přepsání cen
+ * je přesně ta věc, kvůli které se 31. 8. 2026 opravovalo srovnávání
+ * s ceníkem (#177) — tady se stejná chyba dělat nebude.
+ *
+ * Uzamčená (odeslaná) varianta se nepřepíná vůbec: její ceny jsou doklad
+ * o tom, co odešlo zákazníkovi. */
+function cenikRadaPrepniUI(rada) {
+  if (typeof cenikRadaPlatna !== 'function') return;
+  const r = cenikRadaPlatna(rada);
+  const v = aktivniVarianta(ZAK);
+  const d = v && v.data;
+  if (!d) return;
+  if (cenikRadaVarianty(d) === r) return;
+  if (typeof zamekStop === 'function' && zamekStop()) return;
+  if (typeof nahledStop === 'function' && nahledStop('přepnutí řady ceníku')) return;
+
+  const cr = (typeof cenikDnesniData === 'function') ? cenikDnesniData().cenik : DEFAULT_CENIK;
+  const zahr = (typeof CENIK_ZAHR !== 'undefined') ? CENIK_ZAHR : null;
+  const rozdily = (typeof cenikRadaRozdily === 'function') ? cenikRadaRozdily(cr, zahr) : [];
+  if (!rozdily.length && r === 'zahr') {
+    alert('Zahraniční ceník zatím nemá žádnou odchylku — ceny by se nezměnily.\n\n'
+      + 'Zadejte je v záložce Ceník nákladů OCK ve sloupci „Zahraničí" '
+      + '(smí je zadat a zveřejnit jen administrátor).');
+    return;
+  }
+  const nazev = cenikRadaNazev(r);
+  const vypis = rozdily.slice(0, 8).map(x => '• ' + x.popis).join('\n')
+    + (rozdily.length > 8 ? '\n• … a další ' + (rozdily.length - 8) : '');
+  if (!confirm('Přepnout výpočet na ' + (r === 'zahr' ? 'ZAHRANIČNÍ' : 'TUZEMSKÝ') + ' ceník?\n\n'
+    + 'Dotkne se to ' + rozdily.length + ' ceníkových položek:\n' + vypis
+    + '\n\nRuční přepisy v zakázce, globální přirážka ani sazba DPH se nemění.')) return;
+
+  const vysl = cenikRadaPrepni(d, cr, zahr, r);
+  v.upraveno = new Date().toISOString();
+  if (typeof protokolZapis === 'function')
+    protokolZapis(ZAK, { kde: 'Kalkulace OCK', varianta: v.id, variantaNazev: v.nazev,
+      kdo: (typeof zamekKdo === 'function') ? zamekKdo() : '',
+      co: 'Ceník přepnut na ' + nazev + ' (' + vysl.zmen + ' změněných cen)' });
+  syncVarianta(); render();
 }
 
 /* ---------- zámek nepočítané strany zakázky (23. 8. 2026) ----------

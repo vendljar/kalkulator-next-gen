@@ -29,7 +29,11 @@ export default async (req) => {
   if (chyba) return chyba;
   let t; try { t = await req.json(); } catch (e) { return json({ ok: false, chyba: 'Vstup není platný JSON.' }, 400); }
 
-  const ctx = { cenik: t.cenik, cenikProj: t.cenikProj, katalog: t.katalog || null,
+  /* Zahraniční odchylky (#181, 31. 8. 2026) jdou se stejnou verzí jako
+   * tuzemský ceník. Očistu (jen známé cesty, jen čísla) dělá jádro
+   * v programZaznam → cenikZahrOciste; server nevěří tomu, co přišlo. */
+  const ctx = { cenik: t.cenik, cenikProj: t.cenikProj, zahranicni: t.zahranicni || null,
+                katalog: t.katalog || null,
                 slevy: t.slevy || null, kdo: relace.email, poznamka: String(t.poznamka || ''),
                 build: String(t.build || '') };
   let db = await s.cti('db');

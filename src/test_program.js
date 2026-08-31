@@ -87,8 +87,14 @@ test('schéma se zapsalo', db1.schema === PROG_SCHEMA);
 test('razítko je ISO čas', /^\d{4}-\d{2}-\d{2}T/.test(db1.razitko));
 test('platná verze nemá konec platnosti', db1.platny.platnoDo === undefined);
 test('otisk se spočítal', /^[0-9a-f]{8}$/.test(db1.platny.otisk));
-test('otisk je stejný jako otisk ceníku ve variantě',
-  db1.platny.otisk === cenikOtisk(programData(db1.platny)));
+/* Otisk od 31. 8. 2026 (#181) nese i zahraniční odchylky — jinak by změna,
+ * která se týká jen zahraniční řady, vypadala jako „beze změny". Není proto
+ * shodný s holým otiskem ceníku, ale musí se z něj dát odvodit. */
+test('otisk je odvozený z ceníku i ze zahraničních odchylek',
+  db1.platny.otisk === programOtisk(db1.platny)
+  && db1.platny.otisk !== cenikOtisk(programData(db1.platny)));
+test('prázdná zahraniční řada je součástí záznamu',
+  db1.platny.zahranicni && !Object.keys(db1.platny.zahranicni.ceny).length);
 test('ceník se uložil hodnotou, ne odkazem', db1.platny.cenik !== DEFAULT_CENIK);
 test('poznámka a autor se nesou s verzí',
   db1.platny.kdo === 'Vendl' && db1.platny.poznamka === 'zdražení oceli');
@@ -158,7 +164,7 @@ cenikSet(rucne.platny.cenik, 'C.profilasKgKc', 99999);
 const podezrela = programNormalizuj(rucne);
 test('ruční zásah do cen se pozná podle otisku', !!podezrela.platny.otiskNesedi);
 test('otisk se přepočítá podle skutečných dat',
-  podezrela.platny.otisk === cenikOtisk(programData(podezrela.platny)));
+  podezrela.platny.otisk === programOtisk(podezrela.platny));
 test('podezřelý soubor se přesto načte (data se nezahodí)',
   cenikHodnota(programData(podezrela.platny), 'C.profilasKgKc') === 99999);
 

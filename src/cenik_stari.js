@@ -211,13 +211,26 @@ function cenikVerzeCislo(x) {
  * jedna cesta by verzi zapisovala a druhá tiše zahazovala. */
 function cenikRazitkoNovy(data, opts) {
   opts = opts || {};
-  return {
+  const r = {
     datum: opts.dnes || new Date().toISOString().slice(0, 10),
     build: opts.build || '',
     verze: cenikVerzeCislo(opts.verze),
     platnoOd: opts.platnoOd || '',
     otisk: cenikOtisk(data),
   };
+  /* Řada ceníku (#181): u roční staré nabídky musí jít doložit nejen
+   * z JAKÉ VERZE, ale i z JAKÉ ŘADY se počítalo. Tuzemská se nezapisuje —
+   * je výchozí a starší razítka ji nemají. */
+  const rada = (typeof cenikRadaVarianty === 'function') ? cenikRadaVarianty(data)
+    : ((data && data.cenikRada) || 'cr');
+  if (rada === 'zahr') r.rada = 'zahr';
+  return r;
+}
+
+/* Popis řady do razítka a přehledů: prázdno u tuzemska (výchozí stav
+ * nepotřebuje štítek), „zahraniční ceník" u druhé řady. */
+function cenikRazitkoRada(r) {
+  return (r && r.rada === 'zahr') ? 'zahraniční ceník' : '';
 }
 
 /* „verze 2 ceníku (platná od 1. 3. 2026)". Prázdno = verzi neznáme. */
@@ -453,5 +466,5 @@ if (typeof module !== 'undefined')
                      cenikJeKvitovano, cenikPrehled, cenikProcento, cenikVarovaniText,
                      cenikDatumCz, cenikPrepocti, cenikPrepoctiRozpracovane,
                      cenikOznacJakoDnesni,
-                     cenikVerzeCislo, cenikRazitkoNovy, cenikVerzeText, cenikVerzeVeta,
+                     cenikVerzeCislo, cenikRazitkoNovy, cenikRazitkoRada, cenikVerzeText, cenikVerzeVeta,
                      cenikDopadText };

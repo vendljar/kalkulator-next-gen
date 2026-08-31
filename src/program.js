@@ -80,14 +80,25 @@ function programData(zaznam) {
 }
 
 function programOtisk(zaznam) {
+  /* Otisk nese i zahraniční odchylky (#181): bez nich by zveřejnění změny,
+   * která se týká JEN zahraniční řady, vypadalo jako „beze změny" a databáze
+   * by ho odmítla zapsat. */
+  const zahr = JSON.stringify((zaznam || {}).zahranicni || {});
   if (typeof cenikOtisk === 'function' && typeof cenikSledovane === 'function')
-    return cenikOtisk(programData(zaznam));
-  return progOtiskText(JSON.stringify([(zaznam || {}).cenik, (zaznam || {}).cenikProj]));
+    return progOtiskText(cenikOtisk(programData(zaznam)) + '|' + zahr);
+  return progOtiskText(JSON.stringify([(zaznam || {}).cenik, (zaznam || {}).cenikProj,
+                                       (zaznam || {}).zahranicni]));
 }
 
 /* ---------- záznam jedné verze --------------------------------------- */
 
-/* ctx = { cenik, cenikProj, katalog, slevy, build, kdo, poznamka, kdy, platnoOd } */
+/* ctx = { cenik, cenikProj, zahranicni, katalog, slevy, build, kdo, poznamka, kdy, platnoOd }
+ *
+ * `zahranicni` = odchylky zahraniční řady ceníku OCK (#181, 31. 8. 2026):
+ * `{ ceny: {cesta: hodnota}, jenZahr: {cesta: true} }`. Bydlí UVNITŘ téhož
+ * záznamu jako tuzemský ceník, takže obě řady mají společné číslo verze
+ * i otisk — dvě samostatná čísla by se dřív nebo později rozešla a u roční
+ * staré nabídky by nešlo doložit, z jaké dvojice se počítalo. */
 function programZaznam(ctx, verze) {
   ctx = ctx || {};
   const z = {
@@ -99,6 +110,9 @@ function programZaznam(ctx, verze) {
     build: String(ctx.build || ''),
     cenik: progKopie(ctx.cenik) || {},
     cenikProj: progKopie(ctx.cenikProj) || {},
+    zahranicni: (typeof cenikZahrOciste === 'function')
+      ? cenikZahrOciste(ctx.zahranicni)
+      : (progKopie(ctx.zahranicni) || { ceny: {}, jenZahr: {} }),
     katalog: progKopie(ctx.katalog) || null,
     slevy: progKopie(ctx.slevy) || null,
   };
@@ -145,7 +159,8 @@ function programNormalizuj(data) {
 
   const zaznam = (z, i) => {
     const v = programZaznam({
-      cenik: z.cenik, cenikProj: z.cenikProj, katalog: z.katalog, slevy: z.slevy,
+      cenik: z.cenik, cenikProj: z.cenikProj, zahranicni: z.zahranicni,
+      katalog: z.katalog, slevy: z.slevy,
       build: z.build, kdo: z.kdo, poznamka: z.poznamka, kdy: z.zapsano, platnoOd: z.platnoOd,
     }, z.verze || i);
     // Otisk v souboru se přebírá, jen když sedí: přepsat ho potichu by

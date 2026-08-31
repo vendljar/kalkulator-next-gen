@@ -351,6 +351,17 @@ const MUTACE = [
     nahrad: "      if (!hesloPlatne(t.heslo))",
     proc: 'účet s rolí mimo matici práv se nikam nedostane a nejde opravit jinak než ručně v úložišti' },
 
+  /* ---------- zahraniční ceník (#181, 31. 8. 2026) ---------- */
+  { nazev: 'zahraniční ceník zveřejní kdokoli přihlášený', soubor: 'functions/program.mjs',
+    hledej: "  const { chyba, relace } = await vyzadujRoli(req, 'Administrátor');",
+    nahrad: "  const { chyba, relace } = await vyzadujRoli(req);",
+    proc: 'ceny, ze kterých žijí všechny nabídky, by mohl přepsat kdokoli přihlášený' },
+
+  { nazev: 'zahraniční odchylky se berou, jak přijdou', soubor: '../src/program.js',
+    hledej: "      ? cenikZahrOciste(ctx.zahranicni)",
+    nahrad: "      ? (ctx.zahranicni || { ceny: {}, jenZahr: {} })",
+    proc: 'cizí klíč ze souboru databáze by se dostal až do výpočtu ceny' },
+
   /* ---------- 4. dávka (B27, B28, B29, B31) ---------- */
   { nazev: 'B27: neplatný stav Pipedrive se nekontroluje', soubor: 'functions/pd_dealy.mjs',
     hledej: "  if (['open', 'won', 'lost', 'vse'].indexOf(stav) < 0)",

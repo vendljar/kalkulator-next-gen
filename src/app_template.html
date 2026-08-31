@@ -303,6 +303,24 @@
   .kalk-lista a.dv-kotva:hover { background:var(--acc); color:#fff; border-color:var(--acc); }
   /* cíl kotvy nesmí zajet pod přilepenou lištu */
   #page-kalk [id], #page-proj [id] { scroll-margin-top:64px; }
+  /* Řada ceníku ČR / Zahraničí (#181, 31. 8. 2026). Zahraniční režim jemně
+     podbarví celou hlavičku, aby se zakázka poznala i letmým pohledem —
+     zadání J. V.: „přepínač, který se bude jemně podbarvovat". */
+  .rada-prep { display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#fff; }
+  .rada-prep button { border:0; background:#fff; color:var(--mut); font:600 13px "Segoe UI", sans-serif;
+                      padding:4px 14px; cursor:pointer; }
+  .rada-prep button + button { border-left:1px solid var(--line); }
+  .rada-prep button.on { background:#eaf0ff; color:var(--acc); }
+  .rada-prep button.on.zahr { background:#ffedd5; color:#b45309; }
+  .zak-bar.rada-zahr { background:#fff7ed; border-color:#fdba74; }
+  .zak-bar.rada-zahr .zak-bar-h { background:#ffedd5; color:#b45309; border-bottom-color:#fdba74; }
+  .zak-bar.rada-zahr .zak-head input, .zak-bar.rada-zahr .zak-head select { background:#fffdf9; border-color:#f3d5b0; }
+  .ceniktbl tr.ma-zahr td { background:#fffaf3; }
+  .ceniktbl td.zahr-bunka { white-space:nowrap; }
+  .ceniktbl input.zahr-cena { width:96px; }
+  .ceniktbl input.zahr-cena.ma { border-color:#fdba74; background:#fffaf3; }
+  .rada-stitek { font-size:11.5px; font-weight:600; padding:1px 9px; border-radius:999px; margin-left:8px;
+                 background:#fff; color:#b45309; border:1px solid #fdba74; text-transform:none; letter-spacing:0; }
   /* Zamčená (nepočítaná) strana zakázky — 23. 8. 2026. Buňky zešednou
      a nejdou do nich klikat; hlavička a lišta zůstávají živé, protože
      číslo nabídky a přepnutí zámku se musí dát vyplnit i tady. */

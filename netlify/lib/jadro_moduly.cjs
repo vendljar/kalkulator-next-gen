@@ -50,6 +50,10 @@ Object.assign(globalThis, require('../../src/kontroly.js'));
 Object.assign(globalThis, require('../../src/firma.js'));
 Object.assign(globalThis, require('../../src/cenik.js'));
 Object.assign(globalThis, require('../../src/cenik_stari.js'));
+/* Řady ceníku (#181): server očišťuje zahraniční odchylky týmž kódem jako
+ * prohlížeč — bez tohohle řádku by `cenikZahrOciste` neznal seznam cest
+ * a propustil by i cizí klíč. */
+Object.assign(globalThis, require('../../src/cenik_rady.js'));
 Object.assign(globalThis, require('../../src/konfigurace.js'));
 Object.assign(globalThis, require('../../src/sablony_online.js'));
 Object.assign(globalThis, require('../../src/analytika.js'));

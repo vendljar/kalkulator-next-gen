@@ -11,7 +11,40 @@ const CENIK_GRP_SEKCE = (() => {
   return m;
 })();
 
-function cenikRows(def) {
+/* ---------- zahraniční sloupec (#181, 31. 8. 2026) ----------
+ *
+ * Prázdná buňka znamená „stejná jako tuzemská" — udržují se jen odchylky,
+ * ne druhá tabulka o třech stech řádcích. Zaškrtávátko „jen zahr." říká,
+ * že položka v tuzemské kalkulaci vůbec není (cestovní náklady, překlady);
+ * taková se v tuzemské zakázce nezobrazí ani s nulou.
+ *
+ * Zadává a zveřejňuje JEN administrátor — hlídá to i server. */
+function cenikZahrHodnota(path) {
+  const z = (typeof CENIK_ZAHR !== 'undefined') ? CENIK_ZAHR : null;
+  const v = z && z.ceny ? z.ceny[path] : undefined;
+  return v === undefined ? '' : v;
+}
+function cenikZahrSet(path, hodnota) {
+  if (!jeAdmin() || typeof CENIK_ZAHR === 'undefined') return;
+  const t = String(hodnota == null ? '' : hodnota).trim();
+  if (t === '') delete CENIK_ZAHR.ceny[path];
+  else {
+    const c = parseFloat(t.replace(/\s/g, '').replace(',', '.'));
+    if (!isFinite(c)) return;
+    CENIK_ZAHR.ceny[path] = c;
+  }
+  if (typeof progZprava === 'function')
+    progZprava('Zahraniční ceník se změnil — nezapomeňte ho zveřejnit tlačítkem níž, '
+      + 'jinak platí jen vám a po odhlášení se ztratí.', 'varovani');
+  render();
+}
+function cenikZahrJenSet(path, ano) {
+  if (!jeAdmin() || typeof CENIK_ZAHR === 'undefined') return;
+  if (ano) CENIK_ZAHR.jenZahr[path] = true; else delete CENIK_ZAHR.jenZahr[path];
+  render();
+}
+
+function cenikRows(def, zahrSloupec) {
   return def.map(([grp, items]) => {
     const body = items.map(([path, l, u, note, typ]) => {
       const val = get(path);
@@ -21,27 +54,48 @@ function cenikRows(def) {
           <option value="tomas" ${val === 'tomas' ? 'selected' : ''}>Tomáš</option>
           <option value="lakovna" ${val === 'lakovna' ? 'selected' : ''}>lakovna</option></select>`;
       else ed = `<input type="number" step="any" value="${esc(val)}" onchange="set('${path}', +this.value)">`;
-      return `<tr><td>${l}</td><td>${ed}</td><td>${u}</td><td>${note}</td></tr>`;
+      let zahr = '';
+      if (zahrSloupec) {
+        const zv = cenikZahrHodnota(path);
+        const jen = (typeof CENIK_ZAHR !== 'undefined') && !!CENIK_ZAHR.jenZahr[path];
+        zahr = typ ? '<td colspan="2" class="note">—</td>' : `<td class="zahr-bunka">
+          <input type="number" step="any" class="zahr-cena${zv === '' ? '' : ' ma'}" value="${esc(zv)}"
+            placeholder="jako ČR" title="prázdné = platí tuzemská cena"
+            onchange="cenikZahrSet('${path}', this.value)">
+          ${zv === '' ? '' : `<button class="mini noprint" title="převzít tuzemskou cenu"
+            onclick="cenikZahrSet('${path}', '')">↺</button>`}</td>
+          <td class="zahr-bunka"><label title="položka v tuzemské kalkulaci vůbec není">
+            <input type="checkbox" ${jen ? 'checked' : ''}
+              onchange="cenikZahrJenSet('${path}', this.checked)"> jen zahr.</label></td>`;
+      }
+      return `<tr${zahrSloupec && cenikZahrHodnota(path) !== '' ? ' class="ma-zahr"' : ''}>
+        <td>${l}</td><td>${ed}</td>${zahr}<td>${u}</td><td>${note}</td></tr>`;
     }).join('');
-    return `<tr class="sec"><td colspan="4">${grp}</td></tr>${body}${cenikCustomRows(CENIK_GRP_SEKCE[grp])}`;
+    const sl = zahrSloupec ? 6 : 4;
+    return `<tr class="sec"><td colspan="${sl}">${grp}</td></tr>${body}${cenikCustomRows(CENIK_GRP_SEKCE[grp], sl)}`;
   }).join('');
 }
 /* Vlastní položky přidané přímo v ceníku (per sekce) = TRVALÉ položky.
  * Zdrojem pravdy je KATALOG (mimo zakázku), takže se propíšou do každé nové
  * cenové nabídky. Změna se okamžitě promítne i do aktuální zakázky. */
-function cenikCustomRows(sekceKey) {
+function cenikCustomRows(sekceKey, sloupcu) {
   if (!sekceKey || !jeAdmin()) return '';
+  const SL = sloupcu || 4;
+  /* Trvalé položky mají zahraniční cenu přes ceník řady až tehdy, až se
+   * stanou součástí CENIK_DEF — zatím jim sloupec jen dorovná šířku. */
+  const mezera = SL > 4 ? '<td colspan="' + (SL - 4) + '" class="note">—</td>' : '';
   const arr = katalogSekce(KATALOG, sekceKey);
   const rows = arr.map(p => `<tr>
       <td><input type="text" value="${esc(p.nazev)}" onchange="katSet('${sekceKey}','${p.kid}','nazev',this.value)"></td>
       <td><input type="number" step="any" value="${+p.cena || 0}" onchange="katSet('${sekceKey}','${p.kid}','cena',this.value)"></td>
+      ${mezera}
       <td><input type="number" step="any" style="width:70px" value="${+p.mnozstvi || 1}" onchange="katSet('${sekceKey}','${p.kid}','mnozstvi',this.value)" title="výchozí množství v nové nabídce"></td>
       <td><span class="pill ok" title="je součástí každé nové cenové nabídky">trvalá</span>
           <button class="mini noprint" title="odebrat z ceníku i z této zakázky" onclick="katDel('${sekceKey}','${p.kid}')">✕</button></td></tr>`).join('');
   const lokal = katalogCil(Z, sekceKey).filter(p => !p.kid).length;
-  const info = lokal ? `<tr><td colspan="4"><span class="note">V této zakázce je navíc ${lokal} položka/y přidaná přímo v kalkulaci
+  const info = lokal ? `<tr><td colspan="${SL}"><span class="note">V této zakázce je navíc ${lokal} položka/y přidaná přímo v kalkulaci
       (dočasná). Tlačítkem 📌 v Kalkulaci OCK ji uložíš sem natrvalo.</span></td></tr>` : '';
-  return rows + info + `<tr class="pridat noprint"><td colspan="4"><button class="mini" onclick="katAdd('${sekceKey}')">+ přidat trvalou položku do sekce</button></td></tr>`;
+  return rows + info + `<tr class="pridat noprint"><td colspan="${SL}"><button class="mini" onclick="katAdd('${sekceKey}')">+ přidat trvalou položku do sekce</button></td></tr>`;
 }
 
 /* --- obsluha trvalých (katalogových) položek ceníku --- */
@@ -67,6 +121,10 @@ const CENIK_POZN = `<div class="note">Ceník je součástí aktivní varianty a 
   sestavení aplikace, se ceny mění tlačítkem <b>Zveřejnit</b> v kartě Platný ceník programu nahoře.</div>`;
 
 function renderCenik() {
+  /* Zahraniční sloupec vidí a edituje jen administrátor (#181) — zveřejnění
+   * hlídá i server, takže obchodníkovi by k ničemu nebyl. */
+  const zahrSl = jeAdmin() && typeof CENIK_ZAHR !== 'undefined';
+  const zahrPocet = zahrSl ? Object.keys(CENIK_ZAHR.ceny || {}).length : 0;
   document.getElementById('page-cenik').innerHTML =
     `${smiZobrazit('cenik.zverejnit') ? renderCenikProgramKarta() : ''}
      <div class="card"><h2 style="cursor:default">Ceník nákladů OCK – číselník jednotkových cen
@@ -80,9 +138,16 @@ function renderCenik() {
          platí jen pro danou zakázku – natrvalo ji uložíš tlačítkem 📌 u řádku. Výchozí zaškrtnutí volitelných
          řešíš v hlavním výpočtovém poli (sloupec „Výchozí").</div>
        <table class="ceniktbl">
-         <tr><th>Položka</th><th>Cena</th><th>Jednotka</th><th>Poznámka</th></tr>
-         ${cenikRows(CENIK_DEF)}
+         <tr><th>Položka</th><th>Cena ČR</th>${zahrSl
+           ? '<th>Cena Zahraničí</th><th>Jen zahraničí</th>' : ''}<th>Jednotka</th><th>Poznámka</th></tr>
+         ${cenikRows(CENIK_DEF, zahrSl)}
        </table>
+       ${zahrSl ? `<div class="note">Prázdná buňka ve sloupci <b>Cena Zahraničí</b> znamená
+         „stejná jako v ČR“ — udržují se jen odchylky. Zaškrtnutí <b>jen zahraničí</b> říká, že
+         položka v tuzemské kalkulaci vůbec není (cestovní náklady, překlady); v tuzemské zakázce
+         se pak nezobrazí ani s nulou. Odchylek je teď <b>${zahrPocet}</b>.
+         Zveřejňují se spolu s tuzemským ceníkem, jedním tlačítkem a pod jedním číslem verze —
+         obě řady tak nemůžou patřit k jiné verzi.</div>` : ''}
        ${smiZobrazit('cenik.import') ? `<div class="btns" style="margin-top:12px">
          <button class="primary" onclick="cenikExport()">⭳ Export do Excelu (OCK+PROJ)</button>
          <button onclick="cenikImport()">⭱ Import z Excelu</button>

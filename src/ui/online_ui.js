@@ -285,9 +285,12 @@ function onlineZverejni(preddanaPozn) {
     render(); return Promise.resolve(false);
   }
   const rozdily = ONLINE_STAV.db ? programRozdily(ONLINE_STAV.db, ctx) : [];
-  const shrnuti = ONLINE_STAV.db
+  const zahrPocet = (ctx.zahranicni && ctx.zahranicni.ceny)
+    ? Object.keys(ctx.zahranicni.ceny).length : 0;
+  const shrnuti = (ONLINE_STAV.db
     ? (rozdily.length ? rozdily.length + ' změněných položek ceníku' : 'ceník beze změny, mění se katalog nebo slevy')
-    : 'založení online databáze programu';
+    : 'založení online databáze programu')
+    + (zahrPocet ? ' · zahraniční řada: ' + zahrPocet + ' odchylek' : '');
   const pozn = (typeof preddanaPozn === 'string') ? preddanaPozn
     : prompt('Zveřejnit ceník aktivní varianty jako platný ONLINE pro celý program?\n\n'
     + shrnuti + '.\nOd této chvíle z něj budou vycházet nové nabídky všech přihlášených.\n'
@@ -297,7 +300,8 @@ function onlineZverejni(preddanaPozn) {
 
   ONLINE_STAV.pracuje = true; render();
   return onlineApi('/api/program', {
-    cenik: ctx.cenik, cenikProj: ctx.cenikProj, katalog: ctx.katalog,
+    cenik: ctx.cenik, cenikProj: ctx.cenikProj, zahranicni: ctx.zahranicni,
+    katalog: ctx.katalog,
     slevy: ctx.slevy, poznamka: pozn, build: ctx.build,
   }).then(o => {
     onlineZprava('Zveřejněno online – platí verze ' + o.verze + '.');
@@ -1581,6 +1585,9 @@ function onlineRadekZakazky(z, vyber) {
    * kde účet jméno vyplněné nemá — nic se nevymýšlí. */
   const kdo = (typeof uloObchodnik === 'function') ? uloObchodnik(z) : (z.autor || '—');
   const druh = (typeof uloDruhZakazky === 'function') ? uloDruhZakazky(z) : '';
+  /* Zahraniční zakázka nese štítek (#181) — tuzemská ne, ta je výchozí. */
+  const rada = z.rada === 'zahr'
+    ? ' <span class="rada-stitek" title="počítáno zahraničním ceníkem">Zahraničí</span>' : '';
   const chk = vyber
     ? `<td><input type="checkbox" ${onlineVybrano(z.soubor) ? 'checked' : ''}
         onchange="onlineVyberPrepni('${escJs(z.soubor)}', this.checked)"
@@ -1590,7 +1597,7 @@ function onlineRadekZakazky(z, vyber) {
     <td style="text-align:left">${esc(z.cislo || '(bez čísla)')}</td>
     <td style="text-align:left;white-space:normal">${esc(z.nazevAkce || '—')}</td>
     <td style="text-align:left;white-space:normal">${esc(z.objednatel || '—')}</td>
-    <td><span class="pill mut">${esc(druh)}</span></td>
+    <td><span class="pill mut">${esc(druh)}</span>${rada}</td>
     <td>${esc(z.datum || '')}</td>
     <td>${z.variant}</td>
     <td>${odeslane}</td>
