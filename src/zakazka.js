@@ -11,21 +11,82 @@
 
 const ZAKAZKA_SCHEMA = 2;
 
+/* ============================================================
+ * CENÍK JAKO ZDROJ PRAVDY PRO PÁR POLÍ ZADÁNÍ (1. 9. 2026)
+ *
+ * Zadání J. V.: „hodnoty z ceníku se do atypů a režií nepropisují. Ceník má
+ * být zdrojem pravdy. Ovšem tak to není."
+ *
+ * Od 31. 8. byly rozsahy práce a čísla pro ATYP v ceníku, ale používaly se jen
+ * při ZALOŽENÍ zakázky a při zaškrtnutí ATYP. Změna ceníku se do rozdělané
+ * kalkulace nepropsala — a to je proti tomu, k čemu ceník je.
+ *
+ * Pravidlo (stejné jako u globální přirážky, #184, jen o patro níž):
+ *   – VYPLNĚNÁ ceníková položka řídí zakázku. Prázdná (nebo nula) neřídí nic
+ *     a platí, co je v zakázce — viz cenikVychozi() v cenik.js.
+ *   – Co obchodník v kalkulaci SÁM přepsal, zůstává jeho. Ruční změnu si
+ *     poznamená `set()` do `data.zadaniRucni`.
+ *   – Zamčené (odeslané) a kvitované varianty se nepřepisují nikdy; o to se
+ *     stará volající (progSrovnejNedotcene).
+ *
+ * Pole ATYP se srovnávají jen u zakázky, která ATYP zaškrtnutý MÁ. U ostatních
+ * by rezerva 30 % z ceníku znamenala tichou změnu ceny u standardní šachty.
+ * ============================================================ */
+const ZADANI_Z_CENIKU = [
+  { z: 'montazZakladHod', c: 'vychMontazZakladHod', popis: 'Montáž – základ' },
+  { z: 'projekceZakladHod', c: 'vychProjekceZakladHod', popis: 'Projekce – základ' },
+  { z: 'oplechOstatniKg', c: 'vychOplechOstatniKg', popis: 'Oplechování ostatní – materiál' },
+  { z: 'oplechOstatniHod', c: 'vychOplechOstatniHod', popis: 'Oplechování ostatní – práce' },
+  { z: 'rezervaZakladPct', c: 'atypRezervaZakladPct', popis: 'REZERVA základ', atyp: true },
+  { z: 'rezervaPriplatkyPct', c: 'atypRezervaPriplatkyPct', popis: 'REZERVA příplatky', atyp: true },
+  { z: 'zamecnikAtypKc', c: 'atypZamecnikKc', popis: 'Zámečník atyp', atyp: true },
+];
+/* Hodiny navíc se nepočítají z ceníku přímo (jsou to podíly ze základu), ale
+ * ruční přepis se u nich hlídá stejně. */
+const ZADANI_RUCNI_KLICE = ZADANI_Z_CENIKU.map(x => x.z).concat(['montazAtypHod', 'projekceAtypHod']);
+
+function zadaniRucniMapa(data) {
+  if (!data || typeof data !== 'object') return {};
+  if (!data.zadaniRucni || typeof data.zadaniRucni !== 'object') data.zadaniRucni = {};
+  return data.zadaniRucni;
+}
+function zadaniRucniJe(data, klic) {
+  return !!(data && data.zadaniRucni && data.zadaniRucni[String(klic)]);
+}
+function zadaniRucniZnac(data, klic) {
+  if (ZADANI_RUCNI_KLICE.indexOf(String(klic)) < 0) return false;
+  zadaniRucniMapa(data)[String(klic)] = true;
+  return true;
+}
+function zadaniRucniZrus(data, klice) {
+  const m = zadaniRucniMapa(data);
+  (klice || ZADANI_RUCNI_KLICE).forEach(k => { delete m[String(k)]; });
+}
+
+/* Srovná pole zadání s ceníkem varianty. Vrací { zmen, pole:[{klic,popis,stara,nova}] }. */
+function zadaniZCeniku(data) {
+  const out = { zmen: 0, pole: [] };
+  if (!data || !data.ock || !data.ock.zadani || !data.cenik) return out;
+  if (typeof cenikVychozi !== 'function') return out;
+  const z = data.ock.zadani, c = data.cenik;
+  ZADANI_Z_CENIKU.forEach(m => {
+    if (m.atyp && !z.atyp) return;
+    if (zadaniRucniJe(data, m.z)) return;
+    const nova = cenikVychozi(c, m.c, null);
+    if (nova === null || nova === undefined) return;      // prázdná položka nic neřídí
+    const stara = z[m.z];
+    if (String(stara) === String(nova)) return;
+    z[m.z] = nova;
+    out.zmen++;
+    out.pole.push({ klic: m.z, popis: m.popis, stara, nova });
+  });
+  return out;
+}
+
 function novaVariantaData() {
   const cenik = JSON.parse(JSON.stringify(DEFAULT_CENIK));
   const zadani = JSON.parse(JSON.stringify(DEFAULT_ZADANI));
-  /* Rozsahy práce, se kterými začíná nová zakázka, si bere z ceníku
-   * (31. 8. 2026, zadání J. V.). Prázdná nebo nulová ceníková položka
-   * znamená nenastaveno a platí hodnota ze sestavení — viz cenikVychozi().
-   * Rozpracované nabídky se tím nemění: zadání je práce obchodníka
-   * a přepočet ceníku se ho nedotýká nikdy. */
-  if (typeof cenikVychozi === 'function') {
-    zadani.montazZakladHod = cenikVychozi(cenik, 'vychMontazZakladHod', zadani.montazZakladHod);
-    zadani.projekceZakladHod = cenikVychozi(cenik, 'vychProjekceZakladHod', zadani.projekceZakladHod);
-    zadani.oplechOstatniKg = cenikVychozi(cenik, 'vychOplechOstatniKg', zadani.oplechOstatniKg);
-    zadani.oplechOstatniHod = cenikVychozi(cenik, 'vychOplechOstatniHod', zadani.oplechOstatniHod);
-  }
-  return {
+  const data = {
     ock: { zadani, fixes: false },   // výchozí režim: 1:1 jako Excel
     cenik,
     /* Řada ceníku (#181, 31. 8. 2026): nová zakázka i nová varianta jsou
@@ -55,7 +116,14 @@ function novaVariantaData() {
     // obchodník je může vést zvlášť – přesně jako slevu a sazbu DPH.
     zaokr: (typeof zaokrDefault === 'function') ? zaokrDefault() : { krok: 100, smer: 'nahoru' },
     zaokrProj: (typeof zaokrDefault === 'function') ? zaokrDefault() : { krok: 100, smer: 'nahoru' },
+    /* Co si obchodník v zadání přepsal sám (1. 9. 2026). Nová zakázka nemá
+     * přepsané nic, takže ji ceník řídí celou — viz zadaniZCeniku(). */
+    zadaniRucni: {},
   };
+  /* Rozsahy práce z ceníku (31. 8. 2026, zadání J. V.). Prázdná nebo nulová
+   * ceníková položka nic neřídí a platí hodnota ze sestavení. */
+  zadaniZCeniku(data);
+  return data;
 }
 
 let _varCounter = 0;
@@ -919,7 +987,8 @@ const StorageAdapter = {
 };
 
 if (typeof module !== 'undefined')
-  module.exports = { uvodniFotoObrazky, uvodniFotoSymboly, uvodniFotoPole, ZAKAZKA_SCHEMA, novaZakazka, novaVarianta, novaVariantaData,
+  module.exports = { ZADANI_Z_CENIKU, ZADANI_RUCNI_KLICE, zadaniRucniMapa, zadaniRucniJe,
+                     zadaniRucniZnac, zadaniRucniZrus, zadaniZCeniku, uvodniFotoObrazky, uvodniFotoSymboly, uvodniFotoPole, ZAKAZKA_SCHEMA, novaZakazka, novaVarianta, novaVariantaData,
                      nastavRidici, ridiciVarianta, aktivniVarianta, importZakazka, StorageAdapter,
                      ZAK_HLAVICKA_POLE, zajistiProjHlavicku, projHlavicka,
                      projHlavickaEfektivni, projHlavickaZOck, projCisloNabidky,

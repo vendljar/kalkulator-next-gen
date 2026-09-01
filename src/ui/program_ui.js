@@ -85,7 +85,22 @@ function progSrovnejNedotcene(verzeInfo) {
    * sestavení; když se pak složka připojí a ceny se shodou okolností nezmění
    * (třeba proto, že už je jednou načetla jiná cesta), nezměnilo by se nic –
    * a lišta by dál svítila „není z čeho počítat" nad hotovou nabídkou. */
-  const n = r.prepocteno + r.orazitkovano + (r.znacky || 0);
+  /* A po cenách i pole zadání, která ceník řídí (1. 9. 2026, #186):
+   * rozsahy práce a čísla pro ATYP. Zamčené a kvitované varianty se
+   * vynechávají ze stejného důvodu jako u cen — jsou to doklady, ne
+   * rozpracovaná práce. */
+  let zadani = 0;
+  if (typeof cenikDoZadani === 'function' && typeof ZAK !== 'undefined'
+    && ZAK && Array.isArray(ZAK.varianty)) {
+    ZAK.varianty.forEach(v => {
+      if (!v || !v.data) return;
+      if (typeof variantaUzamcena === 'function' && variantaUzamcena(v)) return;
+      if (typeof cenikJeKvitovano === 'function' && typeof cenikOtisk === 'function'
+        && cenikJeKvitovano(v, cenikOtisk(v.data))) return;
+      zadani += cenikDoZadani(v);
+    });
+  }
+  const n = r.prepocteno + r.orazitkovano + (r.znacky || 0) + zadani;
   if (n && typeof syncVarianta === 'function') syncVarianta();
   return n;
 }

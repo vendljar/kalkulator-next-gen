@@ -32,7 +32,13 @@ const soubor = readdirSync(KAM)
    * se dál uznává, ať se historické příručky nepřestanou hlídat. */
   .filter((f) => /^MANUAL_OBCHODNIK_v.*\.html$/.test(f)
     || /^\d{4}-\d{2}-\d{2}_kalkulator_v.*_MANUAL_OBCHODNIK\.html$/.test(f))
+  /* Nejdřív podle DATA v názvu, teprve pak podle čísla verze. Verze je
+   * DEN.MĚSÍC.pořadí, takže na přelomu měsíce je „v1.9.1" číselně MENŠÍ než
+   * „v31.8.5", i když je novější — 1. 9. 2026 tahle kontrola sáhla po staré
+   * příručce a hlásila, že nesedí verze. Datum v ISO tvaru roste vždycky. */
   .sort((a, b) => {
+    const d = (f) => (f.match(/^(\d{4}-\d{2}-\d{2})/) || ['', ''])[1];
+    if (d(a) !== d(b)) return d(a) < d(b) ? -1 : 1;
     const x = cislaVerze(a), y = cislaVerze(b);
     for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0);
     return 0;
@@ -76,6 +82,23 @@ test('příručka popisuje databázi zákazníků',
 test('příručka popisuje Standard OCK a jeho tři stavy',
   /Standard OCK: pozná se atyp sám/.test(html) && /NELZE POSOUDIT/.test(html)
   && /Nic to neblokuje/.test(html));
+/* Obsah s prokliky (1. 9. 2026, zadání J. V.: „přidej na úvod seznam
+ * s jednotlivými kapitolami … aby se dalo klikem přeskočit na kapitolu"). */
+{
+  const ids = [...html.matchAll(/<h2 id="([^"]+)"/g)].map(m => m[1]);
+  const odkazy = [...html.matchAll(/<li[^>]*><a href="#(kap-[^"]+)"/g)].map(m => m[1]);
+  test('příručka má na úvod obsah', /id="obsah"/.test(html) && /obsah-list/.test(html));
+  test('každá kapitola má svou kotvu', ids.length >= 40, ids.length);
+  test('obsah odkazuje na všechny kapitoly', odkazy.length === ids.length,
+    odkazy.length + ' odkazů vs ' + ids.length + ' kapitol');
+  test('žádný odkaz v obsahu nemíří do prázdna',
+    odkazy.every(o => ids.includes(o)), odkazy.filter(o => !ids.includes(o)).join(', '));
+  test('obsah stojí PŘED první kapitolou',
+    html.indexOf('id="obsah"') < html.indexOf('<h2 id='));
+  test('od každé kapitoly vede šipka zpět na obsah',
+    (html.match(/class="nahoru" href="#obsah"/g) || []).length === ids.length);
+}
+
 test('příručka používá pojem zákazník, ne objednatel',
   /v aplikaci se všude říká „zákazník"|Zástupci a kontakty zákazníka/i.test(html));
 test('žádné skutečné ceníkové soubory v textu',

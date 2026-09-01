@@ -513,6 +513,19 @@ function set(path, v) {
   const ks = path.split('.'); const last = ks.pop();
   ks.reduce((o, k) => o[k], rootObj())[last] = v;
   aktivniVarianta(ZAK).upraveno = new Date().toISOString();
+  /* Ceník je zdroj pravdy pro pár polí zadání (1. 9. 2026): ruční přepis
+   * pole se poznamená, aby ho ceník nepřebil, a naopak změna ŘÍDÍCÍ ceníkové
+   * položky se hned propíše do kalkulace — jinak by administrátor zadal číslo
+   * do ceníku a v kalkulaci se nestalo nic (přesně to hlásil J. V.). */
+  if (path.startsWith('Z.') && typeof zadaniRucniZnac === 'function')
+    zadaniRucniZnac(aktivniVarianta(ZAK).data, path.slice(2));
+  if (path.startsWith('C.') && typeof ZADANI_Z_CENIKU !== 'undefined'
+    && typeof cenikDoZadani === 'function') {
+    const klic = path.slice(2);
+    const ridici = ZADANI_Z_CENIKU.some(m => m.c === klic)
+      || klic === 'atypMontazPct' || klic === 'atypProjekcePct';
+    if (ridici) cenikDoZadani(aktivniVarianta(ZAK));
+  }
   /* Zakázkové hodnoty (globální přirážka, sazba DPH): ruční změna se
    * poznamená. Poznámka slouží OBĚMA směry — zveřejnění ceníku nepřepíše to,
    * co obchodník sám nastavil (#177), a naopak do hodnoty, které se nikdo

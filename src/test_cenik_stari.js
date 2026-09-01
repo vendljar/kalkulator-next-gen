@@ -21,6 +21,8 @@ global.CENIK_DEF = ck.CENIK_DEF; global.CENIK_DEF_PROJ = ck.CENIK_DEF_PROJ;
 global.cenikGet = ck.cenikGet; global.cenikSet = ck.cenikSet; global.cenikVychozi = ck.cenikVychozi;
 const zk = require('./zakazka.js');
 global.novaVarianta = zk.novaVarianta; global.novaVariantaData = zk.novaVariantaData;
+global.zadaniZCeniku = zk.zadaniZCeniku; global.zadaniRucniZnac = zk.zadaniRucniZnac;
+global.zadaniRucniZrus = zk.zadaniRucniZrus; global.zadaniRucniJe = zk.zadaniRucniJe;
 global.aktivniVarianta = zk.aktivniVarianta; global.ridiciVarianta = zk.ridiciVarianta;
 const { novaZakazka } = zk;
 const zm = require('./zamek.js');
@@ -246,6 +248,56 @@ test('zamčená varianta se nehlídá – její cena už odešla', (() => {
     && cenikVychozi(null, 'x', 24) === 24);
   test('nesmysl v ceníku nesmí přebít sestavení',
     cenikVychozi({ x: 'abc' }, 'x', 24) === 24 && cenikVychozi({ x: -5 }, 'x', 24) === 24);
+}
+
+/* ---------- ceník řídí pole zadání (1. 9. 2026) ----------
+ * Zadání J. V.: „hodnoty z ceníku se do atypů a režií nepropisují. Ceník má
+ * být zdrojem pravdy. Ovšem tak to není." */
+{
+  const zak = zajistiZamek(novaZakazka());
+  const v = zak.varianty[0];
+  const d = v.data;
+  d.ock.zadani.atyp = true;
+  d.cenik.vychMontazZakladHod = 32;
+  d.cenik.vychOplechOstatniKg = 15;
+  d.cenik.atypRezervaZakladPct = 0.10;
+  d.cenik.atypZamecnikKc = 25000;
+  const r = zadaniZCeniku(d);
+  test('vyplněná ceníková položka se propíše do zadání',
+    d.ock.zadani.montazZakladHod === 32 && d.ock.zadani.oplechOstatniKg === 15, r.zmen);
+  test('a atypová pole taky, když je ATYP zaškrtnutý',
+    d.ock.zadani.rezervaZakladPct === 0.10 && d.ock.zadani.zamecnikAtypKc === 25000);
+  test('výsledek pojmenuje, co se změnilo',
+    r.pole.some(x => x.klic === 'montazZakladHod' && x.nova === 32), JSON.stringify(r.pole));
+  test('druhé volání už nemá co dělat', zadaniZCeniku(d).zmen === 0);
+
+  /* Ruční přepis obchodníka ceník nepřebije. */
+  zadaniRucniZnac(d, 'montazZakladHod');
+  d.ock.zadani.montazZakladHod = 99;
+  d.cenik.vychMontazZakladHod = 40;
+  zadaniZCeniku(d);
+  test('co obchodník přepsal sám, zůstává jeho', d.ock.zadani.montazZakladHod === 99);
+
+  /* Prázdná (nulová) položka neřídí nic. */
+  d.cenik.vychProjekceZakladHod = 0;
+  const pred = d.ock.zadani.projekceZakladHod;
+  zadaniZCeniku(d);
+  test('prázdná ceníková položka nechává zadání být', d.ock.zadani.projekceZakladHod === pred);
+
+  /* Bez ATYPu se atypová pole nesrovnávají — jinak by standardní šachta tiše
+   * dostala rezervu 10 %. */
+  const zak2 = zajistiZamek(novaZakazka());
+  const d2 = zak2.varianty[0].data;
+  d2.ock.zadani.atyp = false;
+  d2.ock.zadani.rezervaZakladPct = 0;
+  d2.cenik.atypRezervaZakladPct = 0.10;
+  zadaniZCeniku(d2);
+  test('bez zaškrtnutého ATYP se rezerva z ceníku nebere', d2.ock.zadani.rezervaZakladPct === 0);
+
+  test('značka se zapíše jen u sledovaných polí',
+    zadaniRucniZnac(d2, 'sirka') === false && zadaniRucniZnac(d2, 'rezervaZakladPct') === true);
+  zadaniRucniZrus(d2, ['rezervaZakladPct']);
+  test('a jde zase zrušit (přepnutí ATYP)', zadaniRucniJe(d2, 'rezervaZakladPct') === false);
 }
 
 /* ---------- přepočet ---------- */

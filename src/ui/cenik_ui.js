@@ -73,8 +73,13 @@ function cenikRows(def, zahrSloupec) {
             <input type="checkbox" ${jen ? 'checked' : ''}
               onchange="cenikZahrJenSet('${path}', this.checked)"> jen zahr.</label></td>`;
       }
+      /* Třídy místo nth-child: se sloupcem Cena Zahraničí má tabulka šest
+       * sloupců, ne čtyři, a stará pravidla podle pořadí pak trefila cizí
+       * buňky — poznámka zůstala v `white-space:nowrap` a utekla mimo kartu
+       * (hlášeno J. V. 1. 9. 2026: „popisný text se nám v ceníku nevejde na
+       * stránku"). Třída ví, co je co, ať sloupců přibude kolik chce. */
       return `<tr${zahrSloupec && cenikZahrHodnota(path) !== '' ? ' class="ma-zahr"' : ''}>
-        <td>${l}</td><td>${ed}</td>${zahr}<td>${u}</td><td>${note}</td></tr>`;
+        <td class="c-nazev">${l}</td><td class="c-hod">${ed}</td>${zahr}<td class="c-jed">${u}</td><td class="c-pozn">${note}</td></tr>`;
     }).join('');
     const sl = zahrSloupec ? 6 : 4;
     return `<tr class="sec"><td colspan="${sl}">${grp}</td></tr>${body}${cenikCustomRows(CENIK_GRP_SEKCE[grp], sl)}`;
@@ -155,11 +160,11 @@ function renderCenik() {
          <b>každé nové cenové nabídky</b> (žije mimo zakázku, v katalogu). Položka přidaná přímo v Kalkulaci OCK
          platí jen pro danou zakázku – natrvalo ji uložíš tlačítkem 📌 u řádku. Výchozí zaškrtnutí volitelných
          řešíš v hlavním výpočtovém poli (sloupec „Výchozí").</div>
-       <table class="ceniktbl">
-         <tr><th>Položka</th><th>Cena ČR</th>${zahrSl
-           ? '<th>Cena Zahraničí</th><th>Jen zahraničí</th>' : ''}<th>Jednotka</th><th>Poznámka</th></tr>
+       <div class="cenik-scroll"><table class="ceniktbl">
+         <tr><th class="c-nazev">Položka</th><th>Cena ČR</th>${zahrSl
+           ? '<th>Cena Zahraničí</th><th>Jen zahraničí</th>' : ''}<th class="c-jed">Jednotka</th><th class="c-pozn">Poznámka</th></tr>
          ${cenikRows(CENIK_DEF, zahrSl)}
-       </table>
+       </table></div>
        ${zahrSl ? `<div class="note">Prázdná buňka ve sloupci <b>Cena Zahraničí</b> znamená
          „stejná jako v ČR“ — udržují se jen odchylky. Zaškrtnutí <b>jen zahraničí</b> říká, že
          položka v tuzemské kalkulaci vůbec není (cestovní náklady, překlady); v tuzemské zakázce
@@ -195,10 +200,10 @@ function renderCenikProj() {
        <div class="row" style="max-width:420px">
          ${inp('PC.marze', { type: 'pct', l: 'GLOBÁLNÍ PŘIRÁŽKA PROJ' })}
        </div>
-       <table class="ceniktbl">
+       <div class="cenik-scroll"><table class="ceniktbl">
          <tr><th>Položka</th><th>Cena</th><th>Jednotka</th><th>Poznámka</th></tr>
          ${cenikRows(CENIK_DEF_PROJ)}
-       </table>
+       </table></div>
        ${smiZobrazit('cenik.import') ? `<div class="btns" style="margin-top:12px">
          <button class="primary" onclick="cenikExport()">⭳ Export do Excelu (OCK+PROJ)</button>
          <button onclick="cenikImport()">⭱ Import z Excelu</button>

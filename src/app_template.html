@@ -384,6 +384,17 @@
   .ceniktbl td:nth-child(2) { width:140px; }
   .ceniktbl td:nth-child(3) { width:70px; text-align:left; color:var(--mut); }
   .ceniktbl td:nth-child(4) { text-align:left; color:var(--mut); font-size:12px; white-space:normal; }
+  /* Ceníková tabulka podle TŘÍD (1. 9. 2026). Pravidla podle pořadí sloupců
+     výš platí dál pro ostatní tabulky s .ceniktbl (překlady v Nastavení);
+     v ceníku OCK/PROJ ale sloupců přibylo a poznámka se nevešla na stránku. */
+  .ceniktbl td.c-nazev, .ceniktbl th.c-nazev { text-align:left; white-space:normal; width:230px; }
+  .ceniktbl td.c-hod { width:150px; }
+  .ceniktbl td.c-jed, .ceniktbl th.c-jed { width:76px; text-align:left; color:var(--mut); white-space:nowrap; }
+  .ceniktbl td.c-pozn, .ceniktbl th.c-pozn { text-align:left; color:var(--mut); font-size:12px;
+     white-space:normal; overflow-wrap:anywhere; }
+  /* Karta má overflow:hidden, takže cokoli širšího by se uřízlo. Tabulka se
+     proto smí posunout uvnitř vlastního rámečku, ne pod okrajem karty. */
+  .cenik-scroll { overflow-x:auto; }
   .subhead td { color:var(--mut); font-size:11px; text-transform:uppercase; background:#fafbfd; }
   .neg { color:#b91c1c; }
   /* editovatelný název položky přímo v tabulce (vypadá jako text, edit po najetí/kliknutí) */

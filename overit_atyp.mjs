@@ -192,6 +192,55 @@ zkus('nová zakázka bere výchozí rozsahy práce z ceníku',
 zkus('nula v ceníku znamená nenastaveno, platí hodnota ze sestavení',
   vychoziZak.nula === 24, vychoziZak.nula);
 
+/* ---------- 7) ceník je zdroj pravdy i pro rozdělanou zakázku (1. 9. 2026) ----------
+ * Zadání J. V.: „hodnoty z ceníku se do atypů a režií nepropisují." Do teď se
+ * ceník použil jen při založení zakázky a při zaškrtnutí ATYP. */
+const propis = await p.evaluate(() => {
+  prepniTab('kalk'); render();
+  atypPrepni(true);
+  const pred = { mont: Z.montazZakladHod, rez: Z.rezervaZakladPct, zam: Z.zamecnikAtypKc,
+                 mAtyp: Z.montazAtypHod, opl: Z.oplechOstatniKg };
+  set('C.vychMontazZakladHod', 32);
+  set('C.vychOplechOstatniKg', 15);
+  set('C.atypRezervaZakladPct', 0.10);
+  set('C.atypZamecnikKc', 25000);
+  set('C.atypMontazPct', 0.50);
+  const po = { mont: Z.montazZakladHod, rez: Z.rezervaZakladPct, zam: Z.zamecnikAtypKc,
+               mAtyp: Z.montazAtypHod, opl: Z.oplechOstatniKg };
+  set('Z.montazZakladHod', 99);
+  set('C.vychMontazZakladHod', 40);
+  return { pred, po, poRucnim: Z.montazZakladHod,
+           rucni: Object.keys(aktivniVarianta(ZAK).data.zadaniRucni || {}) };
+});
+zkus('změna ceníku se hned propíše do rozsahů práce',
+  propis.po.mont === 32 && propis.po.opl === 15, JSON.stringify(propis.po));
+zkus('a do atypových polí taky',
+  propis.po.rez === 0.10 && propis.po.zam === 25000, JSON.stringify(propis.po));
+zkus('hodiny navíc se přepočítají podle ceníkového podílu',
+  propis.po.mAtyp > propis.pred.mAtyp, propis.pred.mAtyp + ' → ' + propis.po.mAtyp);
+zkus('ruční přepis obchodníka ceník nepřebije', propis.poRucnim === 99, propis.poRucnim);
+zkus('a je poznamenaný jako ruční', propis.rucni.indexOf('montazZakladHod') >= 0,
+  JSON.stringify(propis.rucni));
+
+/* ---------- 8) ceníková tabulka se vejde do karty (1. 9. 2026) ----------
+ * Hlášeno J. V.: „popisný text se nám v ceníku nevejde na stránku." Se
+ * sloupcem Cena Zahraničí má tabulka šest sloupců a poznámka utíkala mimo. */
+const sirka = await p.evaluate(() => {
+  NAST.jeAdmin = true; prepniTab('cenik'); render();
+  const tb = document.querySelector('#page-cenik .ceniktbl');
+  const karta = tb.closest('.card');
+  const pozn = document.querySelector('#page-cenik .ceniktbl td.c-pozn');
+  return { tab: tb.scrollWidth, karta: karta.clientWidth,
+           poznVpravo: pozn ? Math.round(pozn.getBoundingClientRect().right) : 0,
+           kartaVpravo: Math.round(karta.getBoundingClientRect().right),
+           text: pozn ? pozn.textContent.trim().slice(0, 30) : '' };
+});
+zkus('tabulka ceníku se vejde do karty', sirka.tab <= sirka.karta + 1,
+  sirka.tab + ' vs ' + sirka.karta);
+zkus('sloupec s poznámkou je celý vidět', sirka.poznVpravo <= sirka.kartaVpravo + 1,
+  sirka.poznVpravo + ' vs ' + sirka.kartaVpravo);
+zkus('a poznámka opravdu nějaký text nese', sirka.text.length > 3, sirka.text);
+
 zkus('za celý průchod nevznikla chyba v konzoli', konzole.length === 0, konzole.join(' | '));
 
 await b.close();

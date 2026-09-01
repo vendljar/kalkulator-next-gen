@@ -96,6 +96,38 @@ function renderInputs() {
       inp('Z.rezervaPriplatkyPct', { type: 'pct', l: 'REZERVA příplatky' }), false, 'ock-prace');
 }
 
+/* ---- ceník → zadání pro jednu variantu (1. 9. 2026) ----
+ *
+ * Zadání J. V.: „hodnoty z ceníku se do atypů a režií nepropisují. Ceník má
+ * být zdrojem pravdy." Tohle je ta ruka, která to dělá: srovná pole zadání
+ * s ceníkem varianty. Jednoduchá pole umí jádro (zadaniZCeniku v zakazka.js),
+ * tady se k nim přidávají HODINY NAVÍC — ty se nepřebírají, ale počítají
+ * z podílu v ceníku, a k tomu je potřeba výpočet (hodiny navíc dle konstrukce),
+ * který v jádru zakázky není.
+ *
+ * Nesahá na to, co obchodník přepsal sám (`data.zadaniRucni`), a volá se jen
+ * nad rozpracovanou variantou — zamčené a kvitované vynechává volající. */
+function cenikDoZadani(v) {
+  const d = v && v.data;
+  if (!d || typeof zadaniZCeniku !== 'function') return 0;
+  let zmen = zadaniZCeniku(d).zmen;
+  const z = d.ock && d.ock.zadani, c = d.cenik;
+  if (!z || !c || !z.atyp || typeof cenikVychozi !== 'function') return zmen;
+  const pm = cenikVychozi(c, 'atypMontazPct', null);
+  const pp = cenikVychozi(c, 'atypProjekcePct', null);
+  if (pm != null && !zadaniRucniJe(d, 'montazAtypHod')) {
+    let navic = 0;
+    try { navic = vypocet(z, c, JEKLY, (d.ock || {}).fixes).montaz.hodinyNavicCelkem || 0; } catch (e) { navic = 0; }
+    const nova = Math.round(pm * ((+z.montazZakladHod || 0) + navic));
+    if (z.montazAtypHod !== nova) { z.montazAtypHod = nova; zmen++; }
+  }
+  if (pp != null && !zadaniRucniJe(d, 'projekceAtypHod')) {
+    const nova = Math.round(pp * (+z.projekceZakladHod || 0));
+    if (z.projekceAtypHod !== nova) { z.projekceAtypHod = nova; zmen++; }
+  }
+  return zmen;
+}
+
 /* Zaškrtnutí ATYP: předvyplnění rezerv a zámečníka (17. 8. 2026 večer).
  * Stojí MIMO renderInputs — volá se z onchange, musí být globální. */
 function atypPrepni(zap, opts) {
@@ -116,6 +148,12 @@ function atypPrepni(zap, opts) {
     else Z.atypRucneVypnut = true;
   }
   Z.atyp = !!zap;
+  /* Přepnutí ATYP je vědomé rozhodnutí: předvyplní se znovu z ceníku, takže
+   * se ruční značky u atypových polí ruší (1. 9. 2026). Co si obchodník
+   * přepíše POTOM, mu zase zůstane. */
+  if (typeof zadaniRucniZrus === 'function')
+    zadaniRucniZrus(aktivniVarianta(ZAK).data,
+      ['rezervaZakladPct', 'rezervaPriplatkyPct', 'zamecnikAtypKc', 'montazAtypHod', 'projekceAtypHod']);
   /* Čím se ATYP předvyplní, bere ceník (31. 8. 2026, zadání J. V.: „do ceníku
    * OCK v sekci atyp přidej ještě možnost editovat atypické položky").
    * Prázdná nebo nulová ceníková položka znamená nenastaveno a platí hodnota
