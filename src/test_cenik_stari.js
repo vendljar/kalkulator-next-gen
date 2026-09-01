@@ -18,7 +18,7 @@ const sl = require('./sleva.js');
 global.slevaPodil = sl.slevaPodil; global.slevaDefault = sl.slevaDefault;
 const ck = require('./cenik.js');
 global.CENIK_DEF = ck.CENIK_DEF; global.CENIK_DEF_PROJ = ck.CENIK_DEF_PROJ;
-global.cenikGet = ck.cenikGet; global.cenikSet = ck.cenikSet;
+global.cenikGet = ck.cenikGet; global.cenikSet = ck.cenikSet; global.cenikVychozi = ck.cenikVychozi;
 const zk = require('./zakazka.js');
 global.novaVarianta = zk.novaVarianta; global.novaVariantaData = zk.novaVariantaData;
 global.aktivniVarianta = zk.aktivniVarianta; global.ridiciVarianta = zk.ridiciVarianta;
@@ -213,6 +213,40 @@ test('zamčená varianta se nehlídá – její cena už odešla', (() => {
   const pr = cenikPrehled(kopie, DNES(), { dnes: '2026-07-29' });
   return pr.zamceno === true && pr.varovat === false;
 })());
+
+/* ---------- ceníkové položky ATYP a výchozí rozsahy práce (31. 8. 2026) ----------
+ * Zadání J. V.: „do ceníku OCK v sekci atyp přidej ještě možnost editovat
+ * atypické položky … a do sekce režie přidej položky z červených rámečků."
+ * Podstatné je, že jsou to REGULÉRNÍ ceníkové položky: jdou zveřejnit, jdou
+ * do otisku a do porovnání verzí. Kdyby ve sledovaných nebyly, změna jen
+ * jejich hodnoty by se nedala zveřejnit (viz audit N8 u PC.dph). */
+{
+  const cesty = cenikSledovane().map(p => p.cesta);
+  const nove = ['C.atypPrirazka', 'C.atypMontazPct', 'C.atypProjekcePct', 'C.atypZamecnikKc',
+                'C.atypRezervaZakladPct', 'C.atypRezervaPriplatkyPct',
+                'C.vychMontazZakladHod', 'C.vychProjekceZakladHod',
+                'C.vychOplechOstatniKg', 'C.vychOplechOstatniHod'];
+  test('nové položky ATYP i výchozí rozsahy jsou mezi sledovanými',
+    nove.every(c => cesty.includes(c)), nove.filter(c => !cesty.includes(c)).join(', '));
+  const a = DNES(), b = DNES();
+  b.cenik.atypRezervaZakladPct = 0.45;
+  test('změna jen ceníkové rezervy ATYP změní otisk', cenikOtisk(a) !== cenikOtisk(b));
+  test('a objeví se v rozdílech', (() => {
+    const r = cenikRozdily(a, b);
+    return r.length === 1 && r[0].cesta === 'C.atypRezervaZakladPct';
+  })(), cenikRozdily(a, b).map(r => r.cesta).join(', '));
+  /* Zakázková hodnota to NENÍ: je to firemní nastavení jako každá cena. */
+  test('ceníková položka ATYP není zakázková hodnota',
+    !cenikPatriZakazce('C.atypRezervaZakladPct'));
+
+  /* „Prázdno nebo nula = nenastaveno, platí hodnota ze sestavení." */
+  test('cenikVychozi vezme hodnotu z ceníku', cenikVychozi({ x: 32 }, 'x', 24) === 32);
+  test('nula znamená nenastaveno', cenikVychozi({ x: 0 }, 'x', 24) === 24);
+  test('chybějící klíč i prázdný ceník taky', cenikVychozi({}, 'x', 24) === 24
+    && cenikVychozi(null, 'x', 24) === 24);
+  test('nesmysl v ceníku nesmí přebít sestavení',
+    cenikVychozi({ x: 'abc' }, 'x', 24) === 24 && cenikVychozi({ x: -5 }, 'x', 24) === 24);
+}
 
 /* ---------- přepočet ---------- */
 const { v: vp } = staraVarianta();

@@ -12,9 +12,22 @@
 const ZAKAZKA_SCHEMA = 2;
 
 function novaVariantaData() {
+  const cenik = JSON.parse(JSON.stringify(DEFAULT_CENIK));
+  const zadani = JSON.parse(JSON.stringify(DEFAULT_ZADANI));
+  /* Rozsahy práce, se kterými začíná nová zakázka, si bere z ceníku
+   * (31. 8. 2026, zadání J. V.). Prázdná nebo nulová ceníková položka
+   * znamená nenastaveno a platí hodnota ze sestavení — viz cenikVychozi().
+   * Rozpracované nabídky se tím nemění: zadání je práce obchodníka
+   * a přepočet ceníku se ho nedotýká nikdy. */
+  if (typeof cenikVychozi === 'function') {
+    zadani.montazZakladHod = cenikVychozi(cenik, 'vychMontazZakladHod', zadani.montazZakladHod);
+    zadani.projekceZakladHod = cenikVychozi(cenik, 'vychProjekceZakladHod', zadani.projekceZakladHod);
+    zadani.oplechOstatniKg = cenikVychozi(cenik, 'vychOplechOstatniKg', zadani.oplechOstatniKg);
+    zadani.oplechOstatniHod = cenikVychozi(cenik, 'vychOplechOstatniHod', zadani.oplechOstatniHod);
+  }
   return {
-    ock: { zadani: JSON.parse(JSON.stringify(DEFAULT_ZADANI)), fixes: false },   // výchozí režim: 1:1 jako Excel
-    cenik: JSON.parse(JSON.stringify(DEFAULT_CENIK)),
+    ock: { zadani, fixes: false },   // výchozí režim: 1:1 jako Excel
+    cenik,
     /* Řada ceníku (#181, 31. 8. 2026): nová zakázka i nová varianta jsou
      * VŽDY tuzemské (rozhodnutí J. V.); na zahraniční se přepíná vědomě
      * v hlavičce a přepnutí se nejdřív zeptá. */

@@ -98,6 +98,31 @@ const clone = o => JSON.parse(JSON.stringify(o));
     test('C3 za prázdnou samouzavírací buňkou B3 zachováno', rows[2] && rows[2][0] === 'X' && rows[2][2] === 7, JSON.stringify(rows[2]));
   }
 
+  /* Procentní položky ceníku (31. 8. 2026: ATYP a výchozí rozsahy práce).
+   * V datech jsou desetinný podíl, v Excelu se zadávají stejně jako globální
+   * přirážka — a hlavně se nesmějí importovat jako TEXT, jinak by v ceníku
+   * skončil řetězec a výpočet by z něj udělal NaN. */
+  {
+    const C2 = ZC.zkusebniCenik(), PC2 = ZC.zkusebniCenikProj();
+    C2.atypRezervaZakladPct = 0.30; C2.vychMontazZakladHod = 24;
+    const listy = cen.cenikToSheets(C2, PC2);
+    const najdi = (klic) => listy[0].rows.find(r => r[1] === klic);
+    test('procentní položka ATYP je v exportu', !!najdi('C.atypRezervaZakladPct'));
+    test('výchozí rozsah práce je v exportu', !!najdi('C.vychMontazZakladHod'));
+    najdi('C.atypRezervaZakladPct')[4] = 0.45;
+    najdi('C.vychMontazZakladHod')[4] = 32;
+    const d = cen.cenikDiffZeSheets(listy, C2, PC2);
+    test('import procenta hlásí změnu jako číslo', (() => {
+      const z = d.zmeny.find(x => x.cesta === 'C.atypRezervaZakladPct');
+      return z && z.nova === 0.45 && typeof z.nova === 'number';
+    })(), JSON.stringify(d.zmeny.map(z => z.cesta + '=' + z.nova)));
+    cen.cenikAplikuj(d.zmeny, C2, PC2);
+    test('a zapíše se do ceníku jako podíl', C2.atypRezervaZakladPct === 0.45, C2.atypRezervaZakladPct);
+    test('výchozí rozsah práce se importuje taky', C2.vychMontazZakladHod === 32, C2.vychMontazZakladHod);
+    test('import nehlásí chyby ani neznámé klíče', d.chyby.length === 0 && d.nezname.length === 0,
+      d.chyby.join(';') + ' | ' + d.nezname.join(','));
+  }
+
   console.log(fail ? `\n${fail} CHYB` : '\nVŠECHNY TESTY CENÍK XLSX OK');
   process.exit(fail ? 1 : 0);
 })();

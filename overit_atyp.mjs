@@ -126,6 +126,72 @@ zkus('po doplnění ceny se položka spočítá množství × cena', poDoplneni.
 zkus('a varování zhasne', poDoplneni.bezCeny === false && poDoplneni.kody.indexOf('atypBezCeny') < 0,
   (poDoplneni.kody || []).join(','));
 
+/* ---------- 6) ceník řídí, čím se ATYP předvyplní (31. 8. 2026) ----------
+ * Zadání J. V.: „do ceníku OCK v sekci atyp přidej ještě možnost editovat
+ * atypické položky." Do teď byla ta čísla napsaná v kódu. */
+const vCeniku = await p.evaluate(() => {
+  const html = (() => { prepniTab('cenik'); render(); return document.getElementById('page-cenik').innerHTML; })();
+  return {
+    prirazka: /ATYP: přirážka za projekční a koordinační práce/.test(html),
+    montaz: /ATYP: montáž navíc/.test(html),
+    projekce: /ATYP: projekce navíc/.test(html),
+    zamecnik: /ATYP: zámečník atyp/.test(html),
+    rezervy: /ATYP: rezerva základ/.test(html) && /ATYP: rezerva příplatky/.test(html),
+    vychozi: /Výchozí: montáž – základ/.test(html) && /Výchozí: projekce – základ/.test(html)
+      && /Výchozí: oplechování ostatní – materiál/.test(html)
+      && /Výchozí: oplechování ostatní – práce/.test(html),
+  };
+});
+zkus('ceník má v sekci ATYP přirážku za ATYP', vCeniku.prirazka);
+zkus('a podíly pro montáž i projekci navíc', vCeniku.montaz && vCeniku.projekce);
+zkus('a předvyplněnou částku za zámečníka', vCeniku.zamecnik);
+zkus('a obě rezervy', vCeniku.rezervy);
+zkus('sekce REŽIE má výchozí rozsahy práce pro novou zakázku', vCeniku.vychozi);
+
+const pct = await p.evaluate(() => {
+  /* Procento se zadává lidsky (30) a ukládá jako podíl (0,30). */
+  set('C.atypRezervaZakladPct', 40 / 100);
+  prepniTab('cenik'); render();
+  const html = document.getElementById('page-cenik').innerHTML;
+  return { data: aktivniVarianta(ZAK).data.cenik.atypRezervaZakladPct,
+           vidiSe: /value="40"/.test(html) };
+});
+zkus('procento se ukládá jako podíl a zobrazuje v %', pct.data === 0.4 && pct.vidiSe, JSON.stringify(pct));
+
+const predvypln = await p.evaluate(() => {
+  prepniTab('kalk');
+  const c = aktivniVarianta(ZAK).data.cenik;
+  c.atypRezervaZakladPct = 0.40; c.atypRezervaPriplatkyPct = 0.25;
+  c.atypZamecnikKc = 70000; c.atypMontazPct = 0.50; c.atypProjekcePct = 0.10;
+  Z.montazZakladHod = 24; Z.projekceZakladHod = 50;
+  atypPrepni(true);
+  return { rezZ: Z.rezervaZakladPct, rezP: Z.rezervaPriplatkyPct, zam: Z.zamecnikAtypKc,
+           mont: Z.montazAtypHod, proj: Z.projekceAtypHod };
+});
+zkus('zaškrtnutí ATYP vezme rezervy z ceníku',
+  predvypln.rezZ === 0.40 && predvypln.rezP === 0.25, JSON.stringify(predvypln));
+zkus('a částku za zámečníka taky', predvypln.zam === 70000, predvypln.zam);
+zkus('a hodiny navíc podle ceníkových podílů',
+  predvypln.mont >= 12 && predvypln.proj === 5, JSON.stringify(predvypln));
+
+const vychoziZak = await p.evaluate(() => {
+  DEFAULT_CENIK.vychMontazZakladHod = 32;
+  DEFAULT_CENIK.vychProjekceZakladHod = 60;
+  DEFAULT_CENIK.vychOplechOstatniKg = 15;
+  DEFAULT_CENIK.vychOplechOstatniHod = 8;
+  const d = novaVariantaData();
+  DEFAULT_CENIK.vychMontazZakladHod = 0;   // 0 = nenastaveno → platí sestavení
+  const d0 = novaVariantaData();
+  return { hod: d.ock.zadani.montazZakladHod, proj: d.ock.zadani.projekceZakladHod,
+           kg: d.ock.zadani.oplechOstatniKg, praceHod: d.ock.zadani.oplechOstatniHod,
+           nula: d0.ock.zadani.montazZakladHod };
+});
+zkus('nová zakázka bere výchozí rozsahy práce z ceníku',
+  vychoziZak.hod === 32 && vychoziZak.proj === 60 && vychoziZak.kg === 15 && vychoziZak.praceHod === 8,
+  JSON.stringify(vychoziZak));
+zkus('nula v ceníku znamená nenastaveno, platí hodnota ze sestavení',
+  vychoziZak.nula === 24, vychoziZak.nula);
+
 zkus('za celý průchod nevznikla chyba v konzoli', konzole.length === 0, konzole.join(' | '));
 
 await b.close();

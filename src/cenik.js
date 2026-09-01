@@ -2,7 +2,8 @@
  * CENÍK – definice položek (jeden zdroj pravdy) + import/export Excel.
  * CENIK_DEF / CENIK_DEF_PROJ: kategorie → [cesta, popis, jednotka, pozn, typ?].
  * cesta je „C.klic" / „C.skupina.klic" (OCK) nebo „PC.…" (PROJ).
- * typ: undefined = číslo, 'text' = řetězec, 'selLak' = výběr (tomas/lakovna).
+ * typ: undefined = číslo, 'text' = řetězec, 'selLak' = výběr (tomas/lakovna),
+ *      'pct' = procento (v datech desetinný podíl 0,30 – zadává se 30).
  * Používá záložka Ceník (cenik_ui.js) i Excel import/export.
  * ============================================================ */
 
@@ -31,6 +32,22 @@ const CENIK_DEF = [
    * zákazník má vidět jednu ocelovou konstrukci, ne účet za „něco navíc". */
   ['ATYP – PRVKY A PRÁCE NAVÍC', [
     ['C.zamecnikAtypKc', 'Zámečník – ostatní práce (atyp)', 'Kč/j.', 'v zakázce jde přebít dohodou pro jednu stavbu'],
+    /* Co se stane po zaškrtnutí ATYP (zadání J. V. 31. 8. 2026: „do ceníku OCK
+     * v sekci atyp přidej ještě možnost editovat atypické položky"). Do teď
+     * byla všechna tahle čísla napsaná v kódu (ui/kalk_ock.js, atypPrepni)
+     * a firma je nemohla změnit bez nového sestavení. Hodnoty se do zakázky
+     * jen PŘEDVYPLNÍ — obchodník je pak v kalkulaci doladí a jeho čísla už
+     * nikdo nepřepíše (zadání se přepočtem ceníku nemění nikdy). */
+    ['C.atypPrirazka', 'ATYP: přirážka za projekční a koordinační práce', '%',
+     'z nákladu celé sekce Režie; sazba jde v zakázce změnit', 'pct'],
+    ['C.atypMontazPct', 'ATYP: montáž navíc – podíl z hodin montáže', '%',
+     'předvyplní pole „Montáž – atyp navíc" (ze základu + hodin navíc dle konstrukce)', 'pct'],
+    ['C.atypProjekcePct', 'ATYP: projekce navíc – podíl z hodin projekce', '%',
+     'předvyplní pole „Projekce – atyp navíc"', 'pct'],
+    ['C.atypZamecnikKc', 'ATYP: zámečník atyp – předvyplněná částka', 'Kč',
+     'prázdné = nepředvyplňovat; v zakázce jde přepsat'],
+    ['C.atypRezervaZakladPct', 'ATYP: rezerva základ', '%', 'předvyplní pole „REZERVA základ"', 'pct'],
+    ['C.atypRezervaPriplatkyPct', 'ATYP: rezerva příplatky', '%', 'předvyplní pole „REZERVA příplatky"', 'pct'],
   ]],
   ['OPLÁŠTĚNÍ', [
     ['C.skloBokyNazev', 'Sklo boky + zadní stěna – typ', '', '', 'text'],
@@ -67,6 +84,14 @@ const CENIK_DEF = [
     /* Zahraniční zakázky (#181, 31. 8. 2026). V tuzemské kalkulaci se
      * položka nezobrazuje vůbec — nese značku „jen pro zahraničí". */
     ['C.prekladyKc', 'Překlady CZ→DE (smlouvy, zprávy)', 'Kč', 'jen zahraniční zakázky'],
+    /* Výchozí hodnoty zadání pro NOVOU zakázku (zadání J. V. 31. 8. 2026).
+     * Nejsou to ceny, ale rozsahy práce, se kterými každá nová nabídka
+     * začíná — do teď byly napsané v kódu (DEFAULT_ZADANI v engine.js).
+     * Rozpracovanou nabídku nemění: zadání je práce obchodníka. */
+    ['C.vychMontazZakladHod', 'Výchozí: montáž – základ (1 os.)', 'hod', 's čím začíná nová zakázka'],
+    ['C.vychProjekceZakladHod', 'Výchozí: projekce – základ', 'hod', 's čím začíná nová zakázka'],
+    ['C.vychOplechOstatniKg', 'Výchozí: oplechování ostatní – materiál', 'kg', 's čím začíná nová zakázka'],
+    ['C.vychOplechOstatniHod', 'Výchozí: oplechování ostatní – práce', 'hod', 's čím začíná nová zakázka'],
   ]],
   ['SPOJOVACÍ MATERIÁL', [
     ['C.spojovaci.riplockM10', 'Riplock M10', 'Kč/ks', ''],
@@ -168,6 +193,23 @@ const CENIK_SMI_BYT_PRAZDNY = new Set([
   'C.kurzEurKc', 'PC.kurzEurKc',
 ]);
 
+/* ---- výchozí hodnoty zadání z ceníku (31. 8. 2026) ----
+ *
+ * Ceník nově nese i pár hodnot, které nejsou ceny: rozsahy práce, se kterými
+ * začíná nová zakázka, a čísla, která předvyplní zaškrtnutí ATYP. Do teď byla
+ * napsaná v kódu a firma je nemohla změnit bez nového sestavení.
+ *
+ * PRÁZDNO NEBO NULA ZNAMENÁ NENASTAVENO a platí hodnota ze sestavení.
+ * Je to schválně: `pripravit_github.py` před nahráním na GitHub celý
+ * DEFAULT_CENIK vynuluje (v repozitáři nesmí být firemní čísla), takže build
+ * z repozitáře má tyhle položky nulové — a nová zakázka by pak začínala
+ * s nulou hodin montáže. Nula jako firemní výchozí rozsah práce nedává
+ * smysl, kdežto nula jako "tohle jsme nevyplnili" ano. */
+function cenikVychozi(c, klic, zaklad) {
+  const v = c ? c[klic] : null;
+  return (typeof v === 'number' && isFinite(v) && v > 0) ? v : zaklad;
+}
+
 /* přístup do konkrétního ceníkového objektu podle cesty „C.a.b" / „PC.a.b" */
 function cenikGet(obj, cesta) {
   const ks = cesta.split('.').slice(1);   // zahodit prefix C/PC
@@ -225,8 +267,11 @@ function cenikDiffZeSheets(sheets, C, PC) {
       const prefix = klic.split('.')[0];
       const t = cil[prefix]; if (!t) { nezname.push(klic); continue; }
       let nova = r[vi];
-      const typ = klic === 'C.marze' || klic === 'C.dph' || klic === 'PC.marze'
+      /* `pct` je v datech desetinný podíl, takže se importuje jako číslo
+       * (v Excelu se zadává 0,3 = 30 %, stejně jako u globální přirážky). */
+      let typ = klic === 'C.marze' || klic === 'C.dph' || klic === 'PC.marze'
         ? 'num' : cenikTyp(t.def, klic);
+      if (typ === 'pct') typ = 'num';
       if (typ === 'num') {
         /* Prázdná buňka u klíče, který smí být nenastavený, není chyba —
          * je to platná hodnota „nenastaveno" (#132: výchozí přirážka sekce).
@@ -272,5 +317,5 @@ function cenikAplikuj(zmeny, C, PC) {
 }
 
 if (typeof module !== 'undefined')
-  module.exports = { CENIK_DEF, CENIK_DEF_PROJ, cenikGet, cenikSet, cenikTyp,
+  module.exports = { CENIK_DEF, CENIK_DEF_PROJ, cenikGet, cenikSet, cenikTyp, cenikVychozi,
     cenikSheetRows, cenikToSheets, cenikDiffZeSheets, cenikAplikuj, CENIK_HLAVICKA };

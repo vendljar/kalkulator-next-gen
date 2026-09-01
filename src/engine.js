@@ -91,6 +91,15 @@ const DEFAULT_CENIK = {  // HODNOTY VYNULOVÁNY pro GitHub (pripravit_github.py)
   prekladyKc: 0,                  // překlady CZ→DE, jen zahraniční zakázky (#181)
   atypPrirazka: 0,                // ATYP: přirážka k nákladu režie (viz zadání #22)
   zamecnikAtypKc: 0,              // ATYP: sazba za atypickou zámečnickou práci (#7) – viz Z.zamecnikAtypKc
+  /* Co zaškrtnutí ATYP předvyplní do zadání, a s čím začíná nová zakázka
+   * (31. 8. 2026). Do teď byla tahle čísla napsaná v kódu — v atypPrepni()
+   * a v DEFAULT_ZADANI —, takže je firma nemohla změnit bez nového
+   * sestavení. Teď jsou v ceníku, kde se dají zadat a zveřejnit.
+   * Výpočtu se netýkají: pracuje se zadáním zakázky, ne s nimi. */
+  atypMontazPct: 0, atypProjekcePct: 0, atypZamecnikKc: null,
+  atypRezervaZakladPct: 0, atypRezervaPriplatkyPct: 0,
+  vychMontazZakladHod: 0, vychProjekceZakladHod: 0,
+  vychOplechOstatniKg: 0, vychOplechOstatniHod: 0,
   spojovaci: { riplockM10: 0, riplockM8: 0, nordlock: 0, nytM10: 0, nytM8: 0,
                nytM6: 0, tSrouby: 0, sroubM10: 0, sroubM8: 0, sroubM6: 0,
                zavitTyc: 0, chemKotva: 0 },

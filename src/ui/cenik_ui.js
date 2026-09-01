@@ -53,6 +53,11 @@ function cenikRows(def, zahrSloupec) {
       else if (typ === 'selLak') ed = `<select style="width:130px" onchange="set('${path}', this.value)">
           <option value="tomas" ${val === 'tomas' ? 'selected' : ''}>Tomáš</option>
           <option value="lakovna" ${val === 'lakovna' ? 'selected' : ''}>lakovna</option></select>`;
+      /* Procenta se v datech drží jako desetinný podíl (0,30), ale zadávají
+       * se lidsky — 30. Stejně jako globální přirážka o pár řádků výš
+       * (31. 8. 2026, položky ATYP a výchozí rozsahy práce). */
+      else if (typ === 'pct') ed = `<input type="number" step="1" value="${val == null || val === '' ? '' : Math.round(val * 10000) / 100}"
+          placeholder="nenastaveno" onchange="set('${path}', this.value === '' ? 0 : (+this.value) / 100)">`;
       else ed = `<input type="number" step="any" value="${esc(val)}" onchange="set('${path}', +this.value)">`;
       let zahr = '';
       if (zahrSloupec) {

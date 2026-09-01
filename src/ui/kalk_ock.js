@@ -116,11 +116,20 @@ function atypPrepni(zap, opts) {
     else Z.atypRucneVypnut = true;
   }
   Z.atyp = !!zap;
+  /* Čím se ATYP předvyplní, bere ceník (31. 8. 2026, zadání J. V.: „do ceníku
+   * OCK v sekci atyp přidej ještě možnost editovat atypické položky").
+   * Prázdná nebo nulová ceníková položka znamená nenastaveno a platí hodnota
+   * ze sestavení — proto ta druhá čísla ve volání. Předvyplnění je jen
+   * nabídka: obchodník pole pak doladí a jeho čísla nikdo nepřepíše. */
+  const vych = (klic, zaklad) => (typeof cenikVychozi === 'function')
+    ? cenikVychozi(C, klic, zaklad) : zaklad;
+  const rezervaZakl = vych('atypRezervaZakladPct', 0.30);
+  const rezervaPripl = vych('atypRezervaPriplatkyPct', 0.30);
   Z.rezervaProfilyPct = zap ? 0.30 : 0;
   Z.rezervaPlechyPct = zap ? 0.30 : 0;
-  Z.rezervaZakladPct = zap ? 0.30 : 0;
-  Z.rezervaPriplatkyPct = zap ? 0.30 : 0;
-  Z.zamecnikAtypKc = zap ? 50000 : null;
+  Z.rezervaZakladPct = zap ? rezervaZakl : 0;
+  Z.rezervaPriplatkyPct = zap ? rezervaPripl : 0;
+  Z.zamecnikAtypKc = zap ? vych('atypZamecnikKc', 50000) : null;
   /* Hodiny navíc při ATYP (zadání 19. 8. 2026): projekce +30 % ze základních
    * hodin; montáž +30 % z CELKOVÝCH hodin potřebných pro montáž (základ +
    * hodiny navíc vypočtené z konstrukce — světlíky, přechody atd.).
@@ -128,8 +137,8 @@ function atypPrepni(zap, opts) {
   if (zap) {
     let navic = 0;
     try { navic = vypocet(Z, C, JEKLY, OCK.fixes).montaz.hodinyNavicCelkem || 0; } catch (e) { navic = 0; }
-    Z.montazAtypHod = Math.round(0.30 * ((+Z.montazZakladHod || 0) + navic));
-    Z.projekceAtypHod = Math.round(0.30 * (+Z.projekceZakladHod || 0));
+    Z.montazAtypHod = Math.round(vych('atypMontazPct', 0.30) * ((+Z.montazZakladHod || 0) + navic));
+    Z.projekceAtypHod = Math.round(vych('atypProjekcePct', 0.30) * (+Z.projekceZakladHod || 0));
   } else {
     Z.montazAtypHod = 0;
     Z.projekceAtypHod = 0;
