@@ -81,6 +81,21 @@ const obchodnik = await p.evaluate(() => {
 });
 zkus('obchodník pole pro množství u příplatku nevidí', obchodnik);
 
+/* ---------- 5) klíč ceníkové položky u příplatku ----------
+ * Řádky kalkulace klíč mají od 1. 9. 2026, příplatky na něj zapomněly. */
+const klice = await p.evaluate(() => {
+  NAST.jeAdmin = true; prepniTab('kalk'); render();
+  const html = document.getElementById('page-kalk').innerHTML;
+  const admin = /class="klic"[^>]*>C\.priplatky\.zabranyDvereKc</.test(html)
+    && /class="klic"[^>]*>C\.priplatky\.madlaBmKc</.test(html);
+  NAST.jeAdmin = false; NAST.nahledRole = 'Obchodník'; render();
+  const obchodnik = /class="klic"/.test(document.getElementById('page-kalk').innerHTML);
+  NAST.jeAdmin = true; NAST.nahledRole = ''; render();
+  return { admin, obchodnik };
+});
+zkus('u příplatku svítí administrátorovi klíč ceníkové položky', klice.admin);
+zkus('obchodník ho ani u příplatků nevidí', klice.obchodnik === false);
+
 zkus('za celý průchod nevznikla chyba v konzoli', konzole.length === 0, konzole.slice(0, 2).join(' | '));
 
 await b.close();

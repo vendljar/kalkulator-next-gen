@@ -725,7 +725,10 @@ function renderOutputs() {
         <button class="mini noprint" title="smazat příplatek" onclick="priplatekVlastniDel(${i})">✕</button>`;
     }
     const reset = x.nazevPrepsan ? ` <button class="mini noprint" title="vrátit původní název" onclick="nazevReset('${orig}')">↺</button>` : '';
-    return `<input type="text" class="nazev-ed" value="${esc(x.nazev)}" onchange="nazevSet('${orig}', this.value)" title="název příplatku lze přepsat">${reset}`;
+    /* Klíč ceníkové položky i u příplatku (2. 9. 2026): řádky kalkulace ho mají
+     * od 1. 9., příplatky na něj tehdy zapomněly — a přitom je to jediné místo,
+     * kde je vidět, ze které ceníkové položky se cena bere. */
+    return `<input type="text" class="nazev-ed" value="${esc(x.nazev)}" onchange="nazevSet('${orig}', this.value)" title="název příplatku lze přepsat">${reset}${klicChip(x.cenaPath)}`;
   };
   /* Množství u příplatku jde od 2. 9. 2026 PŘEPSAT (zadání J. V. po testu
    * Kornpfortstraße): předloha má u některých položek pod čarou nulu, aby se

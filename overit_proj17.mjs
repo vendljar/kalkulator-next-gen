@@ -438,12 +438,18 @@ test('hlavička je JEDNA společná pro OCK i PROJ (tatáž pole, žádné ští
     return maHodnoty && bezStitku && piseDoSpolecne;
   }));
 
-test('ceníky OCK i PROJ mají sekci CIZÍ MĚNA s Kurzem EUR',
+/* Od 2. 9. 2026 má kurz EUR JEDEN zdroj pravdy — ceník OCK (pokyn J. V.).
+ * V ceníku PROJ řádek schválně není; klíč v datech zůstává jako zrcadlo,
+ * protože dokumenty projekce čtou kurz ze svého ceníku. */
+test('kurz EUR je jen v ceníku OCK a do ceníku PROJ se zrcadlí',
   await p.evaluate(() => {
     const ock = JSON.stringify(CENIK_DEF), proj = JSON.stringify(CENIK_DEF_PROJ);
+    const d = aktivniVarianta(ZAK).data;
+    d.cenik.kurzEurKc = 24.5; kurzZrcadli(d);
     return ock.includes('C.kurzEurKc') && ock.includes('CIZÍ MĚNA')
-      && proj.includes('PC.kurzEurKc') && proj.includes('Kurz EUR')
-      && DEFAULT_CENIK.kurzEurKc === 0 && DEFAULT_CENIK_PROJ.kurzEurKc === 0;
+      && !proj.includes('PC.kurzEurKc')
+      && DEFAULT_CENIK.kurzEurKc === 0
+      && d.proj.cenik.kurzEurKc === 24.5;
   }));
 
 test('cizí mutace bez kurzu se zastaví; s kurzem nese jen celá eura',

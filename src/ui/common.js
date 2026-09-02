@@ -8,9 +8,21 @@
 let ZAK = novaZakazka();
 let Z, C, OCK, PJ, PC, TS, KL, KLP, SL, SLP, ZO, ZOP;
 
+/* Kurz EUR je od 2. 9. 2026 JEDEN pro celou zakázku (pokyn J. V.). Edituje se
+ * v ceníku OCK (`C.kurzEurKc`); ceník projekce si ho jen zrcadlí, protože
+ * dokumenty projekce (nabidka_proj.js) čtou kurz ze svého ceníku. Bez zrcadla
+ * by cizojazyčná nabídka počítala projekci jiným kurzem než stavební část —
+ * a na dokumentu se kurz neukazuje, takže by si toho nikdo nevšiml. */
+function kurzZrcadli(data) {
+  if (!data || !data.cenik || !data.proj || !data.proj.cenik) return;
+  const zdroj = +data.cenik.kurzEurKc || 0;
+  if (zdroj > 0) data.proj.cenik.kurzEurKc = zdroj;
+}
+
 function syncVarianta() {
   const v = aktivniVarianta(ZAK);
   ZAK.aktivni = v.id;
+  kurzZrcadli(v.data);
   if (!v.data.kryci) v.data.kryci = { hodnoty: {} };
   if (!v.data.kryci.hodnoty) v.data.kryci.hodnoty = {};
   if (!v.data.kryciProj) v.data.kryciProj = { hodnoty: {} };     // krycí list PROJ (KLP-1)
@@ -517,6 +529,8 @@ function set(path, v) {
    * pole se poznamená, aby ho ceník nepřebil, a naopak změna ŘÍDÍCÍ ceníkové
    * položky se hned propíše do kalkulace — jinak by administrátor zadal číslo
    * do ceníku a v kalkulaci se nestalo nic (přesně to hlásil J. V.). */
+  if (path === 'C.kurzEurKc' && typeof kurzZrcadli === 'function')
+    kurzZrcadli(aktivniVarianta(ZAK).data);
   if (path.startsWith('Z.') && typeof zadaniRucniZnac === 'function')
     zadaniRucniZnac(aktivniVarianta(ZAK).data, path.slice(2));
   if (path.startsWith('C.') && typeof ZADANI_Z_CENIKU !== 'undefined'
@@ -963,7 +977,9 @@ function zakazkaHlavicka(ock) {
         Math.round(o.h * 10000) / 100} % ${o.l}</option>`).join('')}</select></div>`;
   const dphRow = dphSelect('C.dph', C, C.dph);
   // PROJ má vlastní sazbu DPH (ceník PROJ) – projekční práce bývají v jiné sazbě než stavební část
-  const dphRowProj = dphSelect('PC.dph', PC, PC.dph);
+  /* Předvolby DPH bere projekce z ceníku OCK (2. 9. 2026: jeden zdroj pravdy).
+   * Vybraná sazba zůstává projekci vlastní — `PC.dph`. */
+  const dphRowProj = dphSelect('PC.dph', C, PC.dph);
   /* datumRowProj zanikl 19. 8. 2026 — hlavička je jedna společná (ZAK.datum). */
 
   /* Globální přirážka PROJ (zadání 31. 7. 2026) – stejné místo i chování jako

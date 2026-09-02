@@ -281,6 +281,12 @@ const dph = await p.evaluate(() => {
   const cenikProj = document.getElementById('page-cenikproj').innerHTML;
   set('C.dphZakladni', 0.19); set('C.dphSnizena', 0.09);
   prepniTab('kalk'); render();
+  /* Předvolby v hlavičce PROJ se berou z TÉHOŽ ceníku OCK. */
+  prepniTab('proj'); render();
+  const projMoznosti = [...document.querySelectorAll('#page-proj option')]
+    .map(o => o.textContent).join(' ; ');
+  prepniTab('kalk'); render();
+  window.__projDph = projMoznosti;
   const moznosti = [...document.querySelectorAll('#page-kalk select')]
     .map(s => [...s.options].map(o => o.value + '|' + o.textContent).join(' ; '))
     .filter(t => /DPH|%/.test(t));
@@ -290,16 +296,28 @@ const dph = await p.evaluate(() => {
   const sVlastni = [...document.querySelectorAll('#page-kalk option')]
     .some(o => /vlastní sazba zakázky/.test(o.textContent));
   set('C.dph', 0.19); render();
-  return { cenik: /SAZBY DPH/.test(cenik), cenikProj: /SAZBY DPH/.test(cenikProj),
+  return { cenik: /SAZBY DPH/.test(cenik),
+           /* Hledá se řádek SEKCE, ne jakákoli zmínka — poznámka pod tabulkou
+            * na obě sekce odkazuje slovy, a to je v pořádku. */
+           cenikProj: /class="sec"[^>]*><td[^>]*>SAZBY DPH/.test(cenikProj)
+             || /class="sec"[^>]*><td[^>]*>CIZÍ MĚNA/.test(cenikProj),
+           projText: window.__projDph || '',
+           projPozn: /Sazby DPH a kurz EUR jsou společné s ceníkem OCK/.test(cenikProj),
            text, sVlastni, sazba: aktivniVarianta(ZAK).data.cenik.dph };
 });
-zkus('sekce SAZBY DPH je v ceníku OCK i PROJ', dph.cenik && dph.cenikProj,
-  JSON.stringify({ ock: dph.cenik, proj: dph.cenikProj }));
+/* Od 2. 9. 2026 má DPH i kurz JEDEN zdroj pravdy — ceník OCK. V ceníku PROJ
+ * tyhle sekce schválně nejsou, jen poznámka, kde se nastavují. */
+zkus('sekce SAZBY DPH je v ceníku OCK', dph.cenik);
+zkus('v ceníku PROJ vlastní sekce DPH ani kurz nejsou', dph.cenikProj === false,
+  JSON.stringify({ proj: dph.cenikProj }));
 zkus('hlavička nabízí sazby z ceníku', /19 % základní/.test(dph.text) && /9 % snížená/.test(dph.text),
   dph.text.slice(0, 160));
 zkus('a nabízí i nulovou sazbu', /0 % bez DPH/.test(dph.text), dph.text.slice(0, 160));
 zkus('sazba mimo předvolby se nabídne jako vlastní a nepřepíše se', dph.sVlastni);
 zkus('výběr sazby se uloží do zakázky', Math.abs(dph.sazba - 0.19) < 1e-9, dph.sazba);
+zkus('hlavička PROJ nabízí TYTÉŽ sazby z ceníku OCK',
+  /19 % základní/.test(dph.projText) && /9 % snížená/.test(dph.projText), dph.projText.slice(0, 120));
+zkus('ceník PROJ řekne, kde se DPH a kurz nastavují', dph.projPozn);
 
 /* ---------- 11) osm příplatků z předlohy + klíče souhrnů (1. 9. 2026) ---------- */
 const osm = await p.evaluate(() => {

@@ -277,8 +277,16 @@ test('trvalé položky projekce mají místo v ceníku PROJ',
     /* Od 1. 9. 2026 jsou sekce projekce ROVNOU v tabulce ceníku (jako v OCK),
      * ne v samostatné kartě — kontroluje se tedy tlačítko i to, že sedí uvnitř
      * téže tabulky jako ceníkové řádky. */
+    /* Od 2. 9. 2026 visí tlačítka na KONCI JEDNOTLIVÝCH SEKCÍ ceníku PROJ
+     * (jako v OCK), ne v samostatném bloku pod tabulkou. */
     const tb = document.querySelector('#page-cenikproj .ceniktbl');
-    return /cenikProjTrvaleAdd\(/.test(html) && !!tb && /cenikProjTrvaleAdd\(/.test(tb.innerHTML)
+    if (!tb) return false;
+    const radky = [...tb.querySelectorAll('tr')];
+    const sekce = radky.findIndex(r => /PROJEDNÁNÍ STUDIE/.test(r.textContent) && r.className === 'sec');
+    const dalsiSekce = radky.findIndex((r, i) => i > sekce && r.className === 'sec');
+    const uvnitr = radky.slice(sekce, dalsiSekce < 0 ? radky.length : dalsiSekce)
+      .some(r => /cenikProjTrvaleAdd\('projednani'/.test(r.innerHTML));
+    return /cenikProjTrvaleAdd\(/.test(html) && sekce >= 0 && uvnitr
       && /přidat trvalou hodinovou položku/.test(tb.innerHTML);
   }));
 

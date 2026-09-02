@@ -120,10 +120,11 @@ bl('montáž – hodiny navíc', M1.montaz.hodinyNavicCelkem, -4.9, 1e-9);
 bl('montáž – hodin celkem', M1.montaz.hodCelkem, 76.4, 1e-9);
 
 /* ---------- lešení ----------
- * POZOR: odstup lešení od šachty je 0,25 m. Soubor Kornpfortstraße počítá
- * 0,20 m (nález V2), ALE druhá zákaznická předloha (CN-0327) má v téže buňce
- * 0,5/0,25 jako aplikace. Dokud se nerozhodne, která předloha je pro Model 1
- * referenční, zůstává chování beze změny a hlídá se tady. */
+ * ROZHODNUTO J. V. 2. 9. 2026: referenčním odstupem pro Model 1 zůstává
+ * 0,25 m — tedy chování aplikace i předlohy CN-0327 Lindnerova. Soubor
+ * Kornpfortstraße počítá 0,20 m (nález V2), ale bere se jako odchylka
+ * jednoho souboru, ne jako referenční předloha. Hodnota se hlídá tady, ať
+ * ji nikdo nezmění omylem. */
 bl('lešení věž [m]', M1.odvozene.leseniVez, 15.2);
 bl('lešení U-dokola [m2] (0,25 m odstup)', M1.odvozene.leseniU, 58.80, 1e-4);
 test('oba modely počítají lešení stejně (odstup se zatím neliší)',

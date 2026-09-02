@@ -73,6 +73,10 @@ const VYJIMKY = {
   'PC.marze': 'jako C.marze — vlastní pole nad tabulkou ceníku PROJ',
   'PC.prazdny': 'jako C.prazdny',
   'PC.ukazkove': 'jako C.ukazkove',
+  'PC.kurzEurKc': 'kurz EUR má od 2. 9. 2026 JEDEN zdroj pravdy — ceník OCK (C.kurzEurKc). '
+    + 'Klíč tu zůstává jako ZRCADLO: dokumenty projekce (nabidka_proj.js) čtou kurz ze '
+    + 'svého ceníku a hodnotu do něj kopíruje kurzZrcadli() v ui/common.js. Řádek v ceníku '
+    + 'PROJ nemá schválně — dvě editovatelná pole pro jednu hodnotu se dřív nebo později rozejdou.',
   'PC.dopravaPausalKc': 'mrtvý klíč starých uložených ceníků; paušál se od 17. 8. 2026 '
     + 'počítá vzorcem km/60×1000 v engine_proj.js. Editovatelné číslo bez účinku '
     + 'je past, proto řádek nemá — a smazat ho nejde, nesou ho staré ceníky.',

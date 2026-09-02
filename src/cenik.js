@@ -209,17 +209,14 @@ const CENIK_DEF_PROJ = [
      * Klíč v datech ceníku zůstává kvůli starým uloženým ceníkům. */
   ]],
   /* Kurz EUR — viz poznámka u sekce Cizí měna v ceníku OCK (#155). */
-  /* Sazby DPH projekce — projekční práce bývají v jiné sazbě než stavební část,
-   * proto vlastní trojice předvoleb (1. 9. 2026). */
-  ['SAZBY DPH', [
-    ['PC.dphZakladni', 'DPH základní', '%', 'předvolba v hlavičce Kalkulace PROJ; dnes 21 %', 'pct'],
-    ['PC.dphSnizena', 'DPH snížená', '%', 'předvolba v hlavičce Kalkulace PROJ; dnes 12 %', 'pct'],
-    ['PC.dphNulova', 'DPH nulová (bez DPH)', '%', 'předvolba pro plnění bez daně', 'pct'],
-  ]],
-  ['CIZÍ MĚNA', [
-    ['PC.kurzEurKc', 'Kurz EUR', 'Kč/EUR',
-     'přepočet cen pro nabídky v jiné než české mutaci; prázdné = cizojazyčný tisk se zastaví'],
-  ]],
+  /* SAZBY DPH a KURZ EUR v ceníku PROJ NEJSOU (2. 9. 2026, pokyn J. V.:
+   * „v ceníku PROJ používej stejné sazby DPH jako v ceníku OCK, tzn. jeden
+   * zdroj pravdy, totéž platí i pro kurz EUR"). Dvě místa na tutéž hodnotu
+   * znamenají, že se dřív nebo později rozejdou — a u kurzu by to bylo vidět
+   * až na cizojazyčné nabídce, kde by projekce počítala jiným kurzem než
+   * stavební část. Předvolby DPH i kurz se berou z ceníku OCK
+   * (`C.dphZakladni` … a `C.kurzEurKc`); sazba SAMOTNÉ zakázky zůstává
+   * u projekce vlastní (`PC.dph`) — projekční práce bývají v jiné sazbě. */
 ];
 
 /* Ceníkové klíče, u kterých je prázdno platná hodnota („nenastaveno").

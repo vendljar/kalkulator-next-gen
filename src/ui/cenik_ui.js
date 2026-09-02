@@ -82,7 +82,13 @@ function cenikRows(def, zahrSloupec) {
         <td class="c-nazev">${l}${klicChip(path)}</td><td class="c-hod">${ed}</td>${zahr}<td class="c-jed">${u}</td><td class="c-pozn">${note}</td></tr>`;
     }).join('');
     const sl = zahrSloupec ? 6 : 4;
-    return `<tr class="sec"><td colspan="${sl}">${grp}</td></tr>${body}${cenikCustomRows(CENIK_GRP_SEKCE[grp], sl)}`;
+    /* Na konci skupiny: v OCK trvalé položky katalogu, v PROJ trvalé položky
+     * sekcí projekce, které pod tuhle skupinu patří (2. 9. 2026). */
+    const trvale = (def === CENIK_DEF_PROJ)
+      ? ((typeof cenikProjTrvaleRadky === 'function')
+        ? cenikProjTrvaleRadky(CENIK_PROJ_SEKCE_SKUPINY[grp] || []) : '')
+      : cenikCustomRows(CENIK_GRP_SEKCE[grp], sl);
+    return `<tr class="sec"><td colspan="${sl}">${grp}</td></tr>${body}${trvale}`;
   }).join('');
 }
 /* Vlastní položky přidané přímo v ceníku (per sekce) = TRVALÉ položky.
@@ -202,8 +208,13 @@ function renderCenikProj() {
        </div>
        <div class="cenik-scroll"><table class="ceniktbl">
          <tr><th>Položka</th><th>Cena</th><th>Jednotka</th><th>Poznámka</th></tr>
-         ${cenikRows(CENIK_DEF_PROJ)}${cenikProjTrvaleRadky()}
+         ${cenikRows(CENIK_DEF_PROJ)}
        </table></div>
+       <div class="note"><b>Sazby DPH a kurz EUR jsou společné s ceníkem OCK</b> —
+         mají jeden zdroj pravdy, aby se nemohly rozejít. Nastavíte je v záložce
+         <b>Ceník nákladů OCK</b> (sekce SAZBY DPH a CIZÍ MĚNA); projekce si z nich
+         bere předvolby a kurz. Sazbu DPH pro konkrétní nabídku projekce vybíráte
+         dál v hlavičce Kalkulace PROJ — ta zůstává vlastní.</div>
        ${smiZobrazit('cenik.import') ? `<div class="btns" style="margin-top:12px">
          <button class="primary" onclick="cenikExport()">⭳ Export do Excelu (OCK+PROJ)</button>
          <button onclick="cenikImport()">⭱ Import z Excelu</button>
@@ -237,14 +248,30 @@ function cenikProjTrvaleSekce() {
     : ((typeof DEFAULT_ZADANI_PROJ !== 'undefined' && DEFAULT_ZADANI_PROJ.sekce) || []);
   return zdroj.map(s => ({ key: s.key, nazev: s.nazev }));
 }
-function cenikProjTrvaleRadky() {
+/* Kam v ceníku PROJ patří trvalé položky které sekce (2. 9. 2026, pokyn J. V.:
+ * „přesuň tlačítka pro přidávání trvalých položek vždy na konec jednotlivých
+ * sekcí, tedy tak jak to máme v ceníku OCK"). Do 2. 9. stály sekce projekce
+ * v jednom bloku pod tabulkou; teď visí na skupinách ceníku, ke kterým věcně
+ * patří. Dvě skupiny nesou po dvou sekcích (hodinové sazby pokrývají zaměření
+ * i studii, kolaudace a geodet jdou spolu) — proto je u nich v tlačítku i
+ * jméno sekce, ať je jasné, kam položka půjde. */
+const CENIK_PROJ_SEKCE_SKUPINY = {
+  'HODINOVÉ SAZBY (ZAMĚŘENÍ / STUDIE / DPZ / DPS)': ['zamereni', 'studie'],
+  'PROJEDNÁNÍ STUDIE': ['projednani'],
+  'DPZ – DOKUMENTACE PRO POVOLENÍ ZÁMĚRU': ['dpz'],
+  'IČ – INŽENÝRSKÁ ČINNOST': ['ic'],
+  'DPS – DOKUMENTACE PRO PROVEDENÍ STAVBY': ['dps'],
+  'EZC – EKONOMICKÁ ZADÁVACÍ ČÁST': ['ezc'],
+  'KOLAUDACE A GEODET': ['kolaudace', 'geodet'],
+};
+
+function cenikProjTrvaleRadky(sekce) {
   if (!jeAdmin() || typeof projKatalogSekce !== 'function') return '';
-  /* Sekce projekce jdou ROVNOU V TABULCE ceníku, stejně jako sekce v ceníku OCK
-   * (pokyn J. V. 1. 9. 2026: „přidávání položek do ceníku projekce proveď
-   * stejně jako do ceníku OCK, tzn. tlačítky v jednotlivých sekcích a ne
-   * v samostatné části"). Skupiny nahoře jsou sazby a fixní částky předlohy,
-   * tyhle sekce jsou trvalé položky, které si firma přidala sama. */
-  return cenikProjTrvaleSekce().map(sek => {
+  const vsechny = cenikProjTrvaleSekce();
+  const vyber = sekce ? vsechny.filter(x => sekce.indexOf(x.key) >= 0) : vsechny;
+  if (!vyber.length) return '';
+  const viceSekci = vyber.length > 1;
+  const radky = vyber.map(sek => {
     const polozky = projKatalogSekce(PC, sek.key);
     const seznam = polozky.map(p => `<tr>
       <td class="c-nazev"><input type="text" class="nazev-ed" value="${esc(p.nazev)}"
@@ -256,16 +283,18 @@ function cenikProjTrvaleRadky() {
         : `<input type="number" step="any" value="${+p.cena || 0}"
              onchange="cenikProjTrvaleSet('${esc(sek.key)}','${esc(p.kid)}','cena',this.value)">`}</td>
       <td class="c-jed">${p.typ === 'hod' ? 'hod (' + esc(p.sazba || 'projektant') + ')' : 'Kč'}</td>
-      <td class="c-pozn">trvalá položka – je v každé nové nabídce
+      <td class="c-pozn">trvalá položka${viceSekci ? ' — ' + esc(sek.nazev) : ''}, je v každé nové nabídce
         <button class="mini noprint" title="odebrat trvalou položku z ceníku"
           onclick="cenikProjTrvaleDel('${esc(sek.key)}','${esc(p.kid)}')">✕</button></td></tr>`).join('');
-    return `<tr class="sec"><td colspan="4">${esc(sek.nazev)}</td></tr>${seznam}
-      <tr class="pridat noprint"><td colspan="4">
-        <button class="mini" onclick="cenikProjTrvaleAdd('${esc(sek.key)}','hod')">+ přidat trvalou hodinovou položku</button>
-        <button class="mini" onclick="cenikProjTrvaleAdd('${esc(sek.key)}','fix')">+ přidat trvalou fixní položku</button>
+    const kam = viceSekci ? ' do ' + esc(sek.nazev) : ' do sekce';
+    return seznam + `<tr class="pridat noprint"><td colspan="4">
+        <button class="mini" onclick="cenikProjTrvaleAdd('${esc(sek.key)}','hod')">+ přidat trvalou hodinovou položku${kam}</button>
+        <button class="mini" onclick="cenikProjTrvaleAdd('${esc(sek.key)}','fix')">+ přidat trvalou fixní položku${kam}</button>
       </td></tr>`;
   }).join('');
+  return radky;
 }
+
 function cenikProjTrvaleAdd(sekKey, typ) {
   if (!jeAdmin()) return;
   const it = projKatalogPridej(PC, sekKey, { typ: typ === 'hod' ? 'hod' : 'fix' });

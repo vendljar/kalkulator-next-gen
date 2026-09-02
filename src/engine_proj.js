@@ -13,8 +13,11 @@
  * místě. Značky `ukazkove` a `prazdny` tím zmizí a červený pruh zhasne.
  * Zůstává jen struktura; `dph` je zákonná sazba, ne naše cena. */
 const DEFAULT_CENIK_PROJ = {  // HODNOTY VYNULOVÁNY pro GitHub (pripravit_github.py) – reálné sazby jen v lokální záloze
-  /* Předvolby sazeb DPH projekce (1. 9. 2026) — viz DEFAULT_CENIK v engine.js. */
-  dphZakladni: 0, dphSnizena: 0, dphNulova: 0,
+  /* Předvolby sazeb DPH tu od 2. 9. 2026 NEJSOU — jsou společné s ceníkem OCK
+   * (`C.dphZakladni` …), viz poznámka v cenik.js. Kurz EUR klíč má dál, ale
+   * jen jako ZRCADLO hodnoty z ceníku OCK: dokumenty projekce ho čtou odsud
+   * (nabidka_proj.js), a kdyby se lišil, počítala by projekce jiným kurzem
+   * než stavební část. Zrcadlí ho `kurzZrcadli()` v ui/common.js. */
   ukazkove: true,
   prazdny: true,
   dph: 0,                         // zákonná sazba DPH projekční části (nezávislá na ceníku OCK)
