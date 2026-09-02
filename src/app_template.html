@@ -395,6 +395,10 @@
   /* Karta má overflow:hidden, takže cokoli širšího by se uřízlo. Tabulka se
      proto smí posunout uvnitř vlastního rámečku, ne pod okrajem karty. */
   .cenik-scroll { overflow-x:auto; }
+  /* Klíč položky pro administrátora — malý, šedý, neruší, v tisku není. */
+  .klic { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:10.5px;
+     color:#94a3b8; font-weight:400; white-space:nowrap; }
+  @media print { .klic { display:none; } }
   .subhead td { color:var(--mut); font-size:11px; text-transform:uppercase; background:#fafbfd; }
   .neg { color:#b91c1c; }
   /* editovatelný název položky přímo v tabulce (vypadá jako text, edit po najetí/kliknutí) */

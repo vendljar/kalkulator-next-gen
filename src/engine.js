@@ -100,13 +100,17 @@ const DEFAULT_CENIK = {  // HODNOTY VYNULOVÁNY pro GitHub (pripravit_github.py)
   atypRezervaZakladPct: 0, atypRezervaPriplatkyPct: 0,
   vychMontazZakladHod: 0, vychProjekceZakladHod: 0,
   vychOplechOstatniKg: 0, vychOplechOstatniHod: 0,
+  /* Předvolby sazeb DPH (1. 9. 2026). Sazba zakázky je `dph` o kus výš —
+   * tohle je jen nabídka v hlavičce. Nula = nenastaveno, platí zákonná
+   * sazba ze sestavení (viz dphPredvolby v ui/common.js). */
+  dphZakladni: 0, dphSnizena: 0, dphNulova: 0,
   spojovaci: { riplockM10: 0, riplockM8: 0, nordlock: 0, nytM10: 0, nytM8: 0,
                nytM6: 0, tSrouby: 0, sroubM10: 0, sroubM8: 0, sroubM6: 0,
                zavitTyc: 0, chemKotva: 0 },
   lak: { rezim: 'tomas',          // rezim = přepínač, ne částka
          lakovnaProfilBm: 0, lakovnaListaBm: 0, lakovnaM2: 0,
          tomasProfilM2: 0, tomasListaBm: 0, tomasPlechKs: 0, tomasOplechM2: 0, tomasTercKs: 0 },
-  priplatky: { vsgFolieM2: 0, sknM2: 0, zabranyPadKc: 0, medStrechaM2: 0,
+  priplatky: { vsgFolieM2: 0, sknM2: 0, medStrechaM2: 0,
                ventilatorKc: 0, zabranyDvereKc: 0, madlaBmKc: 0,
                leseniHlavaKc: 0, montazDveriKc: 0, prechMontKc: 0 },
 };
@@ -719,7 +723,17 @@ function cenikMigraceLeseni(cenik) {
   }
   delete cenik.leseniVnitrniFix;
   delete cenik.leseniVnejsiFix;
-  if (cenik.priplatky && typeof cenik.priplatky === 'object') delete cenik.priplatky.leseniHlavaFix;
+  if (cenik.priplatky && typeof cenik.priplatky === 'object') {
+    delete cenik.priplatky.leseniHlavaFix;
+    /* `zabranyPadKc` („zábrany proti pádu do šachty") zahazujeme 1. 9. 2026:
+     * klíč nikdy neměl řádek v ceníku a žádná kalkulace ho nepoužívala, takže
+     * nesl vždycky nulu a jen mátl při kontrole pokrytí ceníku. Uložené
+     * a zveřejněné ceníky ho pořád nesou — proto se maže tady, stejnou cestou
+     * jako `leseniHlavaFix`. Kdyby se zábrany proti pádu měly nabízet, patří
+     * do KATALOGU trvalých položek (sekce příplatky), ne zpátky do kódu:
+     * osm trvale nulových řádků by zaplevelilo každou nabídku. */
+    delete cenik.priplatky.zabranyPadKc;
+  }
 }
 
 if (typeof module !== 'undefined') module.exports = { vypocet, DEFAULT_ZADANI, DEFAULT_CENIK, CEIL, cenikMigraceLeseni };

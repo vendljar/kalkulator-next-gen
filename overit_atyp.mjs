@@ -241,6 +241,61 @@ zkus('sloupec s poznámkou je celý vidět', sirka.poznVpravo <= sirka.kartaVpra
   sirka.poznVpravo + ' vs ' + sirka.kartaVpravo);
 zkus('a poznámka opravdu nějaký text nese', sirka.text.length > 3, sirka.text);
 
+/* ---------- 9) klíče položek pro administrátora (1. 9. 2026) ----------
+ * Zadání J. V.: „přidej k textu položek v ceníku a v kalkulaci jen pro
+ * administrátora malým textem klíč, který bude vzájemným klíčem." */
+const klice = await p.evaluate(() => {
+  NAST.jeAdmin = true; prepniTab('cenik'); render();
+  const cenik = document.getElementById('page-cenik').innerHTML;
+  prepniTab('kalk'); render();
+  const kalk = document.getElementById('page-kalk').innerHTML;
+  NAST.jeAdmin = false; NAST.nahledRole = 'Obchodník'; render();
+  const obchodnikKalk = document.getElementById('page-kalk').innerHTML;
+  prepniTab('cenik'); render();
+  const obchodnikCenik = document.getElementById('page-cenik').innerHTML;
+  NAST.jeAdmin = true; NAST.nahledRole = ''; prepniTab('kalk'); render();
+  return {
+    cenikMa: /class="klic"[^>]*>C\.montazHodKc</.test(cenik),
+    cenikMaAtyp: /class="klic"[^>]*>C\.atypRezervaZakladPct</.test(cenik),
+    kalkMa: /class="klic"[^>]*>C\.montazHodKc</.test(kalk),
+    kalkMaVazbu: /Z\.montazZakladHod ← C\.vychMontazZakladHod/.test(kalk),
+    obchodnik: /class="klic"/.test(obchodnikKalk) || /class="klic"/.test(obchodnikCenik),
+  };
+});
+zkus('ceník ukazuje administrátorovi klíč položky', klice.cenikMa && klice.cenikMaAtyp,
+  JSON.stringify(klice));
+zkus('kalkulace ukazuje u řádku TÝŽ klíč ceníku', klice.kalkMa);
+zkus('a u polí zadání i vazbu na ceníkovou položku', klice.kalkMaVazbu);
+zkus('obchodník klíče nevidí', klice.obchodnik === false);
+
+/* ---------- 10) sazby DPH jako předvolby z ceníku (1. 9. 2026) ---------- */
+const dph = await p.evaluate(() => {
+  prepniTab('cenik'); render();
+  const cenik = document.getElementById('page-cenik').innerHTML;
+  prepniTab('cenikproj'); render();
+  const cenikProj = document.getElementById('page-cenikproj').innerHTML;
+  set('C.dphZakladni', 0.19); set('C.dphSnizena', 0.09);
+  prepniTab('kalk'); render();
+  const moznosti = [...document.querySelectorAll('#page-kalk select')]
+    .map(s => [...s.options].map(o => o.value + '|' + o.textContent).join(' ; '))
+    .filter(t => /DPH|%/.test(t));
+  const text = moznosti.join(' || ');
+  set('C.dph', 0.15);
+  render();
+  const sVlastni = [...document.querySelectorAll('#page-kalk option')]
+    .some(o => /vlastní sazba zakázky/.test(o.textContent));
+  set('C.dph', 0.19); render();
+  return { cenik: /SAZBY DPH/.test(cenik), cenikProj: /SAZBY DPH/.test(cenikProj),
+           text, sVlastni, sazba: aktivniVarianta(ZAK).data.cenik.dph };
+});
+zkus('sekce SAZBY DPH je v ceníku OCK i PROJ', dph.cenik && dph.cenikProj,
+  JSON.stringify({ ock: dph.cenik, proj: dph.cenikProj }));
+zkus('hlavička nabízí sazby z ceníku', /19 % základní/.test(dph.text) && /9 % snížená/.test(dph.text),
+  dph.text.slice(0, 160));
+zkus('a nabízí i nulovou sazbu', /0 % bez DPH/.test(dph.text), dph.text.slice(0, 160));
+zkus('sazba mimo předvolby se nabídne jako vlastní a nepřepíše se', dph.sVlastni);
+zkus('výběr sazby se uloží do zakázky', Math.abs(dph.sazba - 0.19) < 1e-9, dph.sazba);
+
 zkus('za celý průchod nevznikla chyba v konzoli', konzole.length === 0, konzole.join(' | '));
 
 await b.close();

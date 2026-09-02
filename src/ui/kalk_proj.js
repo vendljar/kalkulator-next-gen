@@ -373,9 +373,9 @@ function renderProj() {
     if (col.admin || smiZobrazit('kalk.pridatPolozku'))
       pridatBtns.push(`<button class="mini" title="vlastní řádek jen této zakázky" onclick="pjPolozkaAdd(${i}, 'hod')">+ přidat hodinovou položku</button>`,
         `<button class="mini" title="vlastní řádek jen této zakázky" onclick="pjPolozkaAdd(${i}, 'fix')">+ přidat fixní položku</button>`);
-    if (col.admin)
-      pridatBtns.push(`<button class="mini" title="zapíše položku natrvalo do ceníku PROJ – bude ve všech nových nabídkách" onclick="pjPolozkaAddTrvale(${i}, 'hod')">+ přidat hodinovou položku trvale</button>`,
-        `<button class="mini" title="zapíše položku natrvalo do ceníku PROJ – bude ve všech nových nabídkách" onclick="pjPolozkaAddTrvale(${i}, 'fix')">+ přidat fixní položku trvale</button>`);
+    /* Trvalé položky projekce se od 1. 9. 2026 zakládají v CENÍKU PROJ
+     * (karta „Trvalé položky projekce"), ne tady — viz pokyn J. V.
+     * „nově už budeme trvalé položky přidávat pouze v cenících". */
     const pridat = pridatBtns.length
       ? `<tr class="pridat noprint"><td colspan="${NC}">${pridatBtns.join(' ')}</td></tr>`
       : '';

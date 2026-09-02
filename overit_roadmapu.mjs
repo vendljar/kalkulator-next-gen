@@ -88,9 +88,13 @@ await page.evaluate(() => {
   chip.click();
 });
 await page.waitForTimeout(200);
-test('filtrem vlny F se ukážou jen odložené',
-  await page.evaluate(() => /zobrazeno 5 z/.test(document.getElementById('pocet').textContent)),
-  await page.evaluate(() => document.getElementById('pocet').textContent));
+/* Počet odložených se mění, jak jich přibývá — kontroluje se proto shoda
+ * s daty, ne pevné číslo (1. 9. 2026, po přidání #194). */
+test('filtrem vlny F se ukážou jen odložené', await page.evaluate(() => {
+  const kolikF = RM.polozky.filter(p => p.vlna === 'F').length;
+  const t = document.getElementById('pocet').textContent;
+  return kolikF > 0 && new RegExp('zobrazeno ' + kolikF + ' z').test(t);
+}), await page.evaluate(() => document.getElementById('pocet').textContent));
 
 await page.click('#reset');
 await page.waitForTimeout(200);

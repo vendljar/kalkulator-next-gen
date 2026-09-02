@@ -542,8 +542,22 @@ function set(path, v) {
   render();
 }
 
+/* Klíč položky pro administrátora (1. 9. 2026, zadání J. V.: „přidej k textu
+ * položek v ceníku a v kalkulaci jen pro administrátora malým textem klíč,
+ * který bude vzájemným klíčem mezi těmito položkami").
+ *
+ * Slouží k jedinému: aby šlo bez hádání říct, která ceníková položka stojí za
+ * kterým řádkem kalkulace — a hlavně aby bylo VIDĚT, když za řádkem nestojí
+ * žádná (pak klíč chybí). Obchodník ho nevidí a do tisku nejde. */
+function klicChip(klic, titulek) {
+  if (!klic || typeof jeAdmin !== 'function' || !jeAdmin()) return '';
+  return ` <span class="klic" title="${esc(titulek
+    || 'klíč ceníku — stejný klíč najdete u odpovídající položky v Ceníku nákladů')}">${esc(klic)}</span>`;
+}
+
 function inp(path, opts = {}) {
   const val = get(path);
+  if (opts.klic) opts = Object.assign({}, opts, { l: opts.l + klicChip(opts.klic) });
   const step = opts.step ?? 'any', u = opts.u ?? '';
   if (opts.type === 'check')
     return `<div class="row"><label>${opts.l}</label><input type="checkbox" ${val ? 'checked' : ''} onchange="set('${path}', this.checked)"><span class="u"></span></div>`;
@@ -913,16 +927,35 @@ function zakazkaHlavicka(ock) {
        <span class="pct-wrap"><input type="number" step="0.01" value="${esc(C.kurzEurKc || 0)}"
          title="kurz z ceníku; v dokumentu se neukazuje, jen se jím převádí"
          onchange="set('C.kurzEurKc', +this.value)"> Kč/€</span></div>`;
-  const dphRow = `<div class="row"><label>Sazba DPH</label>
-    <select onchange="set('C.dph', +this.value)">
-      <option value="0.12" ${C.dph === 0.12 ? 'selected' : ''}>12 % snížená</option>
-      <option value="0.21" ${C.dph === 0.21 ? 'selected' : ''}>21 % základní</option></select></div>`;
-
+  /* Sazby DPH jsou od 1. 9. 2026 PŘEDVOLBY Z CENÍKU (zadání J. V.: „přidej do
+   * obou ceníků sekci DPH … a samozřejmě je potřebujeme editovat, kdyby se
+   * změnil zákon"). Nabídka v hlavičce se tedy skládá z ceníku; sazba samotné
+   * zakázky zůstává zakázkovou hodnotou a zveřejnění ceníku ji nepřepíše
+   * (#177). Prázdná nebo nulová předvolba znamená nenastaveno a platí dnešní
+   * zákonná sazba — jinak by po nasazení z vynulovaného repozitáře nabízela
+   * hlavička samé nuly. */
+  const dphPredvolby = (c, dnesniSazba) => {
+    const v = (klic, zaklad) => (typeof cenikVychozi === 'function')
+      ? cenikVychozi(c, klic, zaklad) : zaklad;
+    const nula = (c && typeof c.dphNulova === 'number' && c.dphNulova > 0) ? c.dphNulova : 0;
+    return [
+      { h: v('dphZakladni', 0.21), l: 'základní' },
+      { h: v('dphSnizena', 0.12), l: 'snížená' },
+      { h: nula, l: 'bez DPH' },
+    ].concat((dnesniSazba != null && ![v('dphZakladni', 0.21), v('dphSnizena', 0.12), nula]
+      .some(x => Math.abs(x - dnesniSazba) < 1e-9))
+      ? [{ h: dnesniSazba, l: 'vlastní sazba zakázky' }] : []);
+  };
+  /* Bez klíče v popisku schválně: hlavička má pevné rozvržení a klíč v tomhle
+   * řádku posunul „Datum vytvoření" o čtyři pixely (chytil overit_lista.mjs).
+   * Vazba je zřejmá z ceníku, kde sekce SAZBY DPH klíče nese. */
+  const dphSelect = (cesta, c, sazba) => `<div class="row"><label>Sazba DPH</label>
+    <select onchange="set('${cesta}', +this.value)">${dphPredvolby(c, sazba).map(o =>
+      `<option value="${o.h}" ${Math.abs((+sazba || 0) - o.h) < 1e-9 ? 'selected' : ''}>${
+        Math.round(o.h * 10000) / 100} % ${o.l}</option>`).join('')}</select></div>`;
+  const dphRow = dphSelect('C.dph', C, C.dph);
   // PROJ má vlastní sazbu DPH (ceník PROJ) – projekční práce bývají v jiné sazbě než stavební část
-  const dphRowProj = `<div class="row"><label>Sazba DPH</label>
-    <select onchange="set('PC.dph', +this.value)">
-      <option value="0.12" ${PC.dph === 0.12 ? 'selected' : ''}>12 % snížená</option>
-      <option value="0.21" ${PC.dph === 0.21 ? 'selected' : ''}>21 % základní</option></select></div>`;
+  const dphRowProj = dphSelect('PC.dph', PC, PC.dph);
   /* datumRowProj zanikl 19. 8. 2026 — hlavička je jedna společná (ZAK.datum). */
 
   /* Globální přirážka PROJ (zadání 31. 7. 2026) – stejné místo i chování jako

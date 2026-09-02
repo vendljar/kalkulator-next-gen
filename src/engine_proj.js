@@ -13,6 +13,8 @@
  * místě. Značky `ukazkove` a `prazdny` tím zmizí a červený pruh zhasne.
  * Zůstává jen struktura; `dph` je zákonná sazba, ne naše cena. */
 const DEFAULT_CENIK_PROJ = {  // HODNOTY VYNULOVÁNY pro GitHub (pripravit_github.py) – reálné sazby jen v lokální záloze
+  /* Předvolby sazeb DPH projekce (1. 9. 2026) — viz DEFAULT_CENIK v engine.js. */
+  dphZakladni: 0, dphSnizena: 0, dphNulova: 0,
   ukazkove: true,
   prazdny: true,
   dph: 0,                         // zákonná sazba DPH projekční části (nezávislá na ceníku OCK)

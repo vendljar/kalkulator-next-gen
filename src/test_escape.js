@@ -198,12 +198,18 @@ const PROVERENO = {
   'detail_ui.js': {
     'nazev': 'název kroku výpočtu z pevného seznamu DETAIL_KROKY',
   },
+  'cenik_ui.js': {
+    "klicChip('PC.vlastniPolozky.' + sek.key + '.' + p.kid)":
+      'hotový úsek HTML z klicChip() – klíč i titulek escapuje esc() uvnitř; '
+      + 'sek.key je klíč sekce z pevného výčtu, p.kid je id z projKatalogNoveId()',
+  },
   'kalk_ock.js': {
     'col.admin ? pripNazev(x) : esc(x.nazev)': 'obě větve escapují – pripNazev skládá HTML přes esc() uvnitř',
     'key': 'klíč jeklu z pevného výčtu profilů, ne uživatelský text',
     'label': 'popisek řádku / KPI psaný vývojářem (profRow, sumRadek, kpiLine)',
     'orig': 'o pár řádků výš: const orig = keyAttr(r.origNazev) – tedy escJs',
     'popis': 'text tlačítka „+ …" předaný literálem do radekPridat()',
+    'klic': 'hotový úsek HTML z klicChip() – cestu i titulek escapuje esc() uvnitř',
     'pozn': 'hotový úsek HTML `<span class="note">(${esc(r.pozn)})</span>`',
     'r.sekce': 'klíč sekce kalkulace z pevného výčtu',
   },

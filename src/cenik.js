@@ -134,6 +134,16 @@ const CENIK_DEF = [
    * součást ceníku — verzuje se a zveřejňuje jako každá cena, takže u staré
    * nabídky jde doložit, jakým kurzem odešla. V dokumentu se kurz NIKDE
    * neukazuje (rozhodnutí J. V.), přepočítávají se jím jen částky. */
+  /* Sazby DPH (1. 9. 2026, zadání J. V.: „přidej do obou ceníků nad sekci cizí
+   * měna ještě sekci DPH … předvolby Standardní 21 %, Snížená 12 %, Bez DPH
+   * 0 % a samozřejmě je potřebujeme editovat, kdyby se změnil zákon").
+   * Sazba SAMOTNÉ zakázky zůstává zakázkovou hodnotou (`C.dph`, viz #177) —
+   * tohle jsou PŘEDVOLBY, ze kterých se v hlavičce vybírá. */
+  ['SAZBY DPH', [
+    ['C.dphZakladni', 'DPH základní', '%', 'předvolba v hlavičce kalkulace; dnes 21 %', 'pct'],
+    ['C.dphSnizena', 'DPH snížená', '%', 'předvolba v hlavičce kalkulace; dnes 12 %', 'pct'],
+    ['C.dphNulova', 'DPH nulová (bez DPH)', '%', 'předvolba pro plnění bez daně', 'pct'],
+  ]],
   ['CIZÍ MĚNA', [
     ['C.kurzEurKc', 'Kurz EUR', 'Kč/EUR',
      'přepočet cen pro nabídky v jiné než české mutaci; prázdné = cizojazyčný tisk se zastaví'],
@@ -176,6 +186,13 @@ const CENIK_DEF_PROJ = [
      * Klíč v datech ceníku zůstává kvůli starým uloženým ceníkům. */
   ]],
   /* Kurz EUR — viz poznámka u sekce Cizí měna v ceníku OCK (#155). */
+  /* Sazby DPH projekce — projekční práce bývají v jiné sazbě než stavební část,
+   * proto vlastní trojice předvoleb (1. 9. 2026). */
+  ['SAZBY DPH', [
+    ['PC.dphZakladni', 'DPH základní', '%', 'předvolba v hlavičce Kalkulace PROJ; dnes 21 %', 'pct'],
+    ['PC.dphSnizena', 'DPH snížená', '%', 'předvolba v hlavičce Kalkulace PROJ; dnes 12 %', 'pct'],
+    ['PC.dphNulova', 'DPH nulová (bez DPH)', '%', 'předvolba pro plnění bez daně', 'pct'],
+  ]],
   ['CIZÍ MĚNA', [
     ['PC.kurzEurKc', 'Kurz EUR', 'Kč/EUR',
      'přepočet cen pro nabídky v jiné než české mutaci; prázdné = cizojazyčný tisk se zastaví'],

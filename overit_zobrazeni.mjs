@@ -236,18 +236,26 @@ test('admin má v nadpisu sekce OCK select režimu',
     const el = document.getElementById('ock-sek-rezie');
     return !!el && el.innerHTML.includes('sekceRezimSet') && el.innerHTML.includes('srolovat');
   }));
-test('admin má u sekce OCK tlačítka „+ přidat položku" i „… trvale" (atypická 20. 8. odebrána)',
+/* Od 1. 9. 2026 zůstává v kalkulaci JEN „+ přidat položku" (řádek téhle
+ * zakázky); trvalé položky se zakládají v ceníku. Atypická zmizela 20. 8. */
+test('admin má u sekce OCK jen „+ přidat položku" (trvalá i atypická jsou pryč)',
   await page.evaluate(() => {
     const html = document.getElementById('page-kalk').innerHTML;
-    return html.includes('+ přidat položku<') && html.includes('+ přidat položku trvale')
+    return html.includes('+ přidat položku<') && !html.includes('+ přidat položku trvale')
       && !html.includes('+ přidat atypickou položku');
   }));
-test('admin má select i u sekcí PROJ a tlačítka „… trvale" pro hodinovou i fixní',
+test('admin má select i u sekcí PROJ, ale bez tlačítek „… trvale"',
   await page.evaluate(() => {
     prepniTab('proj'); render();
     const html = document.getElementById('page-proj').innerHTML;
-    return html.includes('sekceRezimSet') && html.includes('+ přidat hodinovou položku trvale')
-      && html.includes('+ přidat fixní položku trvale');
+    return html.includes('sekceRezimSet') && !html.includes('položku trvale')
+      && html.includes('+ přidat hodinovou položku') && html.includes('+ přidat fixní položku');
+  }));
+test('trvalé položky projekce mají místo v ceníku PROJ',
+  await page.evaluate(() => {
+    prepniTab('cenikproj'); render();
+    const html = document.getElementById('page-cenikproj').innerHTML;
+    return /Trvalá položka/.test(html) && /cenikProjTrvaleAdd\(/.test(html);
   }));
 
 /* volba se uloží na server okamžitě (žádné potvrzovací okno) */
@@ -716,24 +724,48 @@ test('NOVÁ zakázka si výchozí zaškrtnutí vezme (OCK i PROJ)',
     return d.ock.zadani.volitelne.haky === true && st.polozky[0].vyrazeno === true;
   }));
 
-/* trvalá položka PROJ: založí se v ceníku PROJ dané sekce */
-test('„+ přidat položku trvale" v PROJ zapíše položku do ceníku PROJ sekce',
+/* Trvalé položky se od 1. 9. 2026 zakládají JEN V CENÍKU (pokyn J. V.:
+ * „nově už budeme trvalé položky přidávat pouze v cenících"). Kontroluje se
+ * tedy obojí: že z kalkulace tlačítka zmizela a že v ceníku fungují. */
+test('v kalkulaci OCK ani PROJ už nejsou tlačítka „přidat položku trvale"',
   await page.evaluate(() => {
+    prepniTab('kalk'); render();
+    const ock = document.getElementById('page-kalk').innerHTML;
     prepniTab('proj'); render();
+    const proj = document.getElementById('page-proj').innerHTML;
+    return !/položku trvale/.test(ock) && !/položku trvale/.test(proj)
+      && !/vlastniAddTrvale\(/.test(ock) && !/pjPolozkaAddTrvale\(/.test(proj)
+      && !/vlastniDoCeniku\(/.test(ock);
+  }));
+/* trvalá položka PROJ: zakládá se v ceníku PROJ, sekci si vybere administrátor */
+test('ceník PROJ založí trvalou položku do své sekce',
+  await page.evaluate(() => {
+    prepniTab('cenikproj'); render();
     const pred = ((PC.vlastniPolozky || {}).studie || []).length;
-    pjPolozkaAddTrvale(1, 'fix');                       // sekce 1 = ST – STUDIE
+    cenikProjTrvaleAdd('studie', 'fix');
     const arr = (PC.vlastniPolozky || {}).studie || [];
     const g = ((DEFAULT_CENIK_PROJ.vlastniPolozky || {}).studie || []);
     return arr.length === pred + 1 && /^pk\d+$/.test(arr[arr.length - 1].kid)
       && g.some(k => k.kid === arr[arr.length - 1].kid)
-      && PJ.sekce[1].polozky.some(p => p.kid === arr[arr.length - 1].kid && p.vlastni);
+      && PJ.sekce.some(s => (s.polozky || []).some(p => p.kid === arr[arr.length - 1].kid && p.vlastni));
   }));
-/* trvalá položka OCK: rovnou do katalogu ceníku */
-test('„+ přidat položku trvale" v OCK zapíše položku do katalogu ceníku',
+test('a hned ji jde v ceníku pojmenovat i ocenit',
   await page.evaluate(() => {
-    prepniTab('kalk'); render();
+    const arr = (PC.vlastniPolozky || {}).studie || [];
+    const kid = arr[arr.length - 1].kid;
+    cenikProjTrvaleSet('studie', kid, 'nazev', 'Zkušební trvalá');
+    cenikProjTrvaleSet('studie', kid, 'cena', 4321);
+    const it = ((PC.vlastniPolozky || {}).studie || []).find(k => k.kid === kid);
+    const vKalk = PJ.sekce.some(s => (s.polozky || []).some(p => p.kid === kid
+      && p.nazev === 'Zkušební trvalá' && +p.cena === 4321));
+    return it && it.nazev === 'Zkušební trvalá' && +it.cena === 4321 && vKalk;
+  }));
+/* trvalá položka OCK: pořád tlačítkem v tabulce ceníku */
+test('ceník OCK založí trvalou položku do katalogu',
+  await page.evaluate(() => {
+    prepniTab('cenik'); render();
     const pred = KATALOG.polozky.rezie.length;
-    vlastniAddTrvale('rezie');
+    katAdd('rezie');
     return KATALOG.polozky.rezie.length === pred + 1
       && Z.vlastniPolozky.rezie.some(p => p.kid === KATALOG.polozky.rezie[KATALOG.polozky.rezie.length - 1].kid);
   }));

@@ -55,7 +55,7 @@ const ZKUSEBNI_CENIK = {
   lak: { rezim: 'tomas',
          lakovnaProfilBm: 100, lakovnaListaBm: 120, lakovnaM2: 500,
          tomasProfilM2: 500, tomasListaBm: 50, tomasPlechKs: 50, tomasOplechM2: 500, tomasTercKs: 20 },
-  priplatky: { vsgFolieM2: 500, sknM2: 500, zabranyPadKc: 0, medStrechaM2: 5000,
+  priplatky: { vsgFolieM2: 500, sknM2: 500, medStrechaM2: 5000,
                ventilatorKc: 20000, zabranyDvereKc: 2000, madlaBmKc: 2000,
                leseniHlavaKc: 1000, montazDveriKc: 2000, prechMontKc: 1000 },
 };

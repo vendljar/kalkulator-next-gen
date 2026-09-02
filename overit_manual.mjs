@@ -71,8 +71,14 @@ test('příručka nese AKTUÁLNÍ verzi aplikace (v' + verzeApp + ')',
   html.includes('v' + verzeApp), verzeApp);
 test('příručka popisuje obnovu rozpracované kalkulace',
   /Rozpracovanou kalkulaci neztratíte|Obnovit rozpracovanou kalkulaci/.test(html));
+/* Od 1. 9. 2026 se trvalé položky zakládají JEN v ceníku (pokyn J. V.),
+ * takže příručka musí říkat obojí: co dělá tlačítko v kalkulaci a kde se
+ * zakládá trvalá položka. */
 test('příručka popisuje přidávání položek (vlastní × trvalé)',
-  /\+ přidat položku trvale/.test(html) && /platí jen v téhle zakázce/i.test(html));
+  /platí jen v téhle zakázce/i.test(html)
+  && /přidat trvalou položku do sekce/.test(html)
+  && /Trvalé položky projekce/.test(html)
+  && !/Vedle stojí <b>„\+ přidat položku trvale/.test(html));
 test('příručka popisuje skryté a srolované sekce',
   /srolovat/i.test(html) && /skrytá sekce <b>se dál počítá<\/b>|se dál počítá/i.test(html));
 test('příručka říká, kde se tvoří smlouva o dílo',
