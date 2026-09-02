@@ -4,7 +4,7 @@
 Skládá jednosouborovou aplikaci (bez CDN, bez serveru):
   CORE  = engine.js + engine_proj.js + techspec.js + zakazka.js
   JEKLY = jekly.json
-  UI    = ui/common.js + ui/kalk_ock.js + ui/techspec_ui.js
+  UI    = ui/common.js + ui/dialog.js + ui/kalk_ock.js + ui/techspec_ui.js
           + ui/kalk_proj.js + ui/cenik_ui.js + ui/zakazka_ui.js
           + ui/nastaveni_ui.js + ui/historie.js + start
 
@@ -29,7 +29,7 @@ CORE = ['build_info.js',
         'dokumenty.js', 'sleva.js', 'schvalovani.js', 'zaokrouhleni.js', 'marze.js', 'kontroly.js', 'ares.js', 'poznamky.js', 'protokol.js', 'firma.js', 'zpracovatel.js', 'nabidka.js', 'nabidka_proj.js', 'sod.js', 'kryci.js', 'kryci_proj.js',
         'cenik.js', 'cenik_stari.js', 'cenik_rady.js', 'katalog.js', 'prepisy.js', 'slovnik.js',
         'konfigurace.js', 'sablony_online.js', 'analytika.js', 'nastaveni_db.js', 'program.js', 'ukazkove.js', 'prava.js', 'zobrazeni.js', 'zakaznici.js', 'standard_ock.js']
-UI = ['ui/common.js', 'ui/zakulozeni_ui.js', 'ui/kalk_ock.js', 'ui/detail_ui.js', 'ui/techspec_ui.js', 'ui/specdata_ui.js',
+UI = ['ui/common.js', 'ui/dialog.js', 'ui/zakulozeni_ui.js', 'ui/kalk_ock.js', 'ui/detail_ui.js', 'ui/techspec_ui.js', 'ui/specdata_ui.js',
       'ui/kryci_ui.js', 'ui/kryci_proj_ui.js', 'ui/kalk_proj.js', 'ui/detail_proj_ui.js', 'ui/nabidka_proj_ui.js', 'ui/sod_ui.js',
       'ui/cenik_stari_ui.js', 'ui/cenik_ui.js',
       'ui/zaokrouhleni_ui.js', 'ui/marze_ui.js', 'ui/zakazka_ui.js', 'ui/schvalovani_ui.js', 'ui/ares_ui.js', 'ui/zamek_ui.js', 'ui/build_info_ui.js', 'ui/ukazkove_ui.js', 'ui/kontroly_ui.js', 'ui/poznamky_ui.js', 'ui/protokol_ui.js', 'ui/seznam_ui.js', 'ui/archiv_ui.js', 'ui/zakaznici_ui.js', 'ui/program_ui.js', 'ui/nastaveni_db_ui.js', 'ui/uloziste_ui.js', 'ui/online_ui.js', 'ui/analytika_ui.js', 'ui/nastaveni_ui.js', 'ui/historie.js']

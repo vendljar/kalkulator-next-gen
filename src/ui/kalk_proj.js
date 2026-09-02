@@ -75,10 +75,10 @@ function pjPolozkaAddTrvale(i, typ) {
  * a za kolik, a příště se vrátí jedním kliknutím.
  * Trvalý řádek (kid) se maže jen v TÉTO zakázce a zapamatuje se, ať se
  * nevrací; v ceníku PROJ a v nových nabídkách zůstává (stejně jako OCK). */
-function pjPolozkaDel(i, j) {
+async function pjPolozkaDel(i, j) {
   const p = PJ.sekce[i].polozky[j];
   if (p && p.kid) {
-    if (!confirm('Položka „' + p.nazev + '" je trvalá (z ceníku PROJ).\n\nSmazat ji jen v této zakázce?\nV ceníku a v nových nabídkách zůstane.')) return;
+    if (!await potvrd('Položka „' + p.nazev + '" je trvalá (z ceníku PROJ).\n\nSmazat ji jen v této zakázce?\nV ceníku a v nových nabídkách zůstane.')) return;
     if (typeof projKatalogZapamatujOdebrani === 'function') projKatalogZapamatujOdebrani(PJ, p);
   }
   PJ.sekce[i].polozky.splice(j, 1);

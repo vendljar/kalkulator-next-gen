@@ -89,13 +89,13 @@ function schvRozhodni(id, co, cast) {
   const sl = v && v.data && (cast === 'proj' ? v.data.slevaProj : v.data.sleva);
   if (!v || !sl) return;
   if (!schvSmiRozhodovat()) {
-    alert('O slevách rozhoduje vedoucí nebo administrátor.\n\n'
+    hlaska('O slevách rozhoduje vedoucí nebo administrátor.\n\n'
       + 'Právo „Schvalování slevy nad strop role" přiděluje administrátor '
       + 'v Nastavení → Zobrazení.');
     return;
   }
   if (typeof variantaUzamcena === 'function' && variantaUzamcena(v)) {
-    alert(`Varianta „${v.nazev}" je uzamčená – byla vytištěna jako cenová nabídka, `
+    hlaska(`Varianta „${v.nazev}" je uzamčená – byla vytištěna jako cenová nabídka, `
       + 'tedy odeslána zákazníkovi.\n\nCo v ní odešlo, se zpětně neschvaluje ani nemění. '
       + 'Pro jinou slevu založte novou variantu.');
     return;
@@ -104,7 +104,7 @@ function schvRozhodni(id, co, cast) {
   const role = (typeof zobrazeniRole === 'function') ? zobrazeniRole() : 'Obchodník';
   if (co !== 'vratit' && !schvalovaniSmiRozhodnout(role, pct, NAST.slevy)) {
     const kdo = schvalovaniKdoMuze(pct, NAST.slevy, NAST.role);
-    alert(`Sleva ${pct} % přesahuje strop role „${role}".\n\n`
+    hlaska(`Sleva ${pct} % přesahuje strop role „${role}".\n\n`
       + (kdo.length ? 'Rozhodnout o ní může: ' + kdo.join(', ') + '.'
                     : 'Podle nastavení stropů o ní nemůže rozhodnout žádná role – '
                       + 'zkontrolujte Nastavení → Slevy.'));

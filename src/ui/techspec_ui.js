@@ -10,9 +10,9 @@ function tsSet(id, val) {
 }
 function tsReset(id) { delete TS.hodnoty[id]; render(); }
 /* výběr z rozbalovacího seznamu; „vlastní text…" umožní libovolnou hodnotu */
-function tsSelect(id, sel) {
+async function tsSelect(id, sel) {
   if (sel.value === '__VLASTNI__') {
-    const t = window.prompt('Vlastní text položky:', sel.getAttribute('data-cur') || '');
+    const t = await dotaz('Vlastní text položky:', sel.getAttribute('data-cur') || '');
     if (t != null && t.trim() !== '') tsSet(id, t); else render();
     return;
   }

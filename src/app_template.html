@@ -395,9 +395,26 @@
   /* Karta má overflow:hidden, takže cokoli širšího by se uřízlo. Tabulka se
      proto smí posunout uvnitř vlastního rámečku, ne pod okrajem karty. */
   .cenik-scroll { overflow-x:auto; }
+  /* Dialog v aplikaci (2. 9. 2026) — náhrada nativního confirm/alert/prompt.
+     Nativní dialog zastaví renderer a aplikace přestane být ovladatelná
+     zvenčí; tenhle je obyčejný DOM, takže jde i automatizovaně naklikat. */
+  .dlg-overlay { position:fixed; inset:0; background:rgba(16,22,34,.55); z-index:200;
+     display:flex; align-items:flex-start; justify-content:center; padding:80px 16px; overflow:auto; }
+  .dlg-box { background:#fff; border-radius:12px; box-shadow:0 18px 50px rgba(16,22,34,.35);
+     max-width:560px; width:100%; padding:20px 22px; }
+  .dlg-nadpis { font-weight:700; font-size:15px; margin-bottom:8px; }
+  .dlg-text { white-space:pre-line; font-size:14px; line-height:1.5; }
+  .dlg-box input[type=text] { width:100%; margin-top:12px; font:inherit; padding:7px 9px;
+     border:1px solid var(--line); border-radius:7px; }
+  .dlg-btns { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+  @media print { .dlg-overlay { display:none !important; } }
   /* Klíč položky pro administrátora — malý, šedý, neruší, v tisku není. */
   .klic { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:10.5px;
      color:#94a3b8; font-weight:400; white-space:nowrap; }
+  /* V řádku formuláře klíč nikdy nesmí roztáhnout popisek ani přelézt do pole
+     vedle (2. 9. 2026): stojí na vlastním řádku pod popiskem a delší text se
+     ořízne — celý je pořád v bublině. */
+  .row label .klic { display:block; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
   @media print { .klic { display:none; } }
   .subhead td { color:var(--mut); font-size:11px; text-transform:uppercase; background:#fafbfd; }
   .neg { color:#b91c1c; }

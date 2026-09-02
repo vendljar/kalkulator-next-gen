@@ -53,7 +53,7 @@ function sodWord(typ) {
   }).catch(err => sodStavText(typ, 'Chyba: ' + err.message));
 }
 
-function sodWordGeneruj(typ, srv) {
+async function sodWordGeneruj(typ, srv) {
   const L = sodJazyk(typ);
   const mutace = (!srv && L !== 'cz' && typeof SABLONY !== 'undefined') ? SABLONY[typ + '_' + L] : null;
   const sablona = srv ? srv.data : (mutace ? mutace.data : SOD_DOCX[typ].data);
@@ -70,7 +70,7 @@ function sodWordGeneruj(typ, srv) {
    * se nikdy nesmí vytisknout z jiné varianty, než jakou má obchodník před
    * sebou (a jakou nese odeslaná nabídka). */
   const varianta = (typeof nabidkaVarianta === 'function')
-    ? nabidkaVarianta()
+    ? await nabidkaVarianta()
     : ((typeof aktivniVarianta === 'function') ? aktivniVarianta(ZAK) : (ZAK.varianty || [])[0]);
   dokumentVygeneruj(typ, sablona.slice(0), ZAK, varianta, JEKLY, L)
     .then(res => {

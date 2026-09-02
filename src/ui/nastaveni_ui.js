@@ -70,7 +70,7 @@ function nastPanel(p) { NAST.panel = p; renderNastaveni(); }
  * Skrýt tlačítko nestačí, funkce jde zavolat i z konzole. */
 function nastSetAdmin(v) {
   if (v && typeof smiPohledAdmina === 'function' && !smiPohledAdmina()) {
-    alert('Pohled administrátora má jen účet s rolí Administrátor. '
+    hlaska('Pohled administrátora má jen účet s rolí Administrátor. '
       + 'Potřebujete-li vidět ceník, požádejte administrátora.');
     return;
   }
@@ -98,12 +98,12 @@ function firmaSet(id, v) {
   nastRefresh();
 }
 function firmaLogoNahraj() {
-  if (!jeAdmin()) return alert('Firemní údaje smí měnit jen administrátor.');
+  if (!jeAdmin()) return hlaska('Firemní údaje smí měnit jen administrátor.');
   const inp = document.createElement('input');
   inp.type = 'file'; inp.accept = 'image/png,image/jpeg,image/svg+xml';
   inp.onchange = () => {
     const f = inp.files && inp.files[0]; if (!f) return;
-    if (f.size > 400 * 1024) return alert('Logo je příliš velké (' + Math.round(f.size / 1024)
+    if (f.size > 400 * 1024) return hlaska('Logo je příliš velké (' + Math.round(f.size / 1024)
       + ' kB). Použijte obrázek do 400 kB – ukládá se přímo do konfigurace.');
     const fr = new FileReader();
     fr.onload = () => { NAST.firma.logo = fr.result; NAST.firma.logoNazev = f.name; nastRefresh(); };
@@ -112,9 +112,9 @@ function firmaLogoNahraj() {
   inp.click();
 }
 function firmaLogoSmaz() { if (!jeAdmin()) return; NAST.firma.logo = ''; NAST.firma.logoNazev = ''; nastRefresh(); }
-function firmaObnovVychozi() {
-  if (!jeAdmin()) return alert('Firemní údaje smí měnit jen administrátor.');
-  if (!confirm('Vrátit firemní údaje na výchozí hodnoty? Ruční změny se ztratí.')) return;
+async function firmaObnovVychozi() {
+  if (!jeAdmin()) return hlaska('Firemní údaje smí měnit jen administrátor.');
+  if (!await potvrd('Vrátit firemní údaje na výchozí hodnoty? Ruční změny se ztratí.')) return;
   konfigNahradVMiste(NAST.firma, firmaDefault());
   /* Vzorek nese značku ukázkových dat, a onlineTik má nasazovat online firmu
    * právě podle ní – bez tohohle řádku by se do vteřiny vrátila zpátky a
@@ -150,7 +150,7 @@ function atypSazbaProc() {
   return Math.round(s * 1000) / 10;
 }
 function nastSetAtyp(v) {
-  if (!jeAdmin()) return alert('Sazbu přirážky za ATYP smí měnit jen administrátor.');
+  if (!jeAdmin()) return hlaska('Sazbu přirážky za ATYP smí měnit jen administrátor.');
   let proc = parseFloat(String(v).replace(',', '.'));
   if (!isFinite(proc) || proc < 0) proc = 0;
   if (proc > 300) proc = 300;          // pojistka proti překlepu (3000 místo 30)
@@ -234,8 +234,8 @@ function stdZaskleniPrepni(vetev, hodnota, zapnuto) {
   nastRefresh();
 }
 
-function stdObnovVychozi() {
-  if (!confirm('Vrátit celý standard na výchozí znění z 21. 8. 2026?')) return;
+async function stdObnovVychozi() {
+  if (!await potvrd('Vrátit celý standard na výchozí znění z 21. 8. 2026?')) return;
   NAST.standard = JSON.parse(JSON.stringify(STANDARD_VYCHOZI));
   nastRefresh();
 }
@@ -577,9 +577,9 @@ function sablonaPrelozStav(typ, lang, text) {
   if (el) el.textContent = text;
 }
 function sablonaPrelozit(typ, lang) {
-  if (!jeAdmin()) return alert('Jazykové mutace šablon smí vytvářet jen administrátor.');
+  if (!jeAdmin()) return hlaska('Jazykové mutace šablon smí vytvářet jen administrátor.');
   const s = SABLONY[typ];
-  if (!s) return alert('Nejdřív nahrajte českou šablonu .docx.');
+  if (!s) return hlaska('Nejdřív nahrajte českou šablonu .docx.');
   const stat = {};
   sablonaPrelozStav(typ, lang, 'Překládám do ' + lang.toUpperCase() + '…');
   docxPrelozSablonu(s.data.slice(0), lang, stat)
@@ -602,7 +602,7 @@ function sablonaPrelozit(typ, lang) {
 function sablonaChybejiciCsv(typ, lang) {
   const s = SABLONY[typ]; if (!s) return;
   const stat = {};
-  docxPrelozSablonu(s.data.slice(0), lang, stat).then(() => {
+  docxPrelozSablonu(s.data.slice(0), lang, stat).then(async () => {
     const csv = '﻿' + ['český text;překlad (' + lang.toUpperCase() + ')']
       .concat(stat.chybi.map(t => '"' + t.replace(/"/g, '""') + '";')).join('\r\n');
     const a = document.createElement('a');
@@ -617,18 +617,18 @@ function sablonaOnlineStav(text, chyba) {
   const el = document.getElementById('sablOnlineStav');
   if (el) { el.textContent = text || ''; el.style.color = chyba ? 'var(--red, #c0392b)' : ''; }
 }
-function sablonaZverejniOnline(typ) {
-  if (!jeAdmin()) return alert('Zveřejnit šablonu smí jen administrátor.');
+async function sablonaZverejniOnline(typ) {
+  if (!jeAdmin()) return hlaska('Zveřejnit šablonu smí jen administrátor.');
   const s = SABLONY[typ];
-  if (!s) return alert('Nejdřív nahrajte .docx soubor šablony.');
+  if (!s) return hlaska('Nejdřív nahrajte .docx soubor šablony.');
   /* Zveřejňuje se česká šablona A VŠECHNY hotové jazykové mutace najednou —
    * zveřejnit jen češtinu by znamenalo, že anglická nabídka pojede z jiné
    * (starší) verze než česká, což je přesně to, čemu má centrála zabránit. */
   const mutace = ['en', 'de', 'fr'].filter(l => SABLONY[typ + '_' + l]);
-  if (!confirm('Zveřejnit „' + s.nazev + '" jako platnou šablonu pro celý program?'
+  if (!await potvrd('Zveřejnit „' + s.nazev + '" jako platnou šablonu pro celý program?'
     + (mutace.length ? '\nSpolu s ní se zveřejní jazykové mutace: ' + mutace.map(l => l.toUpperCase()).join(', ') + '.' : '')
     + '\n\nOd této chvíle z ní budou tisknout všichni přihlášení.')) return;
-  const pozn = prompt('Čím se změna zdůvodňuje (nepovinné):', '') || '';
+  const pozn = await dotaz('Čím se změna zdůvodňuje (nepovinné):', '') || '';
   sablonaOnlineStav('Zveřejňuji…');
   let fronta = Promise.resolve();
   const vysledky = [];
@@ -643,9 +643,9 @@ function sablonaZverejniOnline(typ) {
   });
   fronta.then(() => { sablonaOnlineStav('Hotovo: ' + vysledky.join(' · ')); nastRefresh(); });
 }
-function sablonyRezimUI(rezim) {
+async function sablonyRezimUI(rezim) {
   if (!jeAdmin()) return;
-  if (rezim === 'mekky' && !confirm('Přepnout šablony do MĚKKÉHO režimu?\n\n'
+  if (rezim === 'mekky' && !await potvrd('Přepnout šablony do MĚKKÉHO režimu?\n\n'
     + 'Obchodníci pak budou moci tisknout i z místních souborů. Používejte jen při výpadku '
     + 'online části; po jeho odeznění přepněte zpět na přísný.')) { nastRefresh(); return; }
   onlineSablonyRezimNastav(rezim)
@@ -809,7 +809,7 @@ function konfigCtx() {
 }
 
 function konfigExportSoubor() {
-  if (!jeAdmin()) return alert('Export konfigurace smí spustit jen administrátor.');
+  if (!jeAdmin()) return hlaska('Export konfigurace smí spustit jen administrátor.');
   if (!KONFIG_SEKCE.some(s => KONFIG_VOLBY[s.kod])) return konfigStav('Vyberte aspoň jednu sekci.', true);
   try {
     const data = konfiguraceExport(konfigCtx(), KONFIG_VOLBY);
@@ -822,13 +822,13 @@ function konfigExportSoubor() {
 }
 
 function konfigImportSoubor() {
-  if (!jeAdmin()) return alert('Import konfigurace smí spustit jen administrátor.');
+  if (!jeAdmin()) return hlaska('Import konfigurace smí spustit jen administrátor.');
   const inp = document.createElement('input');
   inp.type = 'file'; inp.accept = '.json,application/json';
   inp.onchange = () => {
     const f = inp.files && inp.files[0]; if (!f) return;
     const fr = new FileReader();
-    fr.onload = () => {
+    fr.onload = async () => {
       let data;
       try { data = JSON.parse(fr.result); }
       catch (e) { return konfigStav('Soubor není platný JSON: ' + e.message, true); }
@@ -844,7 +844,7 @@ function konfigImportSoubor() {
               + ' – ty se mění zveřejněním ceníku (databáze programu).' : '')
             : '')
         + '\n\nPokračovat?';
-      if (!confirm(otazka)) return konfigStav('Import zrušen.');
+      if (!await potvrd(otazka)) return konfigStav('Import zrušen.');
       try {
         const v = konfiguraceImport(data, konfigCtx(), KONFIG_VOLBY);
         nastRefresh();                       // překreslí panel – stav se doplní až potom
@@ -898,7 +898,7 @@ function slovStav(text, chyba) {
   el.style.color = chyba ? 'var(--red, #c0392b)' : '';
 }
 function slovNacti() {
-  if (!jeAdmin()) return alert('Porovnání slovníku smí spustit jen administrátor.');
+  if (!jeAdmin()) return hlaska('Porovnání slovníku smí spustit jen administrátor.');
   const inp = document.createElement('input');
   inp.type = 'file'; inp.accept = '.xlsx';
   inp.onchange = () => {
@@ -919,11 +919,11 @@ function slovNacti() {
   };
   inp.click();
 }
-function slovDoplnitVse() {
+async function slovDoplnitVse() {
   if (!jeAdmin() || !SLOV_STAV) return;
   const zm = SLOV_STAV.rozdil.doplnit;
   if (!zm.length) return;
-  if (!confirm('Doplnit ' + zm.length + ' chybějící překlad/y z tabulky?\n\nPřepisuje se jen tam, kde aplikace překlad nemá – nic hotového se nepřepíše.')) return;
+  if (!await potvrd('Doplnit ' + zm.length + ' chybějící překlad/y z tabulky?\n\nPřepisuje se jen tam, kde aplikace překlad nemá – nic hotového se nepřepíše.')) return;
   const n = slovnikAplikuj(zm, prekladNastav);
   slovPrepocti('Doplněno ' + n + ' překladů.');
 }
@@ -934,11 +934,11 @@ function slovVezmi(kategorie, i) {
   slovnikAplikuj([z], prekladNastav);
   slovPrepocti('Převzato z tabulky: ' + z.cz + ' (' + z.jazyk.toUpperCase() + ')');
 }
-function slovPridejNove() {
+async function slovPridejNove() {
   if (!jeAdmin() || !SLOV_STAV) return;
   const zm = slovnikNoveJakoZmeny(SLOV_STAV.rozdil.nove);
   if (!zm.length) return;
-  if (!confirm('Přidat do slovníku ' + SLOV_STAV.rozdil.nove.length + ' hesel z tabulky (' + zm.length + ' překladů)?\n\nJsou to hesla, která aplikace zatím nezná. Nic stávajícího se nepřepíše.')) return;
+  if (!await potvrd('Přidat do slovníku ' + SLOV_STAV.rozdil.nove.length + ' hesel z tabulky (' + zm.length + ' překladů)?\n\nJsou to hesla, která aplikace zatím nezná. Nic stávajícího se nepřepíše.')) return;
   const n = slovnikAplikuj(zm, prekladNastav);
   slovPrepocti('Přidáno ' + n + ' překladů v nových heslech.');
 }
@@ -1100,9 +1100,9 @@ function zobrSet(klic, role, v) {
 }
 /* Hromadné přepnutí. `navrh` = doporučení sepsané u každého prvku (podklad
  * k rozhodnutí, ne výchozí stav), `vychozi` = dnešek před zavedením matice. */
-function zobrPredloha(ktera) {
+async function zobrPredloha(ktera) {
   if (!jeAdmin()) return;
-  if (!confirm(ktera === 'navrh'
+  if (!await potvrd(ktera === 'navrh'
     ? 'Přepsat celou tabulku doporučením?\n\nDoporučení je návrh, co dát obchodníkovi a co vedoucímu. '
       + 'Vaše dosavadní zaškrtnutí se ztratí. Zveřejnit se to musí zvlášť.'
     : 'Vrátit celou tabulku na stav před zavedením tohoto nastavení?\n\n'

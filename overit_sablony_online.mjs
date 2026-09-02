@@ -42,6 +42,21 @@ import zobrazeni from './netlify/functions/zobrazeni.mjs';
 import zalohaVynuceno from './netlify/functions/zaloha_vynuceno.mjs';
 import sablonyFn from './netlify/functions/sablony.mjs';
 
+/* Dialogy jsou od 2. 9. 2026 v aplikaci (src/ui/dialog.js), ne nativní —
+ * `page.on('dialog')` už tedy nic nechytí. Harness si proto potvrzování
+ * zjednoduší: potvrd/hlaska/dotaz se nahradí funkcemi, které si text
+ * zapamatují a rovnou odpoví „ano". Skutečný modál (kliknutí, Esc, Enter,
+ * ovladatelnost stránky po zavření) ověřuje samostatný overit_dialogy.mjs. */
+const dlgStub = async (page) => page.evaluate(() => {
+  window.__dlgTexty = [];
+  window.potvrd = (t) => { window.__dlgTexty.push(String(t)); return Promise.resolve(true); };
+  window.hlaska = (t) => { window.__dlgTexty.push(String(t)); return Promise.resolve(); };
+  window.dotaz = (t, v) => { window.__dlgTexty.push(String(t)); return Promise.resolve(v == null ? '' : v); };
+});
+const dlgPosledni = async (page) => page.evaluate(() =>
+  (window.__dlgTexty && window.__dlgTexty.length) ? window.__dlgTexty[window.__dlgTexty.length - 1] : '');
+
+
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 const { zipPrecti } = require('/home/claude/work/kng/src/docxgen.js');
@@ -97,6 +112,8 @@ await page.route('**/api/**', async route => {
 await page.goto(ADRESA);
 await page.waitForFunction(() => typeof window.render === 'function');
 await page.waitForTimeout(300);
+
+await dlgStub(page);
 await page.fill('#onlineEmail', 'vendl.jaroslav@engineers-cz.cz');
 await page.fill('#onlineHeslo', 'Zkusebni.Heslo.123');
 await page.click('#prihlaseni-box >> text=Přihlásit');

@@ -31,7 +31,13 @@ const CENIK_DEF = [
    * Do kalkulace a do nabídky přitom všechno spadá do HRUBÉ OCK –
    * zákazník má vidět jednu ocelovou konstrukci, ne účet za „něco navíc". */
   ['ATYP – PRVKY A PRÁCE NAVÍC', [
-    ['C.zamecnikAtypKc', 'Zámečník – ostatní práce (atyp)', 'Kč/j.', 'v zakázce jde přebít dohodou pro jednu stavbu'],
+    /* Dvě zámečnické položky, dvě různé věci (vysvětleno 1. 9. 2026):
+     * tahle je SAZBA ZA KUS a uplatní se jen v modelu 1:1 jako Excel u starších
+     * nabídek, které mají uložený počet kusů. V opraveném modelu se nepoužívá
+     * vůbec. Dnešní zakázka bere částku z pole v kalkulaci, které předvyplní
+     * `C.atypZamecnikKc` o pár řádků níž. */
+    ['C.zamecnikAtypKc', 'Zámečník – ostatní práce (atyp) – sazba za kus', 'Kč/j.',
+     'jen model 1:1 Excel u starších nabídek s uloženými kusy; dnešní zakázka počítá z částky'],
     /* Co se stane po zaškrtnutí ATYP (zadání J. V. 31. 8. 2026: „do ceníku OCK
      * v sekci atyp přidej ještě možnost editovat atypické položky"). Do teď
      * byla všechna tahle čísla napsaná v kódu (ui/kalk_ock.js, atypPrepni)
@@ -125,11 +131,28 @@ const CENIK_DEF = [
     ['C.priplatky.ventilatorKc', 'Ventilátor (ext)', 'Kč/ks', ''],
     ['C.priplatky.zabranyDvereKc', 'Zábrany do dveřních vstupů', 'Kč/ks', ''],
     ['C.priplatky.madlaBmKc', 'Madla – tvrdé dřevo, čirý lak', 'Kč/bm', ''],
-    ['C.priplatky.montazDveriKc', 'Montáž šachetních dveří', 'Kč/ks', ''],
+    /* Montáž šachetních dveří se od 2. 9. 2026 do příplatků NEPOČÍTÁ sama
+     * (v excelové předloze pod čarou není). Cena tu zůstává jako vodítko
+     * pro ruční položku, kterou si obchodník v kalkulaci přidá sám. */
+    ['C.priplatky.montazDveriKc', 'Montáž šachetních dveří (ruční položka)', 'Kč/ks',
+     'v příplatcích se nepočítá automaticky – obchodník ji přidá tlačítkem „+ přidat položku"'],
     ['C.priplatky.prechMontKc', 'Přechodové plechy – montáž', 'Kč/ks', ''],
     ['C.priplatky.leseniHlavaKc', 'Lešení – dokončení hlavy šachty', 'Kč/m',
      'Nástavba už postaveného lešení – fixní část se u ní neúčtuje.'],
-  ]],
+      /* Osm položek z excelové předlohy (rozhodnutí J. V. 1. 9. 2026: „zaveď je
+     * všechny, tak jak jsou"). Jsou to nabídkové položky za akci — v kalkulaci
+     * mají množství 1 a cenu odsud; obchodník obojí v zakázce přepíše.
+     * Cena se nevymýšlí: v repozitáři je nula, ostrá čísla zadá administrátor
+     * v ceníku a zveřejní. */
+    ['C.priplatky.zabranyPadKc', 'Zábrany proti pádu do šachty', 'Kč', 'za akci'],
+    ['C.priplatky.demontazOhrazeniKc', 'Demontáž stávajícího ohrazení', 'Kč', 'za akci'],
+    ['C.priplatky.malbaSchodnicKc', 'Malba schodnic', 'Kč', 'za akci'],
+    ['C.priplatky.naterOhrazeniKc', 'Nátěr celého ohrazení', 'Kč', 'za akci'],
+    ['C.priplatky.naterOkopovychKc', 'Nátěr pouze okopových plechů', 'Kč', 'za akci'],
+    ['C.priplatky.prosklenaStenaKc', 'Prosklená stěna vedle šachty', 'Kč', 'za akci'],
+    ['C.priplatky.demontazVytahuKc', 'Demontáž stávajícího výtahu', 'Kč', 'za akci'],
+    ['C.priplatky.destovySvodKc', 'Dešťový svod', 'Kč', 'za akci'],
+]],
   /* Kurz EUR (#155, 19. 8. 2026): jediná položka sekce Cizí měna. Kurz je
    * součást ceníku — verzuje se a zveřejňuje jako každá cena, takže u staré
    * nabídky jde doložit, jakým kurzem odešla. V dokumentu se kurz NIKDE

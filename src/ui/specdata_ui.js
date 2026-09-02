@@ -21,7 +21,7 @@ function sdItemSet(key, i, val) {
 }
 function sdItemAdd(key) { TS_C[key].push('nová položka'); sdZmena(); }
 function sdItemDel(key, i) {
-  if (TS_C[key].length <= 1) { alert('Seznam musí mít alespoň jednu položku.'); return; }
+  if (TS_C[key].length <= 1) { hlaska('Seznam musí mít alespoň jednu položku.'); return; }
   TS_C[key].splice(i, 1); sdZmena();
 }
 function sdItemMove(key, i, dir) {
@@ -32,9 +32,9 @@ function sdItemMove(key, i, dir) {
 
 /* ---- výchozí hodnota pozice ---- */
 function sdDefSet(id, val) { const p = tsPole(id); if (p) p.def = val; sdZmena(); }
-function sdDefVlastni(id, sel) {
+async function sdDefVlastni(id, sel) {
   if (sel.value === '__VLASTNI__') {
-    const t = window.prompt('Vlastní výchozí text:', sel.getAttribute('data-cur') || '');
+    const t = await dotaz('Vlastní výchozí text:', sel.getAttribute('data-cur') || '');
     if (t != null && t.trim() !== '') sdDefSet(id, t); else render();
     return;
   }
@@ -42,8 +42,8 @@ function sdDefVlastni(id, sel) {
 }
 
 /* ---- reset + export do zdroje ---- */
-function sdResetVse() {
-  if (!confirm('Vrátit všechny číselníky i výchozí hodnoty na původní stav ze zdroje?')) return;
+async function sdResetVse() {
+  if (!await potvrd('Vrátit všechny číselníky i výchozí hodnoty na původní stav ze zdroje?')) return;
   Object.keys(TS_C_ORIG).forEach(k => {
     if (!TS_C[k]) return;
     TS_C[k].length = 0;                 // mutace na místě – reference z polí zůstávají

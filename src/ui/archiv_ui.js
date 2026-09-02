@@ -128,7 +128,7 @@ function archivVezmi(klic, cenik) {
   const z = ARCHIV.find(x => x.klic === klic);
   if (!z) return;
   const v = vytvorAlternativu(ZAK, z, { cenik });
-  if (!v) { alert('Kalkulaci se nepodařilo převzít – záznam nemá data.'); return; }
+  if (!v) { hlaska('Kalkulaci se nepodařilo převzít – záznam nemá data.'); return; }
   syncVarianta();
   zavriArchiv();
   render();

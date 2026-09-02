@@ -187,15 +187,15 @@ function nastdbUlozHned() {
 }
 
 /* Přepsat cizí verzi svojí – jen po kliknutí, s potvrzením. */
-function nastdbPrepis() {
-  if (!confirm('Přepsat nastavení ve složce tím, co je teď v aplikaci?\n\n'
+async function nastdbPrepis() {
+  if (!await potvrd('Přepsat nastavení ve složce tím, co je teď v aplikaci?\n\n'
     + 'Změny, které mezitím udělal někdo jiný, se ztratí.')) return Promise.resolve(false);
   return nastdbUloz(true).then(r => { if (typeof render === 'function') render(); return r; });
 }
 
 /* Zahodit svoje a vzít, co je ve složce. */
-function nastdbZahod() {
-  if (!confirm('Načíst nastavení ze složky a zahodit své neuložené změny?')) return Promise.resolve(false);
+async function nastdbZahod() {
+  if (!await potvrd('Načíst nastavení ze složky a zahodit své neuložené změny?')) return Promise.resolve(false);
   NASTDB_STAV.kolize = false;
   return nastdbNactiZeSlozky();
 }

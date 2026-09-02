@@ -47,12 +47,14 @@ zkus('ceník OCK zná sazbu atypické zámečnické práce',
 zkus('ceník nabízí i vlastní sekci ATYP pro trvalé položky',
   cenikText.includes('atyp – prvky a práce navíc'.toLowerCase()));
 
-/* ---------- 2) prázdné pole v zakázce = platí ceník ---------- */
+/* ---------- 2) prázdné pole v zakázce = platí ceník (MODEL 1:1 EXCEL) ----------
+ * Od 1. 9. 2026 platí tohle pravidlo jen v modelu 1:1 jako Excel; opravený
+ * model starou podobu (kusy × ceníková sazba) nezná — hlídá se níž, v oddílu 12. */
 const sazby = await p.evaluate(() => {
-  const najdi = r => r.sekce.hrubaOck.find(x => (x.origNazev || x.nazev).indexOf('ZÁMEČNÍKA - OSTATNÍ') >= 0);
+  const najdi = (r) => r.sekce.hrubaOck.find(x => (x.origNazev || x.nazev).indexOf('ZÁMEČNÍKA - OSTATNÍ') >= 0);
   const Zz = JSON.parse(JSON.stringify(DEFAULT_ZADANI));
   Zz.zamecnikAtypKs = 2; Zz.zamecnikAtypKc = null;
-  const zCenik = najdi(vypocet(Zz, DEFAULT_CENIK, JEKLY, true));
+  const zCenik = najdi(vypocet(Zz, DEFAULT_CENIK, JEKLY, false));
   Zz.zamecnikAtypKc = 1234;
   const zPrepis = najdi(vypocet(Zz, DEFAULT_CENIK, JEKLY, true));
   Zz.zamecnikAtypKc = 0;
@@ -60,7 +62,7 @@ const sazby = await p.evaluate(() => {
   return { cenik: zCenik && zCenik.cena, prepis: zPrepis && zPrepis.cena, nula: zNula && zNula.naklad,
            cenikovaSazba: DEFAULT_CENIK.zamecnikAtypKc };
 });
-zkus('prázdné pole v zakázce znamená „platí ceník"',
+zkus('prázdné pole v zakázce znamená „platí ceník" (model 1:1 Excel)',
   sazby.cenik === sazby.cenikovaSazba && sazby.cenikovaSazba > 0, JSON.stringify(sazby));
 zkus('vyplněné číslo přebije ceníkovou sazbu', sazby.prepis === 1234, String(sazby.prepis));
 zkus('nula je platná dohoda („uděláme zdarma"), ne návrat k ceníku', sazby.nula === 0, String(sazby.nula));
@@ -258,7 +260,10 @@ const klice = await p.evaluate(() => {
     cenikMa: /class="klic"[^>]*>C\.montazHodKc</.test(cenik),
     cenikMaAtyp: /class="klic"[^>]*>C\.atypRezervaZakladPct</.test(cenik),
     kalkMa: /class="klic"[^>]*>C\.montazHodKc</.test(kalk),
-    kalkMaVazbu: /Z\.montazZakladHod ← C\.vychMontazZakladHod/.test(kalk),
+    /* Od 2. 9. 2026 se v kalkulaci ukazuje jen klíč; celá vazba je v bublině. */
+    kalkMaVazbu: /class="klic"[^>]*>Z\.montazZakladHod</.test(kalk)
+      && /title="[^"]*C\.vychMontazZakladHod[^"]*"/.test(kalk)
+      && !/>Z\.montazZakladHod ←/.test(kalk),
     obchodnik: /class="klic"/.test(obchodnikKalk) || /class="klic"/.test(obchodnikCenik),
   };
 });
@@ -295,6 +300,61 @@ zkus('hlavička nabízí sazby z ceníku', /19 % základní/.test(dph.text) && /
 zkus('a nabízí i nulovou sazbu', /0 % bez DPH/.test(dph.text), dph.text.slice(0, 160));
 zkus('sazba mimo předvolby se nabídne jako vlastní a nepřepíše se', dph.sVlastni);
 zkus('výběr sazby se uloží do zakázky', Math.abs(dph.sazba - 0.19) < 1e-9, dph.sazba);
+
+/* ---------- 11) osm příplatků z předlohy + klíče souhrnů (1. 9. 2026) ---------- */
+const osm = await p.evaluate(() => {
+  prepniTab('cenik'); render();
+  const cenik = document.getElementById('page-cenik').innerHTML;
+  prepniTab('kalk');
+  const c = aktivniVarianta(ZAK).data.cenik;
+  c.priplatky.zabranyPadKc = 12000; c.priplatky.destovySvodKc = 3400;
+  render();
+  const r = spocitejVariantu(aktivniVarianta(ZAK));
+  const naj = n => r.ock.priplatky.find(x => String(x.origNazev || x.nazev) === n);
+  const souhrn = r.ock.sekce.hrubaOck.filter(x => x.cenaSkupina).map(x => x.cenaSkupina);
+  return {
+    montazDveri: r.ock.priplatky.some(x => /MONTÁŽ ŠACHETNÍCH DVEŘÍ/.test(String(x.origNazev || x.nazev))),
+    zabranyMn: (() => { const x = naj('ZÁBRANY PROTI PÁDU DO ŠACHTY'); return x && x.mnozstvi; })(),
+    nastupiste: aktivniVarianta(ZAK).data.ock.zadani.nastupiste,
+    vCeniku: ['Zábrany proti pádu do šachty', 'Demontáž stávajícího ohrazení', 'Malba schodnic',
+      'Nátěr celého ohrazení', 'Nátěr pouze okopových plechů', 'Prosklená stěna vedle šachty',
+      'Demontáž stávajícího výtahu', 'Dešťový svod'].filter(n => cenik.includes(n)).length,
+    zabrany: (() => { const x = naj('ZÁBRANY PROTI PÁDU DO ŠACHTY'); return x && [x.mnozstvi, x.cena, x.naklad]; })(),
+    svod: (() => { const x = naj('DEŠŤOVÝ SVOD'); return x && x.naklad; })(),
+    souhrn,
+  };
+});
+zkus('všech osm příplatků z předlohy je v ceníku', osm.vCeniku === 8, osm.vCeniku);
+zkus('zábrany proti pádu se počítají na všechna nástupiště (jako v předloze)',
+  osm.zabranyMn === osm.nastupiste, osm.zabranyMn + ' vs ' + osm.nastupiste);
+zkus('montáž šachetních dveří se automaticky nepočítá (2. 9. 2026)', osm.montazDveri === false);
+zkus('a počítají se jako množství 1 × cena z ceníku',
+  JSON.stringify(osm.zabrany) === JSON.stringify([osm.nastupiste, 12000, osm.nastupiste * 12000])
+  && osm.svod === 3400,
+  JSON.stringify(osm));
+zkus('souhrnné řádky nesou klíč skupiny ceníku',
+  osm.souhrn.includes('C.spojovaci.*') && osm.souhrn.includes('C.lak.*'), JSON.stringify(osm.souhrn));
+
+/* ---------- 12) zámečník atyp podle modelu výpočtu ---------- */
+const zam = await p.evaluate(() => {
+  const v = aktivniVarianta(ZAK);
+  v.data.cenik.zamecnikAtypKc = 900;
+  Z.zamecnikAtypKs = 3; delete Z.zamecnikAtypKc;
+  const najdi = fixes => {
+    const r = vypocet(Z, v.data.cenik, JEKLY, fixes);
+    return r.sekce.hrubaOck.find(x => /ZÁMEČNÍKA - OSTATNÍ/.test(String(x.origNazev || x.nazev)));
+  };
+  const m1 = najdi(false), m2 = najdi(true);
+  Z.zamecnikAtypKc = 25000;
+  const m2b = najdi(true);
+  delete Z.zamecnikAtypKs; delete Z.zamecnikAtypKc;
+  return { m1: m1 && [m1.mnozstvi, m1.naklad], m2: !!m2, m2b: m2b && [m2b.mnozstvi, m2b.naklad] };
+});
+zkus('model 1:1 Excel počítá kusy × ceníkovou sazbu',
+  JSON.stringify(zam.m1) === JSON.stringify([3, 2700]), JSON.stringify(zam.m1));
+zkus('opravený model bez částky řádek nedělá', zam.m2 === false);
+zkus('opravený model počítá jednu částku', JSON.stringify(zam.m2b) === JSON.stringify([1, 25000]),
+  JSON.stringify(zam.m2b));
 
 zkus('za celý průchod nevznikla chyba v konzoli', konzole.length === 0, konzole.join(' | '));
 

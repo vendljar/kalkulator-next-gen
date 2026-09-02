@@ -33,6 +33,21 @@ import zobrazeni from './netlify/functions/zobrazeni.mjs';
 import zakaznici from './netlify/functions/zakaznici.mjs';
 import sablony from './netlify/functions/sablony.mjs';
 import analytika from './netlify/functions/analytika.mjs';
+
+/* Dialogy jsou od 2. 9. 2026 v aplikaci (src/ui/dialog.js), ne nativní —
+ * `page.on('dialog')` už tedy nic nechytí. Harness si proto potvrzování
+ * zjednoduší: potvrd/hlaska/dotaz se nahradí funkcemi, které si text
+ * zapamatují a rovnou odpoví „ano". Skutečný modál (kliknutí, Esc, Enter,
+ * ovladatelnost stránky po zavření) ověřuje samostatný overit_dialogy.mjs. */
+const dlgStub = async (page) => page.evaluate(() => {
+  window.__dlgTexty = [];
+  window.potvrd = (t) => { window.__dlgTexty.push(String(t)); return Promise.resolve(true); };
+  window.hlaska = (t) => { window.__dlgTexty.push(String(t)); return Promise.resolve(); };
+  window.dotaz = (t, v) => { window.__dlgTexty.push(String(t)); return Promise.resolve(v == null ? '' : v); };
+});
+const dlgPosledni = async (page) => page.evaluate(() =>
+  (window.__dlgTexty && window.__dlgTexty.length) ? window.__dlgTexty[window.__dlgTexty.length - 1] : '');
+
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 
@@ -74,6 +89,8 @@ const prihlas = async () => {
 
 await page.goto(ADRESA);
 await page.waitForFunction(() => typeof window.render === 'function');
+
+await dlgStub(page);
 await prihlas();
 
 let ok = 0, fail = 0;
@@ -99,6 +116,7 @@ test('zakázka se uložila s přirážkou 40 %', pred.marze === 0.40 && !!pred.s
 await page.reload();
 await page.waitForFunction(() => typeof window.render === 'function');
 await page.waitForTimeout(1200);
+await dlgStub(page);
 const po = await page.evaluate(() => ({
   marze: aktivniVarianta(ZAK).data.cenik.marze, cislo: ZAK.cislo,
   soubor: ONLINE_STAV.soubor, prihlasen: !!ONLINE_STAV.ja,
@@ -108,7 +126,9 @@ test('a přirážka v ní zůstala 40 %', po.marze === 0.40, po.marze);
 test('i číslo nabídky sedí', /0999/.test(po.cislo), po.cislo);
 
 /* 3) nová zakázka značku zahodí — po refreshi se pak není kam vracet */
-await page.evaluate(() => { novaZakazkaUI(); });
+/* novaZakazkaUI() se od 2. 9. 2026 ptá in-app modálem (Promise) — stub
+ * odpoví „ano", ale je potřeba počkat, až se promise vyřídí. */
+await page.evaluate(async () => { await novaZakazkaUI(); });
 await page.waitForTimeout(400);
 test('nová zakázka odpojí návrat', await page.evaluate(() =>
   !Uloziste.cti('kng_posledni_zakazka_v1')));

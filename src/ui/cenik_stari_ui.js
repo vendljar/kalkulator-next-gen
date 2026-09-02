@@ -196,7 +196,7 @@ function prepocetProved() {
   const v = aktivniVarianta(ZAK);
   if (!v || !PREPOCET_VYBER || !PREPOCET_VYBER.size) return;
   if (typeof variantaUzamcena === 'function' && variantaUzamcena(v)) {
-    alert('Varianta je uzamčená – ceny odeslané nabídky se nepřepisují. Pokračujte jejím klonem.');
+    hlaska('Varianta je uzamčená – ceny odeslané nabídky se nepřepisují. Pokračujte jejím klonem.');
     return;
   }
   /* Krok zpět se nikde nezapisuje ručně – historieTik() na konci render()

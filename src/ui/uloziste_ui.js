@@ -191,7 +191,7 @@ function uloPrestavRejstrik() {
 
 function uloVyberSlozku() {
   if (!uloPodporovano()) {
-    alert('Tenhle prohlížeč výběr složky neumí. Funguje v Chrome a Edge; ve Firefoxu a Safari zůstává ruční ukládání souborem.');
+    hlaska('Tenhle prohlížeč výběr složky neumí. Funguje v Chrome a Edge; ve Firefoxu a Safari zůstává ruční ukládání souborem.');
     return Promise.resolve(false);
   }
   return window.showDirectoryPicker({ mode: 'readwrite', id: 'kngZakazky' })
@@ -242,8 +242,8 @@ function uloPripojZnovu() {
 }
 
 /* Odpojení nic nemaže – jen se aplikace přestane do složky dívat. */
-function uloOdpojSlozku() {
-  if (!confirm('Odpojit složku?\n\nNa disku se nic nesmaže ani nezmění, aplikace do ní jen přestane ukládat.')) return;
+async function uloOdpojSlozku() {
+  if (!await potvrd('Odpojit složku?\n\nNa disku se nic nesmaže ani nezmění, aplikace do ní jen přestane ukládat.')) return;
   ULO_STAV.koren = null; ULO_STAV.jmeno = ''; ULO_STAV.pripraveno = false;
   ULO_STAV.rejstrik = []; ULO_STAV.soubor = ''; ULO_STAV.razitko = ''; ULO_STAV.posledni = '';
   ULO_STAV.kdyUlozeno = null;
@@ -273,7 +273,7 @@ function uloUlozDoSlozky(opts) {
   const jmeno = (opts.tiche && ULO_STAV.soubor) ? ULO_STAV.soubor : uloJmenoSouboru(ZAK);
   ULO_STAV.pracuje = true;
 
-  return uloCtiSoubor(jmeno).then(text => {
+  return uloCtiSoubor(jmeno).then(async text => {
     let naDisku = null;
     if (text) { try { naDisku = JSON.parse(text); } catch (e) { naDisku = null; } }
 
@@ -294,7 +294,7 @@ function uloUlozDoSlozky(opts) {
           + 'Uložte ručně tlačítkem – zeptám se, co s tím.', 'varovani');
         return false;
       }
-      if (!confirm('Soubor ' + jmeno + ' se ve složce mezitím změnil'
+      if (!await potvrd('Soubor ' + jmeno + ' se ve složce mezitím změnil'
         + (kol.naDisku ? ' (naposledy ' + kol.naDisku.slice(0, 16).replace('T', ' ') + ')' : '')
         + '.\n\nOK = přepsat tím, co mám otevřené\nZrušit = nechat soubor na disku být')) return false;
     }
@@ -366,10 +366,10 @@ function uloPrepocetVeta(r) {
   return t;
 }
 
-function uloOtevriZeSlozky(soubor) {
+async function uloOtevriZeSlozky(soubor) {
   if (!ULO_STAV.koren) return Promise.resolve(false);
   if (typeof historieNeulozeno === 'function' && historieNeulozeno()
-      && !confirm('Otevřená zakázka má neuložené změny. Otevřít jinou a ty změny zahodit?')) return Promise.resolve(false);
+      && !await potvrd('Otevřená zakázka má neuložené změny. Otevřít jinou a ty změny zahodit?')) return Promise.resolve(false);
 
   ULO_STAV.pracuje = true; renderUloziste();
   return uloCtiSoubor(soubor).then(text => {
@@ -408,10 +408,10 @@ function uloOtevriZeSlozky(soubor) {
  * Nic se nemaže bez dotazu a mazat smí jen správce: ve složce jsou
  * odeslané nabídky a smazaný soubor na Disku Google nikdo z aplikace
  * nevrátí. */
-function uloSmazZeSlozky(soubor) {
+async function uloSmazZeSlozky(soubor) {
   if (!ULO_STAV.koren) return;
   if (!smiZobrazit('uloziste.mazani')) { uloZprava('Mazat zakázky ze složky smí jen správce.', 'varovani'); renderUloziste(); return; }
-  if (!confirm('Smazat soubor ' + soubor + ' ze složky?\n\nSmaže se skutečný soubor na disku a z aplikace ho nelze vrátit.')) return;
+  if (!await potvrd('Smazat soubor ' + soubor + ' ze složky?\n\nSmaže se skutečný soubor na disku a z aplikace ho nelze vrátit.')) return;
   ULO_STAV.koren.removeEntry(soubor)
     .then(() => {
       ULO_STAV.rejstrik = uloRejstrikOdeber(ULO_STAV.rejstrik, soubor);

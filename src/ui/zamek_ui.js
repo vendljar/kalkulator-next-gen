@@ -92,11 +92,11 @@ function zamekStop() {
   return true;
 }
 
-function zamekUpozorni(v) {
+async function zamekUpozorni(v) {
   const z = zamekInfo(v);
   const kdy = ((z && z.kdy) || '').slice(0, 10);
   const cislo = variantaCislo(ZAK, v);
-  const chce = confirm(
+  const chce = await potvrd(
     `Varianta „${v.nazev}" (${cislo}) je uzamčená.\n\n`
     + `Byla ${kdy ? kdy + ' ' : ''}vytištěna jako ${(z && z.popis) || 'cenová nabídka'}, `
     + `a vytištěná nabídka se považuje za odeslanou zákazníkovi – proto se už needituje.\n\n`
@@ -132,20 +132,20 @@ function nabidkaStavTextBezpecne(txt) {
 
 /* ---------- odemčení (jen správce, vždy s důvodem) ---------- */
 
-function zamekOdemkniUI(id) {
+async function zamekOdemkniUI(id) {
   const v = ZAK.varianty.find(x => x.id === id);
   if (!v || !variantaUzamcena(v)) return;
   if (!smiZobrazit('zamek.odemknout')) {
-    alert('Odemknout odeslanou nabídku může jen správce.\n\n'
+    hlaska('Odemknout odeslanou nabídku může jen správce.\n\n'
       + 'Běžný postup je založit klon varianty a pokračovat v něm – '
       + 'původní nabídka tak zůstane přesně v podobě, v jaké odešla zákazníkovi.');
     return;
   }
-  const duvod = prompt('Odemknutí odeslané nabídky ' + variantaCislo(ZAK, v)
+  const duvod = await dotaz('Odemknutí odeslané nabídky ' + variantaCislo(ZAK, v)
     + '.\n\nUveďte důvod (uloží se do zakázky):', '');
   if (duvod === null) return;
   const r = odemkniVariantu(v, { jeAdmin: true, duvod, kdo: zamekKdo() });
-  if (!r.ok) { alert('Odemknutí neproběhlo: ' + r.duvod); return; }
+  if (!r.ok) { hlaska('Odemknutí neproběhlo: ' + r.duvod); return; }
   render();
 }
 

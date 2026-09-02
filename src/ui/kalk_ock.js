@@ -227,11 +227,11 @@ function vlastniPolozkyArr(sekce) {
   return Z.vlastniPolozky[sekce];
 }
 function vlastniAdd(sekce) { vlastniPolozkyArr(sekce).push({ nazev: 'Nová položka', mnozstvi: 1, cena: 0 }); aktivniVarianta(ZAK).upraveno = new Date().toISOString(); render(); }
-function vlastniDel(sekce, i) {
+async function vlastniDel(sekce, i) {
   const p = vlastniPolozkyArr(sekce)[i];
   // katalogovou (trvalou) položku si zapamatuj jako odebranou, ať se v této zakázce nevrátí
   if (p && p.kid) {
-    if (!confirm('Položka „' + p.nazev + '" je trvalá (z ceníku).\n\nSmazat ji jen v této zakázce?\nV ceníku a v nových nabídkách zůstane.')) return;
+    if (!await potvrd('Položka „' + p.nazev + '" je trvalá (z ceníku).\n\nSmazat ji jen v této zakázce?\nV ceníku a v nových nabídkách zůstane.')) return;
     katalogZapamatujOdebrani(Z, p);
   }
   vlastniPolozkyArr(sekce).splice(i, 1);
@@ -276,7 +276,13 @@ function bunkaNazev(r, sekceKey) {
   /* Klíč ceníkové položky za tímhle řádkem (1. 9. 2026) — vidí ho jen
    * administrátor. Řádek BEZ klíče je řádek, který se v ceníku neopírá
    * o nic: buď je vlastní (přidaný v zakázce), nebo se cena počítá jinak. */
-  const klic = r.vlastni ? '' : klicChip(r.cenaPath);
+  /* Souhrnný řádek (spojovací materiál, lakování) nemá jednu ceníkovou cenu,
+   * ale celou skupinu — `cenaSkupina` nese `C.spojovaci.*`, ať je i u nich
+   * vidět, kam v ceníku sáhnout (1. 9. 2026). */
+  const klic = r.vlastni ? '' : klicChip(r.cenaPath || r.cenaSkupina,
+    r.cenaSkupina && !r.cenaPath
+      ? 'řádek je součet celé skupiny ceníku — jednu cenu nemá'
+      : undefined);
   return `<input type="text" class="nazev-ed" value="${esc(r.nazev)}" onchange="${onch}" title="název položky lze přepsat">${reset}${pin}${del}${klic}${pozn}`;
 }
 function bunkaMnozstvi(r) {
@@ -560,10 +566,10 @@ function priplatekNabidka(key, zahrnout) {
 }
 /* Vlastní příplatkové položky */
 function priplatekVlastniAdd() { if (!Z.priplatkyVlastni) Z.priplatkyVlastni = []; Z.priplatkyVlastni.push({ nazev: 'Nový příplatek', mnozstvi: 1, cena: 0 }); aktivniVarianta(ZAK).upraveno = new Date().toISOString(); render(); }
-function priplatekVlastniDel(i) {
+async function priplatekVlastniDel(i) {
   const p = Z.priplatkyVlastni[i];
   if (p && p.kid) {
-    if (!confirm('Příplatek „' + p.nazev + '" je trvalý (z ceníku).\n\nSmazat jen v této zakázce?\nV ceníku a v nových nabídkách zůstane.')) return;
+    if (!await potvrd('Příplatek „' + p.nazev + '" je trvalý (z ceníku).\n\nSmazat jen v této zakázce?\nV ceníku a v nových nabídkách zůstane.')) return;
     katalogZapamatujOdebrani(Z, p);
   }
   Z.priplatkyVlastni.splice(i, 1);
@@ -602,11 +608,11 @@ function priplatekVlastniSet(i, k, v) {
  * ztratila. Kartu ukazujeme jen administrátorovi a úklid je vždy jeho vědomé
  * rozhodnutí: sirotek může být dočasný (položka je jen vypnutá nastavením
  * šachty a po přepnutí se vrátí i s přepisem). */
-function sirotciUklidVse() {
+async function sirotciUklidVse() {
   let r; try { r = vypocet(Z, C, JEKLY, OCK.fixes); } catch (e) { return; }
   const s = prepisySirotci(Z, r.nazvyPolozek);
   if (!s.length) return render();
-  if (!confirm('Smazat ' + s.length + ' nepoužitý ruční přepis/y?\n\nTýká se jen přepisů, které v tomto výpočtu nemají odpovídající položku. Vrátit zpět to lze tlačítkem „Zpět“ (Ctrl+Z).')) return;
+  if (!await potvrd('Smazat ' + s.length + ' nepoužitý ruční přepis/y?\n\nTýká se jen přepisů, které v tomto výpočtu nemají odpovídající položku. Vrátit zpět to lze tlačítkem „Zpět“ (Ctrl+Z).')) return;
   prepisyUklid(Z, s);
   aktivniVarianta(ZAK).upraveno = new Date().toISOString();
   render();
@@ -721,9 +727,18 @@ function renderOutputs() {
     const reset = x.nazevPrepsan ? ` <button class="mini noprint" title="vrátit původní název" onclick="nazevReset('${orig}')">↺</button>` : '';
     return `<input type="text" class="nazev-ed" value="${esc(x.nazev)}" onchange="nazevSet('${orig}', this.value)" title="název příplatku lze přepsat">${reset}`;
   };
-  const pripMnozstvi = (x) => x.vlastni
-    ? `<input type="number" step="any" style="width:80px" value="${+(+x.mnozstvi).toFixed(3)}" onchange="priplatekVlastniSet(${+String(x.key).split(':')[1]}, 'mnozstvi', this.value)">`
-    : num(x.mnozstvi, 3);
+  /* Množství u příplatku jde od 2. 9. 2026 PŘEPSAT (zadání J. V. po testu
+   * Kornpfortstraße): předloha má u některých položek pod čarou nulu, aby se
+   * nenabízely, a obchodník se se zákazníkem běžně domluví na jiném počtu.
+   * Pole je stejné jako u řádků kalkulace (bunkaMnozstvi) včetně tlačítka ↺,
+   * které vrátí vypočtené množství; prázdné pole = platí výpočet. */
+  const pripMnozstvi = (x) => {
+    if (x.vlastni)
+      return `<input type="number" step="any" style="width:80px" value="${+(+x.mnozstvi).toFixed(3)}" onchange="priplatekVlastniSet(${+String(x.key).split(':')[1]}, 'mnozstvi', this.value)">`;
+    const orig = keyAttr(x.origNazev);
+    return `<input type="number" step="any" style="width:80px" value="${+(+x.mnozstvi).toFixed(3)}" onchange="mnozstviSet('${orig}', this.value)" title="množství lze ručně přepsat (prázdné = vypočtené)">`
+      + (x.prepsano ? ` <button class="mini noprint" title="vrátit vypočtené množství (${num(x.mnozstviAuto, 3)})" onclick="mnozstviSet('${orig}', '')">↺</button>` : '');
+  };
   const pripCena = (x) => x.vlastni
     ? `<input type="number" step="any" style="width:96px" value="${+(+x.cena).toFixed(2)}" onchange="priplatekVlastniSet(${+String(x.key).split(':')[1]}, 'cena', this.value)">`
     : (x.cenaPath
@@ -766,7 +781,7 @@ function renderOutputs() {
     <tr class="tot"><td colspan="${pripCols - 1 - (col.admin ? 2 : 0)}">PŘÍPLATKY CELKEM (pokud vše)</td><td>${fmt0(r.souhrn.priplatkyCena)}</td>${col.admin ? '<td class="admincol"></td><td class="admincol"></td>' : ''}</tr>
   </table>
   <div class="note">Příplatkové položky jsou ceník variant pro zákazníka – do základní ceny se nezapočítávají.${col.admin ? `
-  Název i jedn. cenu lze přepsat, tlačítkem lze přidat vlastní příplatek. Sloupec <b>Nabídka</b> určuje, které
+  Název, množství i jedn. cenu lze přepsat (↺ vrátí vypočtené množství), tlačítkem lze přidat vlastní příplatek. Sloupec <b>Nabídka</b> určuje, které
   příplatky se propíší do generované cenové nabídky (sekce II.). Položky zvolené ve „Volitelné" se zde
   automaticky nenabízejí podruhé, aby nedošlo k dvojímu započtení.` : ''}</div>`;
 

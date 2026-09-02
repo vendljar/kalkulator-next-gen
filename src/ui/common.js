@@ -185,7 +185,7 @@ function nahledVypni() {
 function nahledStop(popis) {
   if (!nahledAktivni()) return false;   // rolový náhled zápis neblokuje (chová se jako dosud)
   const kdo = NAST.nahledUzivatel.jmeno || NAST.nahledUzivatel.email;
-  alert('Prohlížíte aplikaci jako ' + kdo + ' — v náhledu se nic nezapisuje.\n\n'
+  hlaska('Prohlížíte aplikaci jako ' + kdo + ' — v náhledu se nic nezapisuje.\n\n'
     + (popis ? 'Akce: ' + popis + '\n\n' : '')
     + 'Náhled ukončíte kliknutím na jméno vpravo nahoře; pak se změna zapíše pod vaším jménem.');
   return true;
@@ -551,8 +551,16 @@ function set(path, v) {
  * žádná (pak klíč chybí). Obchodník ho nevidí a do tisku nejde. */
 function klicChip(klic, titulek) {
   if (!klic || typeof jeAdmin !== 'function' || !jeAdmin()) return '';
-  return ` <span class="klic" title="${esc(titulek
-    || 'klíč ceníku — stejný klíč najdete u odpovídající položky v Ceníku nákladů')}">${esc(klic)}</span>`;
+  /* V kalkulaci se ukazuje JEN KLÍČ, ne celá vazba (2. 9. 2026, pokyn J. V.:
+   * „zobrazuj jen klíče s měrnou jednotkou, ne celé výpočty, pak to zabírá
+   * zbytečně moc místa"). Vazba `Z.montazZakladHod ← C.vychMontazZakladHod`
+   * se tedy zkrátí na `Z.montazZakladHod` a celá zůstane v bublině. */
+  const cely = String(klic);
+  const zobraz = cely.split('←')[0].trim();
+  const popis = titulek || (zobraz === cely
+    ? 'klíč ceníku — stejný klíč najdete u odpovídající položky v Ceníku nákladů'
+    : 'řídí se z ceníku: ' + cely);
+  return ` <span class="klic" title="${esc(popis)}">${esc(zobraz)}</span>`;
 }
 
 function inp(path, opts = {}) {
@@ -1033,19 +1041,19 @@ function zakazkaHlavicka(ock) {
 
 /* Ruční přenos hlavičky mezi OCK a PROJ. Ptá se, jen pokud by přepsal
  * neprázdná a odlišná pole – pak vypíše, kterých se to týká. */
-function zakHlavickaKopiruj(smer) {
+async function zakHlavickaKopiruj(smer) {
   const doProj = smer === 'doProj';
   const cil = doProj ? 'Kalkulace PROJ' : 'Kalkulace OCK';
   const zdroj = doProj ? 'Kalkulace OCK' : 'Kalkulace PROJ';
   if (zakazkaHlavickyShodne(ZAK)) {
-    alert('Obě hlavičky už mají shodné údaje – není co přenášet.');
+    hlaska('Obě hlavičky už mají shodné údaje – není co přenášet.');
     return;
   }
   const nazvy = { cislo: 'Číslo nabídky', nazevAkce: 'Název akce', adresa: 'Adresa stavby',
                   objednatel: 'Zákazník', kontakt: 'Kontaktní osoba',
                   ico: 'IČO zákazníka', datum: 'Datum vytvoření' };
   const kolize = zakazkaHlavickaKolize(ZAK, smer);
-  if (kolize.length && !confirm('Přenést údaje z hlavičky ' + zdroj + ' do hlavičky ' + cil + '?\n\n'
+  if (kolize.length && !await potvrd('Přenést údaje z hlavičky ' + zdroj + ' do hlavičky ' + cil + '?\n\n'
       + 'Přepíše se ' + kolize.length + ' již vyplněné pole:\n· '
       + kolize.map(k => nazvy[k] || k).join('\n· ')
       + '\n\nPo přenosu můžete kterékoli pole ručně upravit.')) return;
@@ -1103,7 +1111,7 @@ function renderKalkHlavicka() {
  *
  * Uzamčená (odeslaná) varianta se nepřepíná vůbec: její ceny jsou doklad
  * o tom, co odešlo zákazníkovi. */
-function cenikRadaPrepniUI(rada) {
+async function cenikRadaPrepniUI(rada) {
   if (typeof cenikRadaPlatna !== 'function') return;
   const r = cenikRadaPlatna(rada);
   const v = aktivniVarianta(ZAK);
@@ -1117,7 +1125,7 @@ function cenikRadaPrepniUI(rada) {
   const zahr = (typeof CENIK_ZAHR !== 'undefined') ? CENIK_ZAHR : null;
   const rozdily = (typeof cenikRadaRozdily === 'function') ? cenikRadaRozdily(cr, zahr) : [];
   if (!rozdily.length && r === 'zahr') {
-    alert('Zahraniční ceník zatím nemá žádnou odchylku — ceny by se nezměnily.\n\n'
+    hlaska('Zahraniční ceník zatím nemá žádnou odchylku — ceny by se nezměnily.\n\n'
       + 'Zadejte je v záložce Ceník nákladů OCK ve sloupci „Zahraničí" '
       + '(smí je zadat a zveřejnit jen administrátor).');
     return;
@@ -1125,7 +1133,7 @@ function cenikRadaPrepniUI(rada) {
   const nazev = cenikRadaNazev(r);
   const vypis = rozdily.slice(0, 8).map(x => '• ' + x.popis).join('\n')
     + (rozdily.length > 8 ? '\n• … a další ' + (rozdily.length - 8) : '');
-  if (!confirm('Přepnout výpočet na ' + (r === 'zahr' ? 'ZAHRANIČNÍ' : 'TUZEMSKÝ') + ' ceník?\n\n'
+  if (!await potvrd('Přepnout výpočet na ' + (r === 'zahr' ? 'ZAHRANIČNÍ' : 'TUZEMSKÝ') + ' ceník?\n\n'
     + 'Dotkne se to ' + rozdily.length + ' ceníkových položek:\n' + vypis
     + '\n\nRuční přepisy v zakázce, globální přirážka ani sazba DPH se nemění.')) return;
 
@@ -1713,7 +1721,7 @@ function nactiZakazku(ev) {
           nabidkaStavTextBezpecne(cenikVarovaniText(p) + ' Rozdíly a přepočet najdete na záložce Ceník.');
       }
     }
-    catch (e) { alert('Soubor se nepodařilo načíst: ' + e.message); }
+    catch (e) { hlaska('Soubor se nepodařilo načíst: ' + e.message); }
     ev.target.value = '';
   });
 }

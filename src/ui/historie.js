@@ -102,7 +102,7 @@ function historieObnov(json) {
     HIST.posledni = JSON.stringify(ZAK);   // po migracích se otisk může lišit
     render();
   } catch (e) {
-    alert('Krok se nepodařilo obnovit: ' + e.message);
+    hlaska('Krok se nepodařilo obnovit: ' + e.message);
   } finally {
     HIST.probihaKrok = false;
   }
@@ -263,8 +263,8 @@ function historieObnovZalohu() {
     }
   }
 }
-function historieZahodZalohu() {
-  if (!confirm('Opravdu zahodit zálohu rozpracované kalkulace uloženou v prohlížeči?')) return;
+async function historieZahodZalohu() {
+  if (!await potvrd('Opravdu zahodit zálohu rozpracované kalkulace uloženou v prohlížeči?')) return;
   Uloziste.smaz(HIST_KLIC);
   Uloziste.smaz(HIST_ODLOZENO_KLIC);
   HIST.autoStav = '';

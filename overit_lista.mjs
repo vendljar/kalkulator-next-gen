@@ -312,7 +312,7 @@ const chovani = await p.evaluate(() => {
   const cislo = variantaCislo(ZAK, aktivniVarianta(ZAK));
   const listaText = (document.getElementById('zamekLista').textContent || '').trim();
   // zápis se musí odmítnout; dialog nabízející klon v testu odmítáme
-  const puvodniConfirm = window.confirm; window.confirm = () => false;
+  const puvodniConfirm = window.potvrd; window.potvrd = () => Promise.resolve(false);
   set('Z.zdvih', puvodni + 3);
   const poZapisu = Z.zdvih;
   // klon musí být editovatelný a mít další číslo
@@ -321,7 +321,7 @@ const chovani = await p.evaluate(() => {
   const klonEdit = variantaEditovatelna(klon);
   set('Z.zdvih', puvodni + 3);
   const klonZapis = Z.zdvih;
-  window.confirm = puvodniConfirm;
+  window.potvrd = puvodniConfirm;
   return { zamceno, cislo, poZapisu, puvodni, klonCislo, klonEdit, klonZapis, listaText };
 });
 ok(`tisk nabídky uzamkl variantu (číslo ${chovani.cislo})`, chovani.zamceno);

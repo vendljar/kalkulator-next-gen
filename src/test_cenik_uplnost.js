@@ -95,15 +95,25 @@ const dataKlice = klice(eng.DEFAULT_CENIK, 'C', []).concat(klice(ep.DEFAULT_CENI
   test('každý řádek ceníku má klíč v datech', chybi.length === 0, chybi.join(', '));
 }
 
-/* ---------- zahozený klíč se nesmí vrátit ---------- */
-test('mrtvý klíč zabranyPadKc není v datech',
-  !dataKlice.includes('C.priplatky.zabranyPadKc'));
-test('a migrace ho umí zahodit i z uloženého ceníku', (() => {
-  if (typeof eng.cenikMigraceLeseni !== 'function') return false;
-  const c = { priplatky: { zabranyPadKc: 1234, sknM2: 5 } };
-  eng.cenikMigraceLeseni(c);
-  return c.priplatky.zabranyPadKc === undefined && c.priplatky.sknM2 === 5;
-})());
+/* ---------- osm příplatků z excelové předlohy (1. 9. 2026) ----------
+ * Ráno se `zabranyPadKc` zahazoval jako mrtvý klíč, odpoledne ho J. V. vrátil
+ * k životu spolu se sedmi dalšími („zaveď je všechny, tak jak jsou"). Test
+ * proto hlídá opak než ráno: že těch osm položek v ceníku JE — a že migrace
+ * nikomu nemaže hodnotu, kterou si do nich zadá. */
+{
+  const osm = ['zabranyPadKc', 'demontazOhrazeniKc', 'malbaSchodnicKc', 'naterOhrazeniKc',
+               'naterOkopovychKc', 'prosklenaStenaKc', 'demontazVytahuKc', 'destovySvodKc']
+    .map(k => 'C.priplatky.' + k);
+  test('osm příplatků z předlohy má řádek v ceníku',
+    osm.every(c => radky.has(c)), osm.filter(c => !radky.has(c)).join(', '));
+  test('a klíč v datech', osm.every(c => dataKlice.includes(c)),
+    osm.filter(c => !dataKlice.includes(c)).join(', '));
+  test('migrace jim hodnotu nemaže', (() => {
+    const c = { priplatky: { zabranyPadKc: 1234, leseniHlavaFix: 9 } };
+    eng.cenikMigraceLeseni(c);
+    return c.priplatky.zabranyPadKc === 1234 && c.priplatky.leseniHlavaFix === undefined;
+  })());
+}
 
 console.log('\n' + ok + ' OK, ' + fail + ' FAIL');
 process.exit(fail ? 1 : 0);

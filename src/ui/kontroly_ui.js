@@ -4,7 +4,7 @@
  * Logika je v kontroly.js; tady je jen to, kde se nálezy ukážou a jak se
  * odklepnou.
  *
- * PROČ PANEL A NE confirm(): zadání z 30. 7. 2026 zní „pouze rozsviť
+ * PROČ PANEL A NE await potvrd(): zadání z 30. 7. 2026 zní „pouze rozsviť
  * varování před nabídkou". Modální okno by se navíc otevřelo úplně vždycky –
  * sestavení nese ukázkový ceník, takže pravidlo „ukazkovyCenik" svítí od
  * první vteřiny po instalaci. Dialog, který vyskočí pokaždé, se odklikává

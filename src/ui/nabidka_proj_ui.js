@@ -134,7 +134,7 @@ function nabidkaProjWord() {
   }).catch(err => nabidkaProjStavText('Chyba: ' + err.message));
 }
 
-function nabidkaProjWordGeneruj(srv) {
+async function nabidkaProjWordGeneruj(srv) {
   const L = (typeof tiskJazyk === 'function') ? tiskJazyk() : jazyk();   // volba „Jazyk tisku" (#143)
   const mutace = (!srv && L !== 'cz' && typeof SABLONY !== 'undefined') ? SABLONY['nabidkaProj_' + L] : null;
   const sablona = srv ? srv.data : (mutace ? mutace.data : SABLONA_PROJ_DOCX.data);
@@ -149,7 +149,7 @@ function nabidkaProjWordGeneruj(srv) {
    * používá tatáž funkce; nabídka se tak nikdy nevytiskne z něčeho jiného,
    * než co má obchodník na obrazovce. */
   const varianta = (typeof nabidkaVarianta === 'function')
-    ? nabidkaVarianta()
+    ? await nabidkaVarianta()
     : ((typeof aktivniVarianta === 'function') ? aktivniVarianta(ZAK) : (ZAK.varianty || [])[0]);
   dokumentVygeneruj('nabidkaProj', sablona.slice(0), ZAK, varianta, JEKLY, L)
     .then(res => {
@@ -187,7 +187,7 @@ function nabidkaProjNahled() {
    * (zhasnutým) – tiskový náhled je dokument pro zákazníka jako každý jiný. */
   if (typeof dokumentZabrana === 'function') {
     const duvod = dokumentZabrana();
-    if (duvod) { alert(duvod); return; }
+    if (duvod) { hlaska(duvod); return; }
   }
   const L = (typeof tiskJazyk === 'function') ? tiskJazyk()
     : ((typeof jazyk === 'function') ? jazyk() : 'cz');   // volba „Jazyk tisku" (#143)

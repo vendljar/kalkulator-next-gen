@@ -279,7 +279,7 @@ function onlineVerzeInfo() {
 
 /* Zveřejnění online – stejná úvaha jako progZverejni nad složkou, jen zápis
  * jde na server (a server si admina i „beze změny" zkontroluje ještě sám). */
-function onlineZverejni(preddanaPozn) {
+async function onlineZverejni(preddanaPozn) {
   if (!jeAdminOnline()) { onlineZprava('Zveřejnit ceník smí jen administrátor.', 'varovani'); render(); return Promise.resolve(false); }
   const ctx = progKontext('');
   if (ONLINE_STAV.db && programBezeZmeny(ONLINE_STAV.db, ctx)) {
@@ -294,7 +294,7 @@ function onlineZverejni(preddanaPozn) {
     : 'založení online databáze programu')
     + (zahrPocet ? ' · zahraniční řada: ' + zahrPocet + ' odchylek' : '');
   const pozn = (typeof preddanaPozn === 'string') ? preddanaPozn
-    : prompt('Zveřejnit ceník aktivní varianty jako platný ONLINE pro celý program?\n\n'
+    : await dotaz('Zveřejnit ceník aktivní varianty jako platný ONLINE pro celý program?\n\n'
     + shrnuti + '.\nOd této chvíle z něj budou vycházet nové nabídky všech přihlášených.\n'
     + 'Rozpracované nabídky se přepočítají samy, vytištěné (uzamčené) zůstanou beze změny.'
     + '\n\nČím se změna zdůvodňuje (nepovinné):', '');
@@ -431,7 +431,7 @@ function onlineFirmaPopis() {
 /* Zveřejnění – posílá se to, co je právě v Nastavení → Firma. Posílají se
  * ÚDAJE TAK, JAK JSOU (i se značkou ukázkových dat): server si musí umět sám
  * říct ne, kdyby prohlížeč někdo obešel. Čistou kopii si udělá on. */
-function onlineZverejniFirmu() {
+async function onlineZverejniFirmu() {
   if (!jeAdminOnline()) {
     onlineZprava('Firemní údaje smí zveřejnit jen administrátor.', 'varovani'); render();
     return Promise.resolve(false);
@@ -441,7 +441,7 @@ function onlineZverejniFirmu() {
     onlineZprava('Zveřejnit se nedají: ' + lze.duvod, 'varovani'); render();
     return Promise.resolve(false);
   }
-  if (!confirm('Zveřejnit firemní údaje online pro celý program?\n\n'
+  if (!await potvrd('Zveřejnit firemní údaje online pro celý program?\n\n'
     + (NAST.firma.nazev || '') + ', ' + firmaSidlo(NAST.firma) + '\n\n'
     + 'Od této chvíle je uvidí v hlavičce nabídky všichni přihlášení, i ti, '
     + 'kdo nemají připojenou složku _DB.')) return Promise.resolve(false);
@@ -556,13 +556,13 @@ function onlineUlozZobrazeniTise() {
 
 /* Zveřejnění s dotazem – zůstává pro hromadné přepsání tabulky předlohou,
  * kde se vyplatí říct nahlas, kolik odchylek se právě posílá všem. */
-function onlineZverejniZobrazeni() {
+async function onlineZverejniZobrazeni() {
   if (!jeAdminOnline()) {
     onlineZprava('Nastavení zobrazení smí zveřejnit jen administrátor.', 'varovani'); render();
     return Promise.resolve(false);
   }
   const zmeny = (typeof zobrazeniZmeny === 'function') ? zobrazeniZmeny(NAST.zobrazeni) : [];
-  if (!confirm('Zveřejnit nastavení zobrazení online pro celý program?\n\n'
+  if (!await potvrd('Zveřejnit nastavení zobrazení online pro celý program?\n\n'
     + (zmeny.length
       ? zmeny.length + ' odchylek od výchozího rozdělení.'
       : 'Beze změny proti výchozímu rozdělení.')
@@ -622,11 +622,11 @@ function onlineUloz(opts) {
       try { Promise.resolve(zakaznikNabidniAktualizaci()).catch(() => {}); } catch (e) { /* nevadí */ }
     }
     return onlineNactiRejstrik().then(() => true);
-  }).catch(e => {
+  }).catch(async e => {
     /* Kolize verzí (B10): při ručním uložení se zeptat a případně přepsat;
      * automatické uložení se neptá — jen varuje, ať se nepřepisuje potichu. */
     if (e && e.data && e.data.kolize && !opts.tiche && !opts.prepsat
-        && confirm(e.message + '\n\nPřepsat uloženou verzi mými změnami?')) {
+        && await potvrd(e.message + '\n\nPřepsat uloženou verzi mými změnami?')) {
       ONLINE_STAV.pracuje = false;
       return onlineUloz({ ...opts, prepsat: true });
     }
@@ -680,10 +680,10 @@ function onlineObnovPosledni() {
   }).catch(() => false);
 }
 
-function onlineOtevri(soubor) {
+async function onlineOtevri(soubor) {
   if (!ONLINE_STAV.ja) return Promise.resolve(false);
   if (typeof historieNeulozeno === 'function' && historieNeulozeno()
-    && !confirm('Otevřená zakázka má neuložené změny. Otevřít jinou a ty změny zahodit?'))
+    && !await potvrd('Otevřená zakázka má neuložené změny. Otevřít jinou a ty změny zahodit?'))
     return Promise.resolve(false);
   ONLINE_STAV.pracuje = true; renderOnlinePanel();
   return onlineApi('/api/zakazky?soubor=' + encodeURIComponent(soubor)).then(o => {
@@ -921,7 +921,7 @@ function onlineUzRoleZmen(email, role) {
  * Ptáme se ve dvou krocích schválně: archivace je vratná jedním kliknutím,
  * ale převod autorství se sám nevrátí. Sloučit obojí do jediného „ano" by
  * znamenalo, že si správce nevšimne, co vlastně odklepl. */
-function onlineUzArchiv(email, archiv) {
+async function onlineUzArchiv(email, archiv) {
   if (!archiv) {
     onlineApi('/api/uzivatele', { akce: 'archiv', email, archiv: false })
       .then(() => { onlineZprava('Účet ' + email + ' je zpátky v seznamu. '
@@ -929,7 +929,7 @@ function onlineUzArchiv(email, archiv) {
       .catch(e => onlineZprava('Nepodařilo se vrátit z archivu: ' + e.message, 'varovani'));
     return;
   }
-  if (!confirm('Archivovat účet ' + email + '?\n\n'
+  if (!await potvrd('Archivovat účet ' + email + '?\n\n'
     + 'Účet se nesmaže — jen zmizí z běžného seznamu a nepůjde se jím přihlásit. '
     + 'Razítka pod odeslanými nabídkami zůstanou beze změny.')) return;
   onlineApi('/api/uzivatele', { akce: 'archiv', email, archiv: true })
@@ -944,12 +944,12 @@ function onlineUzArchiv(email, archiv) {
 /* Nabídka převodu hned po archivaci — je to jediná chvíle, kdy správce ví,
  * proč to dělá. Když ji odmítne, zakázky zůstanou podepsané odcházejícím
  * a dá se to udělat kdykoli později. */
-function onlineUzPrevodNabidni(email) {
+async function onlineUzPrevodNabidni(email) {
   const cinni = (ONLINE_STAV.uzivatele || [])
     .filter(u => u.email !== email && !u.archiv && u.aktivni);
   if (!cinni.length) return;
   const seznam = cinni.map((u, i) => (i + 1) + ') ' + u.email).join('\n');
-  const volba = prompt('Převést zakázky po ' + email + ' na jiného kolegu?\n\n'
+  const volba = await dotaz('Převést zakázky po ' + email + ' na jiného kolegu?\n\n'
     + seznam + '\n\nNapište číslo kolegy, nebo nechte prázdné a nic se nestane.');
   const n = Number(String(volba || '').trim());
   if (!n || !cinni[n - 1]) return;
@@ -973,8 +973,8 @@ function onlineUzPrevodNabidni(email) {
  * Když server odmítne kvůli zakázkám (409 a `zakazek` v odpovědi), není to
  * konec, ale rozcestí: ukáže se serverová hláška s počtem a hned nato
  * nabídka převodu na jiného kolegu — přesně ta, kterou zná archivace. */
-function onlineUzSmaz(email) {
-  if (!confirm('Opravdu SMAZAT účet ' + email + '?\n\n'
+async function onlineUzSmaz(email) {
+  if (!await potvrd('Opravdu SMAZAT účet ' + email + '?\n\n'
     + 'CO ZMIZÍ: účet z databáze i ze seznamu, přihlášení (i s už otevřeným '
     + 'oknem) a jeho sken podpisu s razítkem. Vrátit to nejde.\n\n'
     + 'CO ZŮSTANE: razítka pod odeslanými nabídkami a podpisy pod rozhodnutími '
@@ -984,9 +984,9 @@ function onlineUzSmaz(email) {
   onlineUzAkce({ akce: 'smaz', email },
     'Účet ' + email + ' je smazaný i s podpisem. Razítka pod odeslanými nabídkami '
     + 'a pod rozhodnutími o slevách zůstala beze změny.',
-    { priChybe: (e) => {
+    { priChybe: async (e) => {
       onlineZprava(e.message, 'varovani');
-      /* Nabídka převodu se odkládá o tik: prompt() by jinak zakryl obrazovku
+      /* Nabídka převodu se odkládá o tik: await dotaz() by jinak zakryl obrazovku
        * dřív, než se stihne vykreslit hláška serveru — a správce by se
        * rozhodoval, aniž by věděl, proč se ho aplikace ptá. */
       if (e.data && e.data.zakazek) setTimeout(() => onlineUzPrevodNabidni(email), 0);
@@ -1779,7 +1779,7 @@ function onlineVyberVse(zap) {
 
 function onlineVyberZrus() { ONLINE_STAV.prehled.vybrane = []; renderPrehledHledaniTelo(); }
 
-function onlineSmazVybrane() {
+async function onlineSmazVybrane() {
   if (!jeAdminOnline()) { onlineZprava('Mazat zakázky smí jen administrátor.', 'varovani'); render(); return; }
   const vybrane = (ONLINE_STAV.prehled.vybrane || []).slice();
   if (!vybrane.length) return;
@@ -1788,14 +1788,14 @@ function onlineSmazVybrane() {
   const seznam = zaznamy.slice(0, 12).map(z => '• ' + (z.cislo || '(bez čísla)')
     + (z.nazevAkce ? ' — ' + z.nazevAkce : '')).join('\n')
     + (zaznamy.length > 12 ? '\n• … a další ' + (zaznamy.length - 12) : '');
-  if (!confirm('Opravdu smazat ' + vybrane.length + ' '
+  if (!await potvrd('Opravdu smazat ' + vybrane.length + ' '
     + (vybrane.length === 1 ? 'zakázku' : (vybrane.length < 5 ? 'zakázky' : 'zakázek')) + ' z databáze?\n\n'
     + seznam + '\n\nSmazané zakázky jsou pryč i s historií cen a variant. '
     + 'Vrátit je jde jen ze zálohy databáze.')) return;
   /* Druhé potvrzení JEN tam, kde v zakázce leží vytištěná nabídka. */
   let iOdeslane = false;
   if (odeslanych) {
-    if (!confirm('Pozor: ve výběru je ' + odeslanych + ' ODESLANÁ (vytištěná) nabídka.\n\n'
+    if (!await potvrd('Pozor: ve výběru je ' + odeslanych + ' ODESLANÁ (vytištěná) nabídka.\n\n'
       + 'Odeslaná nabídka je doklad o tom, co odešlo zákazníkovi. Opravdu smazat i ji?')) return;
     iOdeslane = true;
   }

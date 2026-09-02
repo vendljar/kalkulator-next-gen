@@ -20,20 +20,21 @@ function varNova() {
 }
 function varAktivuj(id) { ZAK.aktivni = id; syncVarianta(); render(); }
 function varRidici(id) { nastavRidici(ZAK, id); render(); }
-function varSmaz(id) {
-  if (ZAK.varianty.length <= 1) { alert('Poslední variantu nelze smazat.'); return; }
+async function varSmaz(id) {
+  if (ZAK.varianty.length <= 1) { await hlaska('Poslední variantu nelze smazat.'); return; }
   const v = ZAK.varianty.find(x => x.id === id);
   // #34: odeslanou nabídku běžný uživatel nemaže – je to doklad o tom, co
   // zákazník dostal. Správce ano (má i odemknutí), ale s výslovným varováním.
   if (typeof variantaUzamcena === 'function' && variantaUzamcena(v)) {
     if (!smiZobrazit('varianta.smazatUzamcenou')) {
-      alert(`Varianta „${v.nazev}" (${variantaCislo(ZAK, v)}) je uzamčená jako odeslaná nabídka `
+      await hlaska(`Varianta „${v.nazev}" (${variantaCislo(ZAK, v)}) je uzamčená jako odeslaná nabídka `
         + 'a nelze ji smazat.\n\nZáznam o tom, co odešlo zákazníkovi, musí v zakázce zůstat.');
       return;
     }
-    if (!confirm(`Varianta „${v.nazev}" (${variantaCislo(ZAK, v)}) je UZAMČENÁ – byla vytištěna `
-      + 'jako cenová nabídka, tedy odeslána zákazníkovi.\n\nOpravdu ji smazat i s dokladem o odeslání?')) return;
-  } else if (!confirm(`Smazat variantu „${v.nazev}“?`)) return;
+    if (!await potvrd(`Varianta „${v.nazev}" (${variantaCislo(ZAK, v)}) je UZAMČENÁ – byla vytištěna `
+      + 'jako cenová nabídka, tedy odeslána zákazníkovi.\n\nOpravdu ji smazat i s dokladem o odeslání?',
+      { nadpis: 'Smazat uzamčenou variantu?', vychoziNe: true })) return;
+  } else if (!await potvrd(`Smazat variantu „${v.nazev}“?`)) return;
   ZAK.varianty = ZAK.varianty.filter(x => x.id !== id);
   if (!ZAK.varianty.some(x => x.ridici)) ZAK.varianty[0].ridici = true;
   if (ZAK.aktivni === id) ZAK.aktivni = ZAK.varianty[0].id;
@@ -42,10 +43,10 @@ function varSmaz(id) {
 /* Pole v přehledové tabulce (název, zákazník, poznámka). Zámek se tu řeší
  * ručně, ne obecným obalením: varSet pracuje s libovolnou variantou podle id,
  * ne jen s otevřenou. */
-function varSet(id, k, val) {
+async function varSet(id, k, val) {
   const v = ZAK.varianty.find(x => x.id === id);
   if (typeof variantaUzamcena === 'function' && variantaUzamcena(v)) {
-    alert(`Varianta „${v.nazev}" (${variantaCislo(ZAK, v)}) je uzamčená jako odeslaná nabídka `
+    await hlaska(`Varianta „${v.nazev}" (${variantaCislo(ZAK, v)}) je uzamčená jako odeslaná nabídka `
       + '– její údaje se už nemění.\n\nPokračujte tlačítkem „Klonovat" na jejím řádku.');
     render();   // vrátí do políčka uloženou hodnotu
     return;
@@ -53,8 +54,9 @@ function varSet(id, k, val) {
   v[k] = val; v.upraveno = new Date().toISOString();
   render();
 }
-function novaZakazkaUI() {
-  if (!confirm('Založit novou prázdnou zakázku? Neuložené změny aktuální zakázky se ztratí.')) return;
+async function novaZakazkaUI() {
+  if (!await potvrd('Založit novou prázdnou zakázku? Neuložené změny aktuální zakázky se ztratí.',
+    { nadpis: 'Nová zakázka' })) return;
   ZAK = novaZakazka(); syncVarianta();
   /* Výchozí zaškrtnutí položek (20. 8. 2026): sloupec Výchozí v kalkulaci
    * OCK i PROJ platí právě a jen tady — na ČERSTVÉM zadání, kde jsou ještě
@@ -524,12 +526,13 @@ function nabidkaStavText(txt) { document.querySelectorAll('.nabidkaStav').forEac
 function nabidkaStavHtml(html) { document.querySelectorAll('.nabidkaStav').forEach(e => { e.innerHTML = html; }); }
 
 /* Varianta pro generování: otevřená; liší-li se od řídící, dá na výběr */
-function nabidkaVarianta() {
+async function nabidkaVarianta() {
   const akt = aktivniVarianta(ZAK), rid = ridiciVarianta(ZAK);
   if (akt.id === rid.id) return akt;
-  return confirm(`Otevřená varianta „${akt.nazev}" není řídící (řídící je „${rid.nazev}").\n\n`
-    + `OK = generovat z OTEVŘENÉ varianty (přesně to, co teď vidíte v záložkách)\n`
-    + `Zrušit = generovat z ŘÍDÍCÍ varianty „${rid.nazev}"`) ? akt : rid;
+  return await potvrd(`Otevřená varianta „${akt.nazev}" není řídící (řídící je „${rid.nazev}").\n\n`
+    + `Ano = generovat z OTEVŘENÉ varianty (přesně to, co teď vidíte v záložkách)\n`
+    + `Ne = generovat z ŘÍDÍCÍ varianty „${rid.nazev}"`,
+    { nadpis: 'Ze které varianty generovat?' }) ? akt : rid;
 }
 
 /* ---------- generování nabídky do Wordu (lokálně, bez Apps Script) ---------- */
@@ -560,7 +563,7 @@ function nabidkaWord() {
   }).catch(err => nabidkaStavText('Chyba: ' + err.message));
 }
 
-function nabidkaWordGeneruj(srv) {
+async function nabidkaWordGeneruj(srv) {
   // jazyk dokumentu – volba „Jazyk tisku" u tlačítka (#143), jinak Nastavení;
   // pevný text jen tehdy, existuje-li jazyková mutace šablony (server/Nastavení)
   const L = (typeof tiskJazyk === 'function') ? tiskJazyk() : jazyk();
@@ -575,7 +578,7 @@ function nabidkaWordGeneruj(srv) {
   nabidkaStavText('Vyplňuji šablonu…' + (L !== 'cz' ? ' (' + L.toUpperCase() + ')' : '')
     + (srv ? ' [serverová verze ' + srv.verze + ']' : ''));
   // varianta se určuje jednou dopředu – potřebujeme ji i pro zámek (#34)
-  const varianta = nabidkaVarianta();
+  const varianta = await nabidkaVarianta();
   // jednotný registr dokumentů (dokumenty.js) – stejná cesta jako krycí list apod.
   dokumentVygeneruj('nabidka', sablona.slice(0), ZAK, varianta, JEKLY, L)
     .then(res => {
@@ -613,10 +616,10 @@ function nabidkaWordGeneruj(srv) {
  * N1 – tiskne se ve zvoleném jazyce dokumentů (cz / en / de / fr): hodnoty
  * překládá nabidkaData, popisky a nadpisy nabidkaNahledSekce + P() níže.
  * Neznámý výraz zůstává česky (slovník, preklad.js) – nic se nevymýšlí. */
-function nabidkaNahled() {
+async function nabidkaNahled() {
   const L = (typeof jazyk === 'function') ? jazyk() : 'cz';
   const P = t => (L !== 'cz' && typeof tr === 'function') ? tr(t, L) : t;
-  const data = nabidkaData(ZAK, nabidkaVarianta(), JEKLY, L);
+  const data = nabidkaData(ZAK, await nabidkaVarianta(), JEKLY, L);
   const p = data.placeholders;
   const radek = (l, v) => `<tr><td style="font-weight:600">${esc(l)}</td><td>${esc(v)}</td></tr>`;
   const sekceHtml = nabidkaNahledSekce(p, L).map(s =>
@@ -681,7 +684,7 @@ function nabidkaFotoNahraj(cast) {
   inp.type = 'file'; inp.accept = 'image/png,image/jpeg,image/webp';
   inp.onchange = () => {
     const f = inp.files && inp.files[0]; if (!f) return;
-    if (f.size > 2 * 1024 * 1024) return alert('Fotka je příliš velká (' + Math.round(f.size / 1024)
+    if (f.size > 2 * 1024 * 1024) return hlaska('Fotka je příliš velká (' + Math.round(f.size / 1024)
       + ' kB). Použijte obrázek do 2 MB – ukládá se přímo do souboru zakázky.');
     const fr = new FileReader();
     fr.onload = () => {
@@ -692,20 +695,20 @@ function nabidkaFotoNahraj(cast) {
   };
   inp.click();
 }
-function nabidkaFotoSmaz(cast) {
+async function nabidkaFotoSmaz(cast) {
   const p = nabidkaFotoPole(cast);
-  if (!confirm('Odebrat úvodní fotku z cenové nabídky ' + (NABIDKA_FOTO_NAZVY[cast] || 'OCK') + '?')) return;
+  if (!await potvrd('Odebrat úvodní fotku z cenové nabídky ' + (NABIDKA_FOTO_NAZVY[cast] || 'OCK') + '?')) return;
   ZAK[p.foto] = ''; ZAK[p.nazev] = '';
   render();
 }
 /* Přenos fotky mezi nabídkami – vědomý, na tlačítko, jako u hlaviček.
  * Přepisuje se cíl, zdroj zůstává; obě nabídky tak můžou mít i nadále
  * každá svou. */
-function nabidkaFotoPrevezmi(cast) {
+async function nabidkaFotoPrevezmi(cast) {
   const cil = nabidkaFotoPole(cast);
   const zdroj = nabidkaFotoPole(cast === 'proj' ? 'ock' : 'proj');
-  if (!ZAK[zdroj.foto]) return alert('Druhá nabídka žádnou úvodní fotku nahranou nemá.');
-  if (ZAK[cil.foto] && !confirm('Nahradit fotku této nabídky fotkou z druhé nabídky?')) return;
+  if (!ZAK[zdroj.foto]) return hlaska('Druhá nabídka žádnou úvodní fotku nahranou nemá.');
+  if (ZAK[cil.foto] && !await potvrd('Nahradit fotku této nabídky fotkou z druhé nabídky?')) return;
   ZAK[cil.foto] = ZAK[zdroj.foto];
   ZAK[cil.nazev] = ZAK[zdroj.nazev];
   ZAK[cil.popis] = ZAK[zdroj.popis];
@@ -758,17 +761,17 @@ function nabidkaFotoKarta(cast) {
  * Sablona_NABIDKA_CN.docx) i „Kompletní náhled podkladů" zůstávají beze změny
  * jako druhá cesta – nic se neodebralo.
  * ============================================================================ */
-function nabidkaOckDokument() {
+async function nabidkaOckDokument() {
   /* Pojistka pro případ, že by se sem někdo dostal jinudy než tlačítkem
    * (zhasnutým) – tiskový náhled je dokument pro zákazníka jako každý jiný. */
   if (typeof dokumentZabrana === 'function') {
     const duvod = dokumentZabrana();
-    if (duvod) { alert(duvod); return; }
+    if (duvod) { hlaska(duvod, { nadpis: 'Dokument nelze vytvořit' }); return; }
   }
   const L = (typeof tiskJazyk === 'function') ? tiskJazyk()
     : ((typeof jazyk === 'function') ? jazyk() : 'cz');   // volba „Jazyk tisku" (#143)
   const P = t => (L !== 'cz' && typeof tr === 'function') ? tr(t, L) : t;
-  const varianta = nabidkaVarianta();   // drží se kvůli zámku (#34)
+  const varianta = await nabidkaVarianta();   // drží se kvůli zámku (#34)
   const data = nabidkaData(ZAK, varianta, JEKLY, L);
   const p = data.placeholders;
 

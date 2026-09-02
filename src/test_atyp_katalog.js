@@ -65,16 +65,32 @@ test('atyp položka zvedne náklad sekce přesně o svou hodnotu',
 test('atyp položka se promítne i do celkové ceny nabídky',
   rSAtyp.souhrn.zakladCena > rBez.souhrn.zakladCena);
 
-/* ---------- 3) cena zámečnické atyp práce pochází z ceníku ---------- */
+/* ---------- 3) zámečník atyp: DVA MODELY, DVĚ PRAVIDLA (1. 9. 2026) ----------
+ * Rozhodnutí J. V.: starší podoba (počet kusů × ceníková sazba) zůstává jen
+ * v modelu 1:1 jako Excel; opravený model počítá vždy novým způsobem, tedy
+ * z jedné částky v zakázce. Tahle sada hlídá obě strany, ať se nezamění. */
+const spoctiM1 = (z, c) => eng.vypocet(z, c || CENIK, JEKLY, false);   // 1:1 Excel
 const CEN = kopie(CENIK); CEN.zamecnikAtypKc = 900;
 const zZam = zadaniZ(z => { z.zamecnikAtypKs = 3; delete z.zamecnikAtypKc; });
-const rZam = najdi(spocti(zZam, CEN), 'ZÁMEČNÍKA - OSTATNÍ');
-test('bez přepisu se sazba atyp zámečníka vezme z ceníku', rZam && rZam.cena === 900, rZam && rZam.cena);
-test('náklad atyp zámečníka = množství × ceníková sazba', rZam && rZam.naklad === 3 * 900, rZam && rZam.naklad);
+const rZam = najdi(spoctiM1(zZam, CEN), 'ZÁMEČNÍKA - OSTATNÍ');
+test('model 1:1 Excel: bez přepisu se sazba vezme z ceníku', rZam && rZam.cena === 900, rZam && rZam.cena);
+test('model 1:1 Excel: náklad = kusy × ceníková sazba', rZam && rZam.naklad === 3 * 900, rZam && rZam.naklad);
+
+/* Opravený model starou podobu nezná: kusy se ignorují a ceníková sazba za kus
+ * se neuplatní — bez částky v zakázce řádek prostě nevznikne. */
+test('opravený model: bez částky v zakázce řádek nevznikne',
+  najdi(spocti(zZam, CEN), 'ZÁMEČNÍKA - OSTATNÍ') === undefined);
+const zZamCastka = zadaniZ(z => { z.zamecnikAtypKs = 3; z.zamecnikAtypKc = 25000; });
+const rZamM2 = najdi(spocti(zZamCastka, CEN), 'ZÁMEČNÍKA - OSTATNÍ');
+test('opravený model: počítá se jedna částka, kusy se ignorují',
+  rZamM2 && rZamM2.mnozstvi === 1 && rZamM2.naklad === 25000,
+  rZamM2 && (rZamM2.mnozstvi + ' × ' + rZamM2.cena));
+test('model 1:1 Excel u téže zakázky pořád násobí kusy',
+  najdi(spoctiM1(zZamCastka, CEN), 'ZÁMEČNÍKA - OSTATNÍ').naklad === 3 * 25000);
 
 /* Přepis v zakázce má přednost — je to dohoda pro jednu stavbu, ceník zůstává. */
 const zPrepis = zadaniZ(z => { z.zamecnikAtypKs = 3; z.zamecnikAtypKc = 1200; });
-const rPrepis = najdi(spocti(zPrepis, CEN), 'ZÁMEČNÍKA - OSTATNÍ');
+const rPrepis = najdi(spoctiM1(zPrepis, CEN), 'ZÁMEČNÍKA - OSTATNÍ');
 test('číslo v zakázce přebije ceníkovou sazbu', rPrepis && rPrepis.naklad === 3 * 1200, rPrepis && rPrepis.naklad);
 test('přepis nesahá do ceníku', CEN.zamecnikAtypKc === 900, CEN.zamecnikAtypKc);
 
@@ -82,13 +98,13 @@ test('přepis nesahá do ceníku', CEN.zamecnikAtypKc === 900, CEN.zamecnikAtypK
  * ústupek zákazníkovi tiše přepsal ceníkovou sazbou a nabídka by byla dražší,
  * než co bylo domluveno. */
 const zNula = zadaniZ(z => { z.zamecnikAtypKs = 3; z.zamecnikAtypKc = 0; });
-const rNula = najdi(spocti(zNula, CEN), 'ZÁMEČNÍKA - OSTATNÍ');
+const rNula = najdi(spoctiM1(zNula, CEN), 'ZÁMEČNÍKA - OSTATNÍ');
 test('nula v zakázce je platný přepis, ne návrat k ceníku', rNula && rNula.naklad === 0, rNula && rNula.naklad);
 
 /* ---------- 4) položka bez ceny nepropadne jako nula ---------- */
 const CEN0 = kopie(CENIK); CEN0.zamecnikAtypKc = 0;
 const zBezCeny = zadaniZ(z => { z.zamecnikAtypKs = 2; delete z.zamecnikAtypKc; });
-const rBezCeny = najdi(spocti(zBezCeny, CEN0), 'ZÁMEČNÍKA - OSTATNÍ');
+const rBezCeny = najdi(spoctiM1(zBezCeny, CEN0), 'ZÁMEČNÍKA - OSTATNÍ');
 test('atyp práce bez ceny je v datech označená', rBezCeny && rBezCeny.bezCeny === true, rBezCeny && rBezCeny.bezCeny);
 
 const K2 = kat.katalogPrazdny();
@@ -120,7 +136,9 @@ test('kontrola neblokuje, jen varuje (úroveň 2)',
   pravidlo && pravidlo.uroven === kt.KONTROLY_UROVEN && !pravidlo.zabranaMozna,
   pravidlo && (pravidlo.uroven + '/' + pravidlo.zabranaMozna));
 
-const ctxS = { zadani: zBezCeny, cenik: CEN0, vysledek: spocti(zBezCeny, CEN0) };
+/* Kontrola se zkouší nad modelem 1:1 Excel — v opraveném modelu by řádek
+ * bez částky vůbec nevznikl (viz oddíl 3), takže by nebylo co hlídat. */
+const ctxS = { zadani: zBezCeny, cenik: CEN0, vysledek: spoctiM1(zBezCeny, CEN0) };
 const vyslS = kt.kontrolyProved(ctxS);
 const nalez = vyslS.nalezy.find(n => n.kod === 'atypBezCeny');
 test('nad položkou bez ceny se kontrola rozsvítí', !!nalez, JSON.stringify(vyslS.kody));
@@ -138,7 +156,7 @@ test('nad oceňovanou atyp položkou kontrola mlčí',
 /* ---------- 6) staré zakázky se nesmí hnout ---------- */
 const zStara = zadaniZ(z => { z.zamecnikAtypKs = 4; z.zamecnikAtypKc = 750; });
 const cenikStary = kopie(CENIK); delete cenikStary.zamecnikAtypKc;
-const rStara = najdi(spocti(zStara, cenikStary), 'ZÁMEČNÍKA - OSTATNÍ');
+const rStara = najdi(spoctiM1(zStara, cenikStary), 'ZÁMEČNÍKA - OSTATNÍ');
 test('zakázka s vlastní cenou počítá i nad ceníkem bez nové položky stejně',
   rStara && rStara.naklad === 4 * 750, rStara && rStara.naklad);
 

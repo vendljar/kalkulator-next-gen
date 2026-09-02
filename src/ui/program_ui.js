@@ -221,7 +221,7 @@ function progKontext(poznamka) {
   };
 }
 
-function progZverejni(preddanaPozn) {
+async function progZverejni(preddanaPozn) {
   if (!jeAdmin()) { progZprava('Zveřejnit ceník smí jen správce.', 'varovani'); render(); return Promise.resolve(false); }
   /* Pozn.: tady zůstává `jeAdmin()`, ne `smiZobrazit()`. Zveřejnění ceníku
    * hlídá i server (netlify/functions/program.mjs) a matice zobrazení ho má
@@ -231,7 +231,7 @@ function progZverejni(preddanaPozn) {
     render(); return Promise.resolve(false);
   }
   if (PROG_STAV.chyba) {
-    if (!confirm('Databáze programu ve složce se nedá přečíst:\n\n' + PROG_STAV.chyba
+    if (!await potvrd('Databáze programu ve složce se nedá přečíst:\n\n' + PROG_STAV.chyba
       + '\n\nZaložit ji znovu od této verze? Původní soubor se přepíše a historie starších cen se ztratí.')) return Promise.resolve(false);
   }
   const ctx = progKontext('');
@@ -244,7 +244,7 @@ function progZverejni(preddanaPozn) {
     ? (rozdily.length ? rozdily.length + ' změněných položek ceníku' : 'ceník beze změny, mění se katalog nebo slevy')
     : 'založení databáze programu ve složce';
   const pozn = (typeof preddanaPozn === 'string') ? preddanaPozn
-    : prompt('Zveřejnit ceník aktivní varianty jako platný pro celý program?\n\n'
+    : await dotaz('Zveřejnit ceník aktivní varianty jako platný pro celý program?\n\n'
     + shrnuti + '.\nOd této chvíle z něj budou vycházet nové nabídky.\n'
     + 'Rozpracované nabídky se přepočítají samy, vytištěné (uzamčené) zůstanou beze změny.'
     + '\n\nČím se změna zdůvodňuje (nepovinné):', '');
@@ -256,11 +256,11 @@ function progZverejni(preddanaPozn) {
   // když zápis selže, musí být co nabídnout ke stažení.
   let pripraveno = '';
   // Souběžný zápis: mezi načtením a zveřejněním mohl soubor změnit někdo jiný.
-  return uloCtiSoubor(PROG_SOUBOR).then(text => {
+  return uloCtiSoubor(PROG_SOUBOR).then(async text => {
     let naDisku = null;
     if (text) { try { naDisku = JSON.parse(text); } catch (e) { naDisku = null; } }
     if (naDisku && String(naDisku.razitko || '') !== PROG_STAV.razitko) {
-      if (!confirm('Databázi programu ve složce mezitím změnil někdo jiný'
+      if (!await potvrd('Databázi programu ve složce mezitím změnil někdo jiný'
         + (naDisku.razitko ? ' (naposledy ' + String(naDisku.razitko).slice(0, 16).replace('T', ' ') + ')' : '')
         + '.\n\nOK = zveřejnit přesto (jeho verze zůstane v historii)\nZrušit = nechat soubor být a nejdřív si ho načíst')) return false;
       // Navázat na to, co je na disku, ne na to, co máme v paměti – jinak by
@@ -360,7 +360,7 @@ function cenikPrenosNahraj() {
     const f = inp.files && inp.files[0];
     if (!f) return;
     const fr = new FileReader();
-    fr.onload = () => {
+    fr.onload = async () => {
       let d;
       try { d = JSON.parse(String(fr.result)); } catch (e) { d = null; }
       /* Vadný nebo cizí soubor se NEZVEŘEJNÍ. Ceník je to jediné, z čeho
@@ -371,7 +371,7 @@ function cenikPrenosNahraj() {
       }
       const kam = (typeof ONLINE_STAV !== 'undefined' && ONLINE_STAV.prostredi === 'test')
         ? 'TESTOVACÍHO webu' : 'OSTRÉHO webu';
-      if (!confirm('Zveřejnit ceník ze souboru „' + f.name + '" (verze ' + (d.verze || '?') + ') '
+      if (!await potvrd('Zveřejnit ceník ze souboru „' + f.name + '" (verze ' + (d.verze || '?') + ') '
         + 'jako platný ceník ' + kam + '?\n\n'
         + 'Od té chvíle z něj vycházejí všechny nové nabídky. Dosavadní verze se odloží '
         + 'do historie a jde se k ní vrátit. Vytištěné (uzamčené) nabídky se nemění.')) return;
@@ -420,7 +420,7 @@ function cenikPrenosKarta() {
 /* Převzetí starší verze do aktivní varianty. Nezveřejňuje – jen nasype
  * historické ceny do ceníku varianty, aby šlo spočítat, jak by nabídka
  * vypadala tehdy. Zveřejnit se dá až samostatným krokem. */
-function progPrevezmiVerzi(cislo) {
+async function progPrevezmiVerzi(cislo) {
   const z = programVerze(cenikAktivniDb().db, cislo);
   if (!z) return;
   const v = (typeof aktivniVarianta === 'function') ? aktivniVarianta(ZAK) : null;
@@ -429,7 +429,7 @@ function progPrevezmiVerzi(cislo) {
     progZprava('Varianta je uzamčená jako odeslaná – ceník v ní se už nemění.', 'varovani');
     renderProgram(); return;
   }
-  if (!confirm('Přepsat ceník aktivní varianty cenami z ' + programPopisVerze(z) + '?\n\n'
+  if (!await potvrd('Přepsat ceník aktivní varianty cenami z ' + programPopisVerze(z) + '?\n\n'
     + 'Zveřejněná platná verze se tím nemění – jen si spočítáte, jak by nabídka vyšla tehdy.')) return;
   konfigNahradVMiste(v.data.cenik, z.cenik || {});
   if (v.data.proj) konfigNahradVMiste(v.data.proj.cenik, z.cenikProj || {});
@@ -470,14 +470,14 @@ function cenikAktivniDb() {
   return { db: null, zdroj: null };
 }
 
-function cenikZverejniVse() {
+async function cenikZverejniVse() {
   const slozka = typeof ULO_STAV !== 'undefined' && !!ULO_STAV.koren && ULO_STAV.pripraveno;
   const online = typeof ONLINE_STAV !== 'undefined' && !!ONLINE_STAV.ja;
   if (!slozka && !online) {
     progZprava('Platný ceník žije na serveru — přihlaste se a zveřejněte znovu.', 'varovani');
     render(); return Promise.resolve(false);
   }
-  const pozn = prompt('Zveřejnit ceník aktivní varianty jako platný pro celý program?\n\n'
+  const pozn = await dotaz('Zveřejnit ceník aktivní varianty jako platný pro celý program?\n\n'
     + 'Od této chvíle z něj vycházejí všechny nové nabídky'
     + (online && slozka ? ' (zapíše se na server i do složky _DB)' : online ? ' (zapíše se na server)' : ' (zapíše se do složky _DB)')
     + '.\nRozpracované nabídky se přepočítají samy, vytištěné (uzamčené) zůstávají beze změny.'

@@ -194,7 +194,7 @@ function zakaznikSet(id, v) {
   render();
 }
 
-function zakaznikUloz() {
+async function zakaznikUloz() {
   const z = ZAK_DB.otevreny;
   if (!z) return Promise.resolve(false);
   if (!zakaznikKlic(z)) {
@@ -202,7 +202,7 @@ function zakaznikUloz() {
     render(); return Promise.resolve(false);
   }
   const podobni = ZAK_DB.novy ? zakazniciPodobni(ZAK_DB.seznam, z) : [];
-  if (podobni.length && !confirm('Podobného zákazníka už v seznamu máme:\n\n'
+  if (podobni.length && !await potvrd('Podobného zákazníka už v seznamu máme:\n\n'
       + podobni.map(x => '• ' + (x.nazev || '?') + (x.ico ? ' (IČO ' + x.ico + ')' : '')).join('\n')
       + '\n\nOpravdu založit další kartu?')) return Promise.resolve(false);
   ZAK_DB.pracuje = true; render();
@@ -219,11 +219,11 @@ function zakaznikUloz() {
     .catch(e => { ZAK_DB.pracuje = false; ZAK_DB.hlaska = 'Neuloženo: ' + e.message; render(); return false; });
 }
 
-function zakaznikSmaz() {
+async function zakaznikSmaz() {
   const z = ZAK_DB.otevreny;
   if (!z || !jeAdminOnline()) return;
   const klic = zakaznikKlic(z);
-  if (!confirm('Smazat kartu zákazníka „' + (z.nazev || klic) + '"?\n\n'
+  if (!await potvrd('Smazat kartu zákazníka „' + (z.nazev || klic) + '"?\n\n'
     + 'Zakázky zůstanou, ale údaje, které jste u něj jednou dohledali, se ztratí.')) return;
   onlineApi('/api/zakaznici?klic=' + encodeURIComponent(klic), null, 'DELETE')
     .then(() => {
@@ -251,14 +251,14 @@ function zakaznikDoZakazkyUI(klic) {
 /* ---------- zakázka → karta (nabídne se, nevnucuje se) ---------- */
 /* Volá se po uložení zakázky. Když se hlavička liší od karty, ukáže seznam
  * rozdílů a teprve na potvrzení je zapíše. Nikdy nic potichu. */
-function zakaznikNabidniAktualizaci() {
+async function zakaznikNabidniAktualizaci() {
   if (!zakazniciMozne() || !ZAK.zakaznikId) return Promise.resolve(false);
   const z = ZAK_DB.seznam.find(x => zakaznikKlic(x) === ZAK.zakaznikId);
   if (!z) return Promise.resolve(false);
   const rozdily = zakaznikRozdily(z, ZAK);
   if (!rozdily.length) return Promise.resolve(false);
   const popis = rozdily.map(r => '• ' + r.label + ': „' + (r.karta || '—') + '" → „' + r.zakazka + '"').join('\n');
-  if (!confirm('U zákazníka „' + (z.nazev || '?') + '" se v téhle zakázce liší '
+  if (!await potvrd('U zákazníka „' + (z.nazev || '?') + '" se v téhle zakázce liší '
       + rozdily.length + ' údajů:\n\n' + popis
       + '\n\nUložit je i do jeho karty (platí pro příští zakázky)?')) return Promise.resolve(false);
   const novy = zakaznikPrevezmi(JSON.parse(JSON.stringify(z)), rozdily);

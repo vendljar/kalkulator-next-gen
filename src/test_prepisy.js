@@ -19,6 +19,10 @@ const eng = require('./engine.js');
 const P = require('./prepisy.js');
 const K = require('./katalog.js');
 const ZC = require('./zkusebni_cenik.js');
+/* Jádro čte `prepisPlati` z globálního prostoru (v sestaveném souboru tam je
+ * z format.js). Bez něj by fallback bral prázdný řetězec jako platný přepis
+ * a „prázdno není nula" by přestalo platit — proto se tu načítá výslovně. */
+global.prepisPlati = require('./format.js').prepisPlati;
 
 let ok = 0, fail = 0;
 const test = (n, cond, info) => { if (cond) { ok++; console.log('OK  ' + n); } else { fail++; console.log('FAIL ' + n, info || ''); } };
@@ -114,6 +118,60 @@ test('změna ceny v ceníku přepisy neruší', z4.cenyPrepis['DOPRAVA A PŘESUN
 test('popis hodnoty u přejmenování', P.prepisHodnotaText({ mapa: 'nazvyPrepis', hodnota: 'Nový' }).indexOf('Nový') > 0);
 test('popis hodnoty u ceny má Kč', P.prepisHodnotaText({ mapa: 'cenyPrepis', hodnota: 1234.567 }) === '1234.57 Kč');
 test('popis hodnoty u množství je holé číslo', P.prepisHodnotaText({ mapa: 'mnozstviPrepis', hodnota: '4' }) === '4');
+
+/* ---- přepis množství u PŘÍPLATKU (2. 9. 2026) ----
+ * Excel má u některých položek pod čarou množství 0, aby se nenabízely,
+ * a obchodník se se zákazníkem běžně domluví na jiném počtu. Do 2. 9. 2026
+ * šla u příplatku přepsat jen cena. Sémantika je stejná jako u řádků
+ * kalkulace: PRÁZDNO NENÍ NULA. */
+{
+  const najdi = (vysl, nazev) => vysl.priplatky.find(p => (p.origNazev || p.nazev) === nazev);
+  const NAZEV = 'ZÁBRANY DO DVEŘNÍCH VSTUPŮ';
+
+  const zAuto = zadani();
+  const auto = najdi(spocti(zAuto), NAZEV);
+  test('bez přepisu má příplatek vypočtené množství',
+    auto && auto.mnozstvi === zAuto.nastupiste && auto.prepsano === false,
+    auto && (auto.mnozstvi + '/' + auto.prepsano));
+
+  const zNula = zadani();
+  zNula.mnozstviPrepis = { [NAZEV]: 0 };
+  const nula = najdi(spocti(zNula), NAZEV);
+  test('přepis množství na 0 dá nulový náklad', nula && nula.mnozstvi === 0 && nula.naklad === 0,
+    nula && (nula.mnozstvi + '/' + nula.naklad));
+  test('a řekne, že je přepsané', nula && nula.prepsano === true);
+  test('vypočtené množství zůstane k dispozici pro ↺',
+    nula && nula.mnozstviAuto === zNula.nastupiste, nula && nula.mnozstviAuto);
+
+  const zPrazdno = zadani();
+  zPrazdno.mnozstviPrepis = { [NAZEV]: '' };
+  const prazdno = najdi(spocti(zPrazdno), NAZEV);
+  test('prázdný přepis znamená „platí vypočtené", ne nula',
+    prazdno && prazdno.mnozstvi === zPrazdno.nastupiste && prazdno.prepsano === false,
+    prazdno && (prazdno.mnozstvi + '/' + prazdno.prepsano));
+
+  /* Lešení má vlastní náklad (proměnná část × množství PLUS fixní částka).
+   * Přepis množství se do něj musí promítnout POMĚREM — jinak by fixní část
+   * buď spadla pod stůl, nebo se zněkolikanásobila. */
+  const zLes = zadani();
+  zLes.volitelne.leseniVnejsi = false;
+  const lesAuto = najdi(spocti(zLes), 'LEŠENÍ - vnější');
+  const zLes2 = JSON.parse(JSON.stringify(zLes));
+  zLes2.mnozstviPrepis = { 'LEŠENÍ - vnější': lesAuto.mnozstvi / 2 };
+  const lesPul = najdi(spocti(zLes2), 'LEŠENÍ - vnější');
+  test('přepis množství u lešení nezahodí fixní část, přepočte ji poměrem',
+    Math.abs(lesPul.naklad - lesAuto.naklad / 2) < 0.01,
+    lesPul.naklad + ' vs ' + lesAuto.naklad / 2);
+  const zLes0 = JSON.parse(JSON.stringify(zLes));
+  zLes0.mnozstviPrepis = { 'LEŠENÍ - vnější': 0 };
+  test('a nula u lešení znamená opravdu nulu', najdi(spocti(zLes0), 'LEŠENÍ - vnější').naklad === 0);
+
+  /* Přepis se klíčuje názvem, takže musí jít do rejstříku i pro příplatky —
+   * jinak by ho úklid sirotků (#4) hned smazal. */
+  test('přepis u příplatku není sirotek',
+    P.prepisySirotci(zNula, spocti(zNula).nazvyPolozek).length === 0,
+    P.prepisySirotci(zNula, spocti(zNula).nazvyPolozek));
+}
 
 console.log('\n' + ok + ' OK, ' + fail + ' FAIL');
 process.exit(fail ? 1 : 0);

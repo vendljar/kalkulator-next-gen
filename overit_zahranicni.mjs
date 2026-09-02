@@ -10,6 +10,21 @@
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
+
+/* Dialogy jsou od 2. 9. 2026 v aplikaci (src/ui/dialog.js), ne nativní —
+ * `page.on('dialog')` už tedy nic nechytí. Harness si proto potvrzování
+ * zjednoduší: potvrd/hlaska/dotaz se nahradí funkcemi, které si text
+ * zapamatují a rovnou odpoví „ano". Skutečný modál (kliknutí, Esc, Enter,
+ * ovladatelnost stránky po zavření) ověřuje samostatný overit_dialogy.mjs. */
+const dlgStub = async (page) => page.evaluate(() => {
+  window.__dlgTexty = [];
+  window.potvrd = (t) => { window.__dlgTexty.push(String(t)); return Promise.resolve(true); };
+  window.hlaska = (t) => { window.__dlgTexty.push(String(t)); return Promise.resolve(); };
+  window.dotaz = (t, v) => { window.__dlgTexty.push(String(t)); return Promise.resolve(v == null ? '' : v); };
+});
+const dlgPosledni = async (page) => page.evaluate(() =>
+  (window.__dlgTexty && window.__dlgTexty.length) ? window.__dlgTexty[window.__dlgTexty.length - 1] : '');
+
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 
@@ -31,10 +46,12 @@ const chyby = [];
 page.on('pageerror', e => chyby.push(String(e)));
 page.on('console', m => { if (m.type() === 'error') chyby.push(m.text()); });
 let posledniDialog = '';
-page.on('dialog', d => { posledniDialog = d.message(); d.accept(); });
+/* nativní dialogy nahradil in-app modál — text se čte z dlgPosledni() */
 
 await page.goto('http://127.0.0.1:' + server.address().port);
 await page.waitForFunction(() => typeof window.render === 'function');
+
+await dlgStub(page);
 await page.addStyleTag({ content: '#prihlaseni-overlay{display:none !important}' });
 await page.evaluate(() => { NAST.jeAdmin = true; prepniTab('kalk'); render(); });
 await page.waitForTimeout(300);
@@ -51,9 +68,10 @@ test('hlavička není podbarvená',
   await page.evaluate(() => !document.querySelector('#page-kalk .zak-bar.rada-zahr')));
 
 /* ---------- 2) bez odchylek se nepřepíná ---------- */
-posledniDialog = '';
+await page.evaluate(() => { window.__dlgTexty = []; });
 await page.evaluate(() => cenikRadaPrepniUI('zahr'));
 await page.waitForTimeout(200);
+posledniDialog = await dlgPosledni(page);
 test('prázdný zahraniční ceník přepnutí odmítne a poradí',
   /Zahraniční ceník zatím nemá žádnou odchylku/.test(posledniDialog), posledniDialog.slice(0, 60));
 test('a řada zůstala tuzemská',
@@ -70,10 +88,10 @@ await page.evaluate(() => {
   d.cenik.marze = 0.40;                 // zakázková hodnota — přepnutí se jí nesmí dotknout
   render();
 });
-posledniDialog = '';
+await page.evaluate(() => { window.__dlgTexty = []; });
 await page.evaluate(() => cenikRadaPrepniUI('zahr'));
 await page.waitForTimeout(300);
-
+posledniDialog = await dlgPosledni(page);
 test('přepnutí se nejdřív zeptá a vypíše dopad',
   /Dotkne se to \d+ ceníkových položek/.test(posledniDialog), posledniDialog.slice(0, 80));
 test('řada se přepnula',

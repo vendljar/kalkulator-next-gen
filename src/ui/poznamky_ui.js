@@ -94,11 +94,11 @@ function prilohyNahraj() {
         const r = prilohyPridej(zak, { nazev: f.name, typ: f.type, velikost: f.size, data: fr.result },
                                 { kdo: poznamkyKdo() });
         if (!r.ok) chyby.push(f.name + ': ' + r.duvod);
-        if (--zbyva === 0) { if (chyby.length) alert(chyby.join('\n')); poznamkyZmena(); }
+        if (--zbyva === 0) { if (chyby.length) hlaska(chyby.join('\n')); poznamkyZmena(); }
       };
       fr.onerror = () => {
         chyby.push(f.name + ': soubor se nepodařilo načíst.');
-        if (--zbyva === 0) { alert(chyby.join('\n')); poznamkyZmena(); }
+        if (--zbyva === 0) { hlaska(chyby.join('\n')); poznamkyZmena(); }
       };
       fr.readAsDataURL(f);
     });
@@ -114,11 +114,11 @@ function prilohyStahni(id) {
   document.body.appendChild(a); a.click(); a.remove();
 }
 
-function prilohySmazUI(id) {
+async function prilohySmazUI(id) {
   const zak = poznamkyZak(); if (!zak) return;
   const p = (zak.prilohy || []).find(x => x.id === id); if (!p) return;
   /* Tady se ptáme: na rozdíl od poznámky se obsah přílohy opravdu ztratí. */
-  if (!confirm('Odebrat přílohu „' + p.nazev + '“? Obsah souboru se ze zakázky smaže natrvalo.')) return;
+  if (!await potvrd('Odebrat přílohu „' + p.nazev + '“? Obsah souboru se ze zakázky smaže natrvalo.')) return;
   prilohySmaz(zak, id, { kdo: poznamkyKdo() });
   poznamkyZmena();
 }

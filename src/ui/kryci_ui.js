@@ -255,7 +255,7 @@ function kryciTiskPohled(verze) {
    * (zhasnutým) – tiskový náhled je dokument pro zákazníka jako každý jiný. */
   if (typeof dokumentZabrana === 'function') {
     const duvod = dokumentZabrana();
-    if (duvod) { alert(duvod); return; }
+    if (duvod) { hlaska(duvod); return; }
   }
   const v = aktivniVarianta(ZAK);
   const e2 = esc;   // #6: sjednoceno se sdíleným escapováním (ošetří i uvozovky a apostrof)

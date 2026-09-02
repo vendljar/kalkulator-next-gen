@@ -10,6 +10,21 @@
 import { chromium } from 'playwright';
 import path from 'path';
 
+/* Dialogy jsou od 2. 9. 2026 v aplikaci (src/ui/dialog.js), ne nativní —
+ * `page.on('dialog')` už tedy nic nechytí. Harness si proto potvrzování
+ * zjednoduší: potvrd/hlaska/dotaz se nahradí funkcemi, které si text
+ * zapamatují a rovnou odpoví „ano". Skutečný modál (kliknutí, Esc, Enter,
+ * ovladatelnost stránky po zavření) ověřuje samostatný overit_dialogy.mjs. */
+const dlgStub = async (page) => page.evaluate(() => {
+  window.__dlgTexty = [];
+  window.potvrd = (t) => { window.__dlgTexty.push(String(t)); return Promise.resolve(true); };
+  window.hlaska = (t) => { window.__dlgTexty.push(String(t)); return Promise.resolve(); };
+  window.dotaz = (t, v) => { window.__dlgTexty.push(String(t)); return Promise.resolve(v == null ? '' : v); };
+});
+const dlgPosledni = async (page) => page.evaluate(() =>
+  (window.__dlgTexty && window.__dlgTexty.length) ? window.__dlgTexty[window.__dlgTexty.length - 1] : '');
+
+
 const soubor = 'file://' + path.resolve('dist/kalkulacka.html');
 let ok = 0, fail = 0;
 const zkus = (popis, podminka, detail) => {
@@ -25,6 +40,8 @@ stranka.on('pageerror', e => chyby.push(String(e)));
 stranka.on('dialog', d => d.accept());
 await stranka.goto(soubor);
 await stranka.waitForTimeout(400);
+
+await dlgStub(stranka);
 
 /* Paměťová složka + počítadlo zápisů: bez něj by nešlo poznat, jestli
  * aplikace nezapisuje na Disk pokaždé, co se něco překreslí. */

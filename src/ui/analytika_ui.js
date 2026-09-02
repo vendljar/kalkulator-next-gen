@@ -156,7 +156,7 @@ function analytikaVypinac(zap) {
     ANL.sber = !!zap;
     if (zap) analytikaStart();
     analytikaNactiPrehled();
-  }).catch(e => alert('Nastavení sběru se neuložilo: ' + e.message));
+  }).catch(e => hlaska('Nastavení sběru se neuložilo: ' + e.message));
 }
 
 function analytikaCasText(sek) {
@@ -299,7 +299,7 @@ function heatNacti() {
     heatKresli(); heatPanel();
   }).catch(e => {
     ANL.heat = false; renderOnlineLista();
-    alert('Heat mapa se nenačetla: ' + e.message);
+    hlaska('Heat mapa se nenačetla: ' + e.message);
   });
 }
 

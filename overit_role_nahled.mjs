@@ -40,6 +40,21 @@ import firma from './netlify/functions/firma.mjs';
 import zobrazeni from './netlify/functions/zobrazeni.mjs';
 import zalohaVynuceno from './netlify/functions/zaloha_vynuceno.mjs';
 
+/* Dialogy jsou od 2. 9. 2026 v aplikaci (src/ui/dialog.js), ne nativní —
+ * `page.on('dialog')` už tedy nic nechytí. Harness si proto potvrzování
+ * zjednoduší: potvrd/hlaska/dotaz se nahradí funkcemi, které si text
+ * zapamatují a rovnou odpoví „ano". Skutečný modál (kliknutí, Esc, Enter,
+ * ovladatelnost stránky po zavření) ověřuje samostatný overit_dialogy.mjs. */
+const dlgStub = async (page) => page.evaluate(() => {
+  window.__dlgTexty = [];
+  window.potvrd = (t) => { window.__dlgTexty.push(String(t)); return Promise.resolve(true); };
+  window.hlaska = (t) => { window.__dlgTexty.push(String(t)); return Promise.resolve(); };
+  window.dotaz = (t, v) => { window.__dlgTexty.push(String(t)); return Promise.resolve(v == null ? '' : v); };
+});
+const dlgPosledni = async (page) => page.evaluate(() =>
+  (window.__dlgTexty && window.__dlgTexty.length) ? window.__dlgTexty[window.__dlgTexty.length - 1] : '');
+
+
 const require = createRequire(import.meta.url);
 let chromium;
 try { ({ chromium } = require('playwright')); }
@@ -75,7 +90,7 @@ const page = await ctx.newPage();
 /* Odmítnutí se hlásí přes alert(); dialog se musí odklepnout, jinak by
  * stránka zamrzla a další kontrola by vypršela. Text si zapamatujeme. */
 let poslednihlaska = '';
-page.on('dialog', d => { poslednihlaska = d.message(); d.accept(); });
+/* Od 2. 9. 2026 se hlásí in-app modálem; text se čte z dlgPosledni(). */
 const chyby = [];
 page.on('pageerror', e => chyby.push(String(e)));
 
@@ -108,11 +123,14 @@ const odhlas = async () => {
   await page.reload();
   await page.waitForFunction(() => typeof window.render === 'function');
   await page.waitForTimeout(400);
+await dlgStub(page);
 };
 
 await page.goto(ADRESA);
 await page.waitForFunction(() => typeof window.render === 'function');
 await page.waitForTimeout(500);
+
+await dlgStub(page);
 
 /* ---------- 1) administrátor: pohled si přepnout smí ---------- */
 
@@ -186,9 +204,9 @@ test('v náhledu se do zakázky nic nezapíše (jen ke čtení)',
   await page.evaluate(() => {
     const pred = ZAK.nazevAkce;
     let hlaska = '';
-    const puvodniAlert = window.alert; window.alert = t => { hlaska = t; };
+    const puvodniAlert = window.hlaska; window.hlaska = t => { hlaska = String(t); return Promise.resolve(); };
     tsSet('nazevAkce', 'ZKOUŠKA V NÁHLEDU');
-    window.alert = puvodniAlert;
+    window.hlaska = puvodniAlert;
     return ZAK.nazevAkce === pred && /náhledu se nic nezapisuje/.test(hlaska);
   }));
 test('ukončení náhledu vrátí pohled administrátora',
@@ -224,9 +242,12 @@ test('tlačítko „Ukončit náhled uživatele" v aplikaci není',
   await page.evaluate(() => !document.getElementById('btnZpetAdmin')));
 
 /* Skrýt nestačí — funkce jde zavolat z konzole prohlížeče. */
-poslednihlaska = '';
+/* Stránka se mezitím načetla znovu (přihlášení jiným účtem), takže stub
+ * dialogů je potřeba nasadit znovu — přežije jen do reloadu. */
+await dlgStub(page);
 await page.evaluate(() => nastSetAdmin(true));
 await page.waitForTimeout(200);
+poslednihlaska = await dlgPosledni(page);
 test('volání nastSetAdmin(true) z konzole roli nezmění',
   await page.evaluate(() => NAST.jeAdmin === false));
 test('odmítnutí se uživateli vysvětlí', /Administrátor/.test(poslednihlaska), poslednihlaska);

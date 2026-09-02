@@ -198,6 +198,9 @@ const PROVERENO = {
   'detail_ui.js': {
     'nazev': 'název kroku výpočtu z pevného seznamu DETAIL_KROKY',
   },
+  'dialog.js': {
+    'dlgEsc(text)': 'dlgEsc() je esc() s fallbackem – text dialogu se escapuje uvnitř (B26)',
+  },
   'cenik_ui.js': {
     "klicChip('PC.vlastniPolozky.' + sek.key + '.' + p.kid)":
       'hotový úsek HTML z klicChip() – klíč i titulek escapuje esc() uvnitř; '

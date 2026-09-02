@@ -27,6 +27,21 @@ import { createServer } from 'http';
 import { readFileSync } from 'fs';
 import path from 'path';
 
+/* Dialogy jsou od 2. 9. 2026 v aplikaci (src/ui/dialog.js), ne nativní —
+ * `page.on('dialog')` už tedy nic nechytí. Harness si proto potvrzování
+ * zjednoduší: potvrd/hlaska/dotaz se nahradí funkcemi, které si text
+ * zapamatují a rovnou odpoví „ano". Skutečný modál (kliknutí, Esc, Enter,
+ * ovladatelnost stránky po zavření) ověřuje samostatný overit_dialogy.mjs. */
+const dlgStub = async (page) => page.evaluate(() => {
+  window.__dlgTexty = [];
+  window.potvrd = (t) => { window.__dlgTexty.push(String(t)); return Promise.resolve(true); };
+  window.hlaska = (t) => { window.__dlgTexty.push(String(t)); return Promise.resolve(); };
+  window.dotaz = (t, v) => { window.__dlgTexty.push(String(t)); return Promise.resolve(v == null ? '' : v); };
+});
+const dlgPosledni = async (page) => page.evaluate(() =>
+  (window.__dlgTexty && window.__dlgTexty.length) ? window.__dlgTexty[window.__dlgTexty.length - 1] : '');
+
+
 const require = createRequire(import.meta.url);
 let chromium;
 try { ({ chromium } = require('playwright')); }
@@ -53,7 +68,7 @@ const prohlizec = await chromium.launch({ args: ['--no-sandbox'] });
 const ctx = await prohlizec.newContext({ viewport: { width: 1360, height: 900 } });
 const page = await ctx.newPage();
 let poslednihlaska = '';
-page.on('dialog', d => { poslednihlaska = d.message(); d.accept(); });
+/* Od 2. 9. 2026 in-app modál — text se čte z dlgPosledni(). */
 const chyby = [];
 page.on('pageerror', e => chyby.push(String(e)));
 /* Offline: server neexistuje, volání API má tiše selhat. */
@@ -62,6 +77,8 @@ await page.route('**/api/**', route => route.fulfill({ status: 503, body: '{"ok"
 await page.goto(ADRESA);
 await page.waitForFunction(() => typeof window.render === 'function');
 await page.waitForTimeout(600);
+
+await dlgStub(page);
 
 /* ---------- nouzový režim bez serveru ----------
  * Stránka se tu podává z opravdového http serveru (kvůli file:// omezením),
@@ -223,9 +240,10 @@ test('a dozví se, kdo o slevě rozhoduje', /rozhoduje vedoucí nebo administrá
 test('otevřít variantu v kalkulaci smí i tak', await tlacitko('Otevřít v kalkulaci').isVisible());
 
 /* Obchvat z konzole nesmí projít — právo se kontroluje i v obsluze. */
-poslednihlaska = '';
+await page.evaluate(() => { window.__dlgTexty = []; });
 await page.evaluate(() => schvRozhodni(ZAK.aktivni, 'schvalit'));
 await page.waitForTimeout(250);
+poslednihlaska = await dlgPosledni(page);
 s = await stav();
 test('schválení z konzole bez práva neprojde', s.kategorie === 'ceka', JSON.stringify(s));
 test('a řekne se proč', /Schvalování slevy nad strop role/.test(poslednihlaska), poslednihlaska);
@@ -274,9 +292,10 @@ test('uzamčená varianta je v seznamu označená', /uzamčená/.test(t), t.slic
 test('a rozhodovat u ní nejde', await tlacitko('Zamítnout').count() === 0);
 test('vysvětlí se to větou, ne prázdným sloupcem', /uzamčená jako odeslaná nabídka/.test(t));
 
-poslednihlaska = '';
+await page.evaluate(() => { window.__dlgTexty = []; });
 await page.evaluate(() => schvRozhodni(ZAK.aktivni, 'zamitnout'));
 await page.waitForTimeout(250);
+poslednihlaska = await dlgPosledni(page);
 s = await stav();
 test('ani obchvatem z konzole', s.kategorie === 'schvaleno', JSON.stringify(s));
 test('a řekne se proč', /uzamčená/.test(poslednihlaska), poslednihlaska);

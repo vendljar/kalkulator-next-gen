@@ -119,9 +119,9 @@ function katSet(sekceKey, kid, klic, hodnota) {
   aktivniVarianta(ZAK).upraveno = new Date().toISOString();
   render();
 }
-function katDel(sekceKey, kid) {
+async function katDel(sekceKey, kid) {
   const p = katalogNajdi(KATALOG, sekceKey, kid);
-  if (!confirm('Odebrat trvalou položku „' + ((p && p.nazev) || '') + '" z ceníku?\n\nZmizí i z této zakázky a nebude součástí nových nabídek.')) return;
+  if (!await potvrd('Odebrat trvalou položku „' + ((p && p.nazev) || '') + '" z ceníku?\n\nZmizí i z této zakázky a nebude součástí nových nabídek.')) return;
   katalogSmazVc(KATALOG, Z, sekceKey, kid);
   render();
 }
@@ -202,7 +202,7 @@ function renderCenikProj() {
        </div>
        <div class="cenik-scroll"><table class="ceniktbl">
          <tr><th>Položka</th><th>Cena</th><th>Jednotka</th><th>Poznámka</th></tr>
-         ${cenikRows(CENIK_DEF_PROJ)}
+         ${cenikRows(CENIK_DEF_PROJ)}${cenikProjTrvaleRadky()}
        </table></div>
        ${smiZobrazit('cenik.import') ? `<div class="btns" style="margin-top:12px">
          <button class="primary" onclick="cenikExport()">⭳ Export do Excelu (OCK+PROJ)</button>
@@ -215,7 +215,6 @@ function renderCenikProj() {
        v záložce <b>Kalkulace PROJ</b> (a naopak, úprava částky u položky v kalkulaci se propíše sem).
        Hodiny jednotlivých položek se zadávají v kalkulaci; vlastní přidané položky mají cenu přímo u sebe.</div>
        ${CENIK_POZN}
-       ${cenikProjTrvale()}
        <div class="note">Ceník PROJ se zveřejňuje spolu s ceníkem OCK – jedním tlačítkem <b>Zveřejnit</b>
          v kartě <b>Databáze programu</b> nahoře (karta je na obou záložkách ceníku a je to táž karta).
          Obě sady tak vždy patří k téže verzi.</div>
@@ -238,34 +237,34 @@ function cenikProjTrvaleSekce() {
     : ((typeof DEFAULT_ZADANI_PROJ !== 'undefined' && DEFAULT_ZADANI_PROJ.sekce) || []);
   return zdroj.map(s => ({ key: s.key, nazev: s.nazev }));
 }
-function cenikProjTrvale() {
+function cenikProjTrvaleRadky() {
   if (!jeAdmin() || typeof projKatalogSekce !== 'function') return '';
-  const radky = cenikProjTrvaleSekce().map(sek => {
+  /* Sekce projekce jdou ROVNOU V TABULCE ceníku, stejně jako sekce v ceníku OCK
+   * (pokyn J. V. 1. 9. 2026: „přidávání položek do ceníku projekce proveď
+   * stejně jako do ceníku OCK, tzn. tlačítky v jednotlivých sekcích a ne
+   * v samostatné části"). Skupiny nahoře jsou sazby a fixní částky předlohy,
+   * tyhle sekce jsou trvalé položky, které si firma přidala sama. */
+  return cenikProjTrvaleSekce().map(sek => {
     const polozky = projKatalogSekce(PC, sek.key);
     const seznam = polozky.map(p => `<tr>
       <td class="c-nazev"><input type="text" class="nazev-ed" value="${esc(p.nazev)}"
         onchange="cenikProjTrvaleSet('${esc(sek.key)}','${esc(p.kid)}','nazev',this.value)">
         ${klicChip('PC.vlastniPolozky.' + sek.key + '.' + p.kid)}</td>
       <td class="c-hod">${p.typ === 'hod'
-        ? `<input type="number" step="any" style="width:80px" value="${+p.hodiny || 0}"
-             title="hodin" onchange="cenikProjTrvaleSet('${esc(sek.key)}','${esc(p.kid)}','hodiny',this.value)"> hod`
+        ? `<input type="number" step="any" style="width:90px" value="${+p.hodiny || 0}"
+             title="hodin" onchange="cenikProjTrvaleSet('${esc(sek.key)}','${esc(p.kid)}','hodiny',this.value)">`
         : `<input type="number" step="any" value="${+p.cena || 0}"
-             onchange="cenikProjTrvaleSet('${esc(sek.key)}','${esc(p.kid)}','cena',this.value)"> Kč`}</td>
-      <td class="c-jed">${p.typ === 'hod' ? esc(p.sazba || 'projektant') : 'fix'}</td>
-      <td class="c-pozn"><button class="mini noprint" title="odebrat trvalou položku z ceníku"
-        onclick="cenikProjTrvaleDel('${esc(sek.key)}','${esc(p.kid)}')">✕ odebrat</button></td></tr>`).join('');
+             onchange="cenikProjTrvaleSet('${esc(sek.key)}','${esc(p.kid)}','cena',this.value)">`}</td>
+      <td class="c-jed">${p.typ === 'hod' ? 'hod (' + esc(p.sazba || 'projektant') + ')' : 'Kč'}</td>
+      <td class="c-pozn">trvalá položka – je v každé nové nabídce
+        <button class="mini noprint" title="odebrat trvalou položku z ceníku"
+          onclick="cenikProjTrvaleDel('${esc(sek.key)}','${esc(p.kid)}')">✕</button></td></tr>`).join('');
     return `<tr class="sec"><td colspan="4">${esc(sek.nazev)}</td></tr>${seznam}
       <tr class="pridat noprint"><td colspan="4">
-        <button class="mini" onclick="cenikProjTrvaleAdd('${esc(sek.key)}','hod')">+ přidat hodinovou položku</button>
-        <button class="mini" onclick="cenikProjTrvaleAdd('${esc(sek.key)}','fix')">+ přidat fixní položku</button>
+        <button class="mini" onclick="cenikProjTrvaleAdd('${esc(sek.key)}','hod')">+ přidat trvalou hodinovou položku</button>
+        <button class="mini" onclick="cenikProjTrvaleAdd('${esc(sek.key)}','fix')">+ přidat trvalou fixní položku</button>
       </td></tr>`;
   }).join('');
-  return `<div class="cenik-scroll"><table class="ceniktbl">
-      <tr><th class="c-nazev">Trvalá položka</th><th>Hodnota</th><th class="c-jed">Typ</th><th class="c-pozn"></th></tr>
-      ${radky}</table></div>
-    <div class="note">Trvalá položka projekce je od 1. 9. 2026 <b>jen tady</b> — v kalkulaci se přidávají
-      položky platné pro jednu zakázku. Co přidáte sem, dostane <b>každá nová nabídka</b> i tahle otevřená;
-      zveřejněním ceníku to platí pro celý program.</div>`;
 }
 function cenikProjTrvaleAdd(sekKey, typ) {
   if (!jeAdmin()) return;
@@ -296,10 +295,10 @@ function cenikProjTrvaleSet(sekKey, kid, klic, hodnota) {
   aktivniVarianta(ZAK).upraveno = new Date().toISOString();
   render();
 }
-function cenikProjTrvaleDel(sekKey, kid) {
+async function cenikProjTrvaleDel(sekKey, kid) {
   if (!jeAdmin()) return;
   const it = projKatalogSekce(PC, sekKey).find(k => k.kid === kid);
-  if (!confirm('Odebrat trvalou položku „' + ((it && it.nazev) || '') + '" z ceníku projekce?\n\n'
+  if (!await potvrd('Odebrat trvalou položku „' + ((it && it.nazev) || '') + '" z ceníku projekce?\n\n'
     + 'Zmizí i z této zakázky a nebude součástí nových nabídek.')) return;
   projKatalogSmaz(PC, sekKey, kid);
   if (typeof DEFAULT_CENIK_PROJ !== 'undefined' && DEFAULT_CENIK_PROJ !== PC)
@@ -312,14 +311,14 @@ function cenikProjTrvaleDel(sekKey, kid) {
   render();
 }
 
-function resetCenik() {
-  if (confirm('Vrátit ceny OCK na platný ceník programu?\n\nPřepíše se jen ceník této varianty, platná verze se nemění.')) {
+async function resetCenik() {
+  if (await potvrd('Vrátit ceny OCK na platný ceník programu?\n\nPřepíše se jen ceník této varianty, platná verze se nemění.')) {
     aktivniVarianta(ZAK).data.cenik = JSON.parse(JSON.stringify(DEFAULT_CENIK));
     syncVarianta(); render();
   }
 }
-function resetCenikProj() {
-  if (confirm('Vrátit ceny PROJ na platný ceník programu?\n\nPřepíše se jen ceník této varianty, platná verze se nemění.')) {
+async function resetCenikProj() {
+  if (await potvrd('Vrátit ceny PROJ na platný ceník programu?\n\nPřepíše se jen ceník této varianty, platná verze se nemění.')) {
     aktivniVarianta(ZAK).data.proj.cenik = JSON.parse(JSON.stringify(DEFAULT_CENIK_PROJ));
     syncVarianta(); render();
   }

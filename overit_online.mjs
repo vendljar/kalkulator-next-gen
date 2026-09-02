@@ -43,6 +43,21 @@ import zalohaVynuceno from './netlify/functions/zaloha_vynuceno.mjs';
 import sablonyFn from './netlify/functions/sablony.mjs';
 import analytikaFn from './netlify/functions/analytika.mjs';
 
+/* Dialogy jsou od 2. 9. 2026 v aplikaci (src/ui/dialog.js), ne nativní —
+ * `page.on('dialog')` už tedy nic nechytí. Harness si proto potvrzování
+ * zjednoduší: potvrd/hlaska/dotaz se nahradí funkcemi, které si text
+ * zapamatují a rovnou odpoví „ano". Skutečný modál (kliknutí, Esc, Enter,
+ * ovladatelnost stránky po zavření) ověřuje samostatný overit_dialogy.mjs. */
+const dlgStub = async (page) => page.evaluate(() => {
+  window.__dlgTexty = [];
+  window.potvrd = (t) => { window.__dlgTexty.push(String(t)); return Promise.resolve(true); };
+  window.hlaska = (t) => { window.__dlgTexty.push(String(t)); return Promise.resolve(); };
+  window.dotaz = (t, v) => { window.__dlgTexty.push(String(t)); return Promise.resolve(v == null ? '' : v); };
+});
+const dlgPosledni = async (page) => page.evaluate(() =>
+  (window.__dlgTexty && window.__dlgTexty.length) ? window.__dlgTexty[window.__dlgTexty.length - 1] : '');
+
+
 const require = createRequire(import.meta.url);
 let chromium;
 try { ({ chromium } = require('playwright')); }
@@ -129,6 +144,8 @@ const prihlas = async (email, heslo) => {
 await page.goto(ADRESA);
 await page.waitForFunction(() => typeof window.render === 'function');
 await page.waitForTimeout(400);
+
+await dlgStub(page);
 
 /* ---- 1) přihlašovací stránka zakrývá aplikaci ---- */
 test('přihlašovací stránka je vidět a nese název aplikace',
@@ -452,6 +469,7 @@ await page.reload();
 await page.waitForFunction(() => typeof window.render === 'function');
 await page.waitForFunction(() => { try { return !!ONLINE_STAV.ja; } catch (e) { return false; } },
   null, { timeout: 8000 });
+await dlgStub(page);
 await page.waitForTimeout(400);
 test('po obnovení stránky je administrátor dál přihlášený a stránka se neukázala',
   !(await gateViditelna()) && await page.evaluate(() => ONLINE_STAV.ja.email === 'vendl.jaroslav@engineers-cz.cz'));
@@ -472,6 +490,7 @@ test('po odhlášení se vrátí přihlašovací stránka', await gateViditelna(
 await page.reload();
 await page.waitForFunction(() => typeof window.render === 'function');
 await page.waitForTimeout(400);
+await dlgStub(page);
 test('po odhlášení a obnovení stránky se aplikace zase zamkne', await gateViditelna());
 test('čerstvá aplikace startuje s ukázkovou firmou',
   await page.evaluate(() => NAST.firma.ukazkove === true));
@@ -596,17 +615,19 @@ test('a co obchodník v zakázce přepíše, se do karty samo nevrátí',
   }));
 test('rozdíl se najde a NABÍDNE (potvrzuje ho člověk)',
   await page.evaluate(async () => {
-    let dotaz = '';
-    const puvodni = window.confirm; window.confirm = (t) => { dotaz = t; return false; };
+    /* Od 2. 9. 2026 se ptá in-app modál (potvrd), ne nativní confirm. */
+    let text = '';
+    const puvodni = window.potvrd;
+    window.potvrd = (t) => { text = String(t); return Promise.resolve(false); };
     await zakaznikNabidniAktualizaci();
-    window.confirm = puvodni;
-    return /jiny@zkusebni/.test(dotaz) && ZAK_DB.seznam[0].technickyEmail === 'technik@zkusebni.cz';
+    window.potvrd = puvodni;
+    return /jiny@zkusebni/.test(text) && ZAK_DB.seznam[0].technickyEmail === 'technik@zkusebni.cz';
   }));
 test('po potvrzení se karta doplní',
   await page.evaluate(async () => {
-    const puvodni = window.confirm; window.confirm = () => true;
+    const puvodni = window.potvrd; window.potvrd = () => Promise.resolve(true);
     await zakaznikNabidniAktualizaci();
-    window.confirm = puvodni;
+    window.potvrd = puvodni;
     return ZAK_DB.seznam[0].technickyEmail === 'jiny@zkusebni.cz';
   }));
 /* ---- výběr firmy našeptávačem vyplní IČO a kontakt (22. 8. 2026 večer) ---- */
