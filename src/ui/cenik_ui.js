@@ -44,6 +44,29 @@ function cenikZahrJenSet(path, ano) {
   render();
 }
 
+/* ---------- globální přirážka pro zahraničí (3. 9. 2026) ----------
+ * Dotaz J. V.: „je možné pro zahraniční zakázky předvolit globální přirážku
+ * 40 % místo standardních 30 %? Nejlepší by bylo uvést to v ceníku zase jako
+ * zahraniční variantu." Ano — přirážka je sledovaná ceníková cesta
+ * (`C.marze` v CENIK_STARI_EXTRA), takže se pro ni dá držet odchylka úplně
+ * stejně jako u kterékoli ceny. Pole stojí vedle tuzemského, ne v tabulce:
+ * přirážka do tabulky cen nepatří, je to jedna hodnota nad celou nabídkou.
+ *
+ * Prázdné pole = pro zahraničí platí tuzemská přirážka. Hodnota se ZADÁVÁ
+ * V PROCENTECH a ukládá jako podíl, přesně jako tuzemská. */
+function cenikMarzeZahrPole(cesta) {
+  const zv = cenikZahrHodnota(cesta);
+  const pct = zv === '' ? '' : Math.round(zv * 10000) / 100;
+  return `<span class="pct-wrap" style="margin-left:18px">
+    <label style="margin-right:6px">…&nbsp;pro ZAHRANIČÍ</label>
+    <input type="number" step="1" class="zahr-cena${zv === '' ? '' : ' ma'}" style="width:80px"
+      value="${esc(pct)}" placeholder="jako ČR"
+      title="prázdné = i v zahraniční zakázce platí tuzemská přirážka"
+      onchange="cenikZahrSet('${cesta}', this.value === '' ? '' : (+this.value) / 100)"> %
+    ${zv === '' ? '' : `<button class="mini noprint" title="převzít tuzemskou přirážku"
+      onclick="cenikZahrSet('${cesta}', '')">↺</button>`}</span>`;
+}
+
 function cenikRows(def, zahrSloupec) {
   return def.map(([grp, items]) => {
     const body = items.map(([path, l, u, note, typ]) => {
@@ -154,13 +177,16 @@ function renderCenik() {
             jako v hlavičce kalkulace — jedno úložiště (ceník varianty), dvě místa
             k zadání, přesně jako u projekce. Zveřejněním se z ní stává výchozí
             přirážka pro každou NOVOU zakázku. -->
-       <div class="row" style="max-width:420px">
+       <div class="row" style="max-width:620px">
          ${inp('C.marze', { type: 'pct', l: 'GLOBÁLNÍ PŘIRÁŽKA OCK' })}
+         ${zahrSl ? cenikMarzeZahrPole('C.marze') : ''}
        </div>
        <div class="note" style="margin-top:0">Táž hodnota jako v hlavičce Kalkulace OCK —
          změna se projeví na obou místech. <b>Zveřejněním ceníku</b> se z ní stane výchozí
          přirážka každé <b>nové</b> zakázky; rozpracovaným ani odeslaným nabídkám ji nikdo
-         nepřepíše (přirážka je rozhodnutí k zakázce, viz #177).</div>
+         nepřepíše (přirážka je rozhodnutí k zakázce, viz #177).${zahrSl ? ` Vyplněná
+         <b>přirážka pro zahraničí</b> se použije, jakmile se zakázka přepne na zahraniční
+         ceník — a jen tehdy, když si ji obchodník v té zakázce sám nepřenastavil.` : ''}</div>
        <div class="note">Sazbu DPH nastavíš v hlavičce Kalkulace OCK. Tlačítkem
          „+ přidat <b>trvalou</b> položku do sekce" založíš položku, která je od té chvíle součástí
          <b>každé nové cenové nabídky</b> (žije mimo zakázku, v katalogu). Položka přidaná přímo v Kalkulaci OCK
@@ -190,6 +216,11 @@ function renderCenik() {
 }
 
 function renderCenikProj() {
+  /* Zahraniční varianta i u přirážky projekce (3. 9. 2026, zadání J. V.:
+   * „připrav tedy pro globální přirážku i variantu pro zahraničí"). Ostatní
+   * ceny projekce zahraniční řadu nemají — ta je z #181 jen pro OCK —, ale
+   * přirážka je sledovaná cesta (`PC.marze`), takže odchylku držet umí. */
+  const zahrSlProj = jeAdmin() && typeof CENIK_ZAHR !== 'undefined';
   document.getElementById('page-cenikproj').innerHTML =
     /* Táž karta Databáze programu jako na záložce OCK (zadání 2. 8. 2026).
      * Zveřejnění a verzování je jedno pro obě sady — _program.json nese ceník
@@ -203,9 +234,14 @@ function renderCenikProj() {
      <div class="body">
        ${cenikStariLista()}
        ${cenikVerzeLista()}
-       <div class="row" style="max-width:420px">
+       <div class="row" style="max-width:620px">
          ${inp('PC.marze', { type: 'pct', l: 'GLOBÁLNÍ PŘIRÁŽKA PROJ' })}
+         ${zahrSlProj ? cenikMarzeZahrPole('PC.marze') : ''}
        </div>
+       ${zahrSlProj ? `<div class="note" style="margin-top:0">Vyplněná <b>přirážka pro
+         zahraničí</b> se použije, jakmile se zakázka přepne na zahraniční ceník — a jen
+         tehdy, když si ji obchodník v té zakázce sám nepřenastavil. Ostatní ceny projekce
+         zahraniční variantu nemají; liší-li se, doplňte je jako ruční sazbu v kalkulaci.</div>` : ''}
        <div class="cenik-scroll"><table class="ceniktbl">
          <tr><th>Položka</th><th>Cena</th><th>Jednotka</th><th>Poznámka</th></tr>
          ${cenikRows(CENIK_DEF_PROJ)}

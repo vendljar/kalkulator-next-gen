@@ -943,12 +943,21 @@ function zakazkaHlavicka(ock) {
       title="${esc(r.popis)} — přepnutí se nejdřív zeptá a ukáže, čeho se dotkne"
       onclick="cenikRadaPrepniUI('${r.id}')">${esc(r.nazev)}</button>`).join('')}</span></div>`;
   /* Kurz je společný pro obě řady (rozhodnutí J. V.), u zahraniční zakázky
-   * se ale ukazuje — ať je vidět, s čím se bude počítat cizojazyčná nabídka. */
+   * se ale ukazuje — ať je vidět, s čím se bude počítat cizojazyčná nabídka.
+   *
+   * MĚNIT ho smí jen ten, kdo smí do ceníku (3. 9. 2026, zadání J. V.:
+   * „obchodníkům odeber možnost editovat kurz"). Je to ceníková hodnota
+   * jako každá jiná — kdyby ji přepsal obchodník v hlavičce, rozejde se
+   * celá zahraniční nabídka s ceníkem a nikde by to nebylo vidět. Ostatní
+   * ho vidí jako text, aby věděli, s čím dokument počítá. */
+  const kurzEd = smiZobrazit('tab.cenik');
   const kurzRow = (radaTed !== 'zahr' || !smiZobrazit('pole.prirazka')) ? ''
     : `<div class="row"><label>Kurz pro nabídku</label>
-       <span class="pct-wrap"><input type="number" step="0.01" value="${esc(C.kurzEurKc || 0)}"
+       <span class="pct-wrap">${kurzEd
+        ? `<input type="number" step="0.01" value="${esc(C.kurzEurKc || 0)}"
          title="kurz z ceníku; v dokumentu se neukazuje, jen se jím převádí"
-         onchange="set('C.kurzEurKc', +this.value)"> Kč/€</span></div>`;
+         onchange="set('C.kurzEurKc', +this.value)">`
+        : `<b title="kurz z ceníku – mění se v Ceníku OCK, sekce CIZÍ MĚNA">${esc(C.kurzEurKc || 0)}</b>`} Kč/€</span></div>`;
   /* Sazby DPH jsou od 1. 9. 2026 PŘEDVOLBY Z CENÍKU (zadání J. V.: „přidej do
    * obou ceníků sekci DPH … a samozřejmě je potřebujeme editovat, kdyby se
    * změnil zákon"). Nabídka v hlavičce se tedy skládá z ceníku; sazba samotné
@@ -1137,7 +1146,9 @@ async function cenikRadaPrepniUI(rada) {
   if (typeof zamekStop === 'function' && zamekStop()) return;
   if (typeof nahledStop === 'function' && nahledStop('přepnutí řady ceníku')) return;
 
-  const cr = (typeof cenikDnesniData === 'function') ? cenikDnesniData().cenik : DEFAULT_CENIK;
+  /* Celý datový objekt, ne jen ceník OCK: odchylku smí mít i přirážka
+   * projekce (`PC.marze`, 3. 9. 2026) a ta se hledá v ceníku PROJ. */
+  const cr = (typeof cenikDnesniData === 'function') ? cenikDnesniData() : { cenik: DEFAULT_CENIK };
   const zahr = (typeof CENIK_ZAHR !== 'undefined') ? CENIK_ZAHR : null;
   const rozdily = (typeof cenikRadaRozdily === 'function') ? cenikRadaRozdily(cr, zahr) : [];
   if (!rozdily.length && r === 'zahr') {
@@ -1151,15 +1162,25 @@ async function cenikRadaPrepniUI(rada) {
     + (rozdily.length > 8 ? '\n• … a další ' + (rozdily.length - 8) : '');
   if (!await potvrd('Přepnout výpočet na ' + (r === 'zahr' ? 'ZAHRANIČNÍ' : 'TUZEMSKÝ') + ' ceník?\n\n'
     + 'Dotkne se to ' + rozdily.length + ' ceníkových položek:\n' + vypis
-    + '\n\nRuční přepisy v zakázce, globální přirážka ani sazba DPH se nemění.')) return;
+    + '\n\nRuční přepisy v zakázce se nemění. Globální přirážka a sazba DPH se přepnou jen '
+    + 'tehdy, když pro ně ceník zahraniční odchylku má a vy jste je v téhle nabídce sám '
+    + 'nepřenastavil.')) return;
 
   const vysl = cenikRadaPrepni(d, cr, zahr, r);
   v.upraveno = new Date().toISOString();
   if (typeof protokolZapis === 'function')
     protokolZapis(ZAK, { kde: 'Kalkulace OCK', varianta: v.id, variantaNazev: v.nazev,
       kdo: (typeof zamekKdo === 'function') ? zamekKdo() : '',
-      co: 'Ceník přepnut na ' + nazev + ' (' + vysl.zmen + ' změněných cen)' });
+      co: 'Ceník přepnut na ' + nazev + ' (' + vysl.zmen + ' změněných cen)'
+        + (vysl.chranene && vysl.chranene.length
+          ? ', ponecháno ručně nastavených: ' + vysl.chranene.length : '') });
   syncVarianta(); render();
+  /* Co se NEZMĚNILO, je stejně důležité jako co se změnilo: obchodník jinak
+   * čeká zahraniční přirážku a v nabídce má pořád svou vlastní. */
+  if (vysl.chranene && vysl.chranene.length)
+    hlaska('Ceník je přepnutý na ' + nazev + '.\n\nBeze změny zůstalo, co jste si v téhle '
+      + 'nabídce nastavil sám:\n' + vysl.chranene.map(x => '• ' + x.popis).join('\n')
+      + '\n\nChcete-li i tady hodnotu z ceníku, přepište ji ručně.');
 }
 
 /* ---------- zámek nepočítané strany zakázky (23. 8. 2026) ----------

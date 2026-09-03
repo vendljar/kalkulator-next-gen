@@ -263,6 +263,64 @@ test('ozubené kolečko Nastavení obchodník nevidí',
 test('náklady zůstávají skryté (třída skryt-naklady)',
   await page.evaluate(() => document.body.classList.contains('skryt-naklady')));
 
+/* ---------- Výchozí a kurz: nastavení PROGRAMU, ne zakázky (3. 9. 2026) ----------
+ * Zadání J. V.: „obchodníci vidí tlačítka Výchozí v kalkulacích a to by
+ * neměli" + „obchodníkům odeber možnost editovat kurz".
+ *
+ * Zkouší se to v NEJHORŠÍM povoleném nastavení: obchodník dostane právo
+ * `sloupce.naklad` (vidí náklad a přirážku, a s ním i koncové administrátorské
+ * sloupce). Ani tehdy nesmí vidět sloupec „Výchozí" — ten mění, co uvidí
+ * v NOVÉ zakázce úplně každý. Sloupec „Viditelné" (OCK) a „Počítat" (PROJ)
+ * mu zůstává: první je součást téhož práva, druhý se týká jen jeho zakázky. */
+await page.evaluate(() => {
+  NAST.zobrazeni = NAST.zobrazeni || {};
+  NAST.zobrazeni['sloupce.naklad'] = { 'Obchodník': true, 'Vedoucí': true };
+  prepniTab('kalk'); render();
+});
+const sloupceOck = await page.evaluate(() => {
+  const th = [...document.querySelectorAll('#page-kalk th')].map(x => x.textContent.trim());
+  return { vychozi: th.includes('Výchozí'), viditelne: th.includes('Viditelné') };
+});
+test('obchodník s právem na náklady sloupec Výchozí v OCK nevidí', sloupceOck.vychozi === false);
+/* Druhé zadání J. V. z 3. 9. 2026: „sloupec Viditelné obchodníkům také skryj."
+ * Nastavuje totéž co Výchozí — co uvidí ostatní —, jen z druhé strany. */
+test('a sloupec Viditelné také ne', sloupceOck.viditelne === false);
+test('kalkulace OCK má v každém řádku stejně buněk jako hlavička',
+  await page.evaluate(() => {
+    const t = [...document.querySelectorAll('#page-kalk table')]
+      .find(x => [...x.querySelectorAll('th')].some(h => h.textContent.trim() === 'Položka'));
+    if (!t) return false;
+    const sirka = (tr) => [...tr.children].reduce((a, c) => a + (c.colSpan || 1), 0);
+    const hlav = sirka(t.rows[0]);
+    return [...t.rows].every(r => sirka(r) === hlav);
+  }));
+
+await page.evaluate(() => { prepniTab('proj'); render(); });
+const sloupceProj = await page.evaluate(() => {
+  const th = [...document.querySelectorAll('#page-proj th')].map(x => x.textContent.trim());
+  return { vychozi: th.includes('Výchozí'), pocitat: th.includes('Počítat') };
+});
+test('obchodník sloupec Výchozí nevidí ani v kalkulaci PROJ', sloupceProj.vychozi === false);
+test('sloupec Počítat (jen tato zakázka) mu v PROJ zůstává', sloupceProj.pocitat === true);
+
+/* Kurz je ceníková hodnota. Obchodník ho u zahraniční zakázky vidí (ať ví,
+ * čím se nabídka převádí), ale nesmí do něj psát — jinak by se dokument
+ * rozešel s ceníkem a nikde by to nebylo vidět. */
+const kurz = await page.evaluate(() => {
+  NAST.zobrazeni['pole.prirazka'] = { 'Obchodník': true, 'Vedoucí': true };
+  const v = aktivniVarianta(ZAK);
+  v.data.cenikRada = 'zahr';
+  v.data.cenik.kurzEurKc = 25.5;
+  prepniTab('kalk'); render();
+  const radek = [...document.querySelectorAll('#page-kalk .row')]
+    .find(x => /Kurz pro nabídku/.test(x.textContent));
+  return { je: !!radek, vstup: radek ? !!radek.querySelector('input') : null,
+           text: radek ? radek.textContent.replace(/\s+/g, ' ').trim() : '' };
+});
+test('obchodník kurz u zahraniční zakázky vidí', kurz.je && /25[.,]5/.test(kurz.text), kurz.text);
+test('ale nemá ho v čem přepsat (jen text, ne pole)', kurz.vstup === false);
+
+
 test('žádná chyba JavaScriptu', chyby.length === 0, chyby.slice(0, 2).join(' | '));
 
 await prohlizec.close();

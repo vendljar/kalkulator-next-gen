@@ -143,6 +143,83 @@ test('obchodník sloupec Zahraničí nevidí',
     return !/Cena Zahraničí/.test(t);
   }));
 
+/* ---------- 6b) globální přirážka pro zahraničí (3. 9. 2026) ----------
+ * V prohlížeči jde o to, co administrátor uvidí a nakliká: že u globální
+ * přirážky je druhé pole „pro ZAHRANIČÍ", že se zapíše do odchylek ceníku
+ * a že přepnutí zakázky přirážku opravdu vymění. Počítání hlídá
+ * `src/test_cenik_rady.js`. */
+test('u globální přirážky je v ceníku i pole pro zahraničí',
+  await page.evaluate(() => {
+    NAST.jeAdmin = true; prepniTab('cenik'); render();
+    return /pro ZAHRANIČÍ/.test((document.getElementById('page-cenik') || {}).innerHTML || '');
+  }));
+const marze = await page.evaluate(() => {
+  cenikZahrSet('C.marze', 0.44);
+  prepniTab('kalk');
+  const v = aktivniVarianta(ZAK);
+  /* Tuzemská přirážka musí být i v PLATNÉM ceníku: návrat do tuzemska bere
+   * hodnotu odtud, ne z toho, co bylo v zakázce před přepnutím. */
+  DEFAULT_CENIK.marze = 0.27;
+  v.data.cenik.marze = 0.27;
+  delete v.data.cenikRucni['C.marze'];      // obchodník se jí nedotkl
+  render();
+  return { odchylka: CENIK_ZAHR.ceny['C.marze'], pred: v.data.cenik.marze };
+});
+test('procenta se do odchylek uloží jako podíl', marze.odchylka === 0.44, marze.odchylka);
+await page.evaluate(() => cenikRadaPrepniUI('zahr'));
+await page.waitForTimeout(300);
+test('přepnutí na zahraničí použije zahraniční přirážku',
+  await page.evaluate(() => aktivniVarianta(ZAK).data.cenik.marze === 0.44),
+  await page.evaluate(() => aktivniVarianta(ZAK).data.cenik.marze));
+await page.evaluate(() => cenikRadaPrepniUI('cr'));
+await page.waitForTimeout(300);
+test('návratem se vrátí tuzemská přirážka',
+  await page.evaluate(() => aktivniVarianta(ZAK).data.cenik.marze === 0.27),
+  await page.evaluate(() => aktivniVarianta(ZAK).data.cenik.marze));
+
+/* Dohodnutá marže jedné nabídky je víc než předvolba z ceníku (#177). */
+await page.evaluate(() => { set('C.marze', 0.29); });
+await page.evaluate(() => cenikRadaPrepniUI('zahr'));
+await page.waitForTimeout(300);
+test('ručně nastavenou přirážku přepnutí nepřepíše',
+  await page.evaluate(() => aktivniVarianta(ZAK).data.cenik.marze === 0.29),
+  await page.evaluate(() => aktivniVarianta(ZAK).data.cenik.marze));
+test('a aplikace o tom obchodníka zpraví',
+  /nastavil sám/.test(await dlgPosledni(page)), await dlgPosledni(page));
+await page.evaluate(() => {
+  cenikRadaPrepniUI('cr'); cenikZahrSet('C.marze', '');
+  delete aktivniVarianta(ZAK).data.cenikRucni['C.marze'];
+});
+await page.waitForTimeout(300);
+
+/* ---------- 6c) zahraniční přirážka i v ceníku projekce (3. 9. 2026) ---------- */
+test('u globální přirážky PROJ je také pole pro zahraničí',
+  await page.evaluate(() => {
+    NAST.jeAdmin = true; prepniTab('cenikproj'); render();
+    return /pro ZAHRANIČÍ/.test((document.getElementById('page-cenikproj') || {}).innerHTML || '');
+  }));
+const marzeProj = await page.evaluate(() => {
+  cenikZahrSet('PC.marze', 0.66);
+  DEFAULT_CENIK_PROJ.marze = 0.55;
+  const v = aktivniVarianta(ZAK);
+  v.data.proj.cenik.marze = 0.55;
+  delete v.data.cenikRucni['PC.marze'];
+  prepniTab('kalk'); render();
+  return CENIK_ZAHR.ceny['PC.marze'];
+});
+test('odchylka přirážky projekce se uloží', marzeProj === 0.66, marzeProj);
+await page.evaluate(() => cenikRadaPrepniUI('zahr'));
+await page.waitForTimeout(300);
+test('přepnutí vymění i přirážku projekce',
+  await page.evaluate(() => aktivniVarianta(ZAK).data.proj.cenik.marze === 0.66),
+  await page.evaluate(() => aktivniVarianta(ZAK).data.proj.cenik.marze));
+await page.evaluate(() => cenikRadaPrepniUI('cr'));
+await page.waitForTimeout(300);
+test('a návrat vrátí tuzemskou přirážku projekce',
+  await page.evaluate(() => aktivniVarianta(ZAK).data.proj.cenik.marze === 0.55),
+  await page.evaluate(() => aktivniVarianta(ZAK).data.proj.cenik.marze));
+await page.evaluate(() => { cenikZahrSet('PC.marze', ''); });
+
 /* ---------- 7) uzamčená varianta se nepřepíná ---------- */
 test('uzamčená (odeslaná) varianta se nepřepne',
   await page.evaluate(() => {
