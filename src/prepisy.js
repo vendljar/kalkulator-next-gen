@@ -79,5 +79,58 @@ function prepisHodnotaText(s) {
   return String(+s.hodnota);
 }
 
+/* ============================================================
+ * VYPNUTÝ ŘÁDEK (nález V22, zadání J. V. 4. 9. 2026)
+ *
+ * „Nula funguje jako množství, tj. vypnutí výpočtu v řádku. Budeme to ale
+ * muset nějak v aplikaci rozsvítit, resp. vypnutý řádek zvýraznit."
+ *
+ * Výpočet nulu respektuje správně (prázdno není nula, viz `prepisPlati`
+ * v engine.js) — jenže v tabulce takový řádek vypadá jako každý jiný a při
+ * proklikávání dlouhé kalkulace se přehlédne. Rozhodnutí, KTERÝ řádek je
+ * vypnutý, patří sem do modelu, ať ho vykreslování jen čte a ať se dá
+ * otestovat bez prohlížeče.
+ *
+ * TŘI RŮZNÉ STAVY, KTERÉ SE NESMÍ SLÉVAT:
+ *   – vyřazená položka (`.vyrazeno`) se nepočítá vůbec,
+ *   – nezahrnutá volitelná (`.nezahrnuto`) zatím není v základní ceně,
+ *   – VYPNUTÁ NULOU se počítá, ale s množstvím 0 — je to dohoda „tohle
+ *     neúčtujeme", a proto zůstává v seznamu i editovatelná.
+ * ============================================================ */
+
+/* Řádek kalkulace OCK: ruční přepis množství je vyplněný a je to nula.
+ * Pozor na rozdíl proti vypočtené nule — ta vypnutím není (položka prostě
+ * v téhle šachtě nevychází) a značit ji by byl šum. */
+function radekVypnutyNulou(r) {
+  return !!(r && r.prepsano && Number(r.mnozstvi) === 0);
+}
+
+/* Položka kalkulace PROJ. Ruční přepis množství tu není; totéž rozhodnutí
+ * se dělá dvěma způsoby:
+ *   – hodinová položka: obchodník vynuluje HODINY (výchozí zadání je nese
+ *     vyplněné, takže nula je vědomý krok),
+ *   – fixní položka: PŘEPÍŠE ČÁSTKU na nulu (samotná nula z ceníku vypnutím
+ *     není — to je neoceněná položka a hlásí ji štítek „bez ceny").
+ * Vyřazená položka se sem nepočítá, ta má vlastní stav. */
+function polozkaProjVypnuta(p) {
+  if (!p || p.vyrazeno) return false;
+  if (p.typ === 'hod') return Number(p.hodinyCelkem != null ? p.hodinyCelkem : p.hodiny) === 0;
+  return !!p.cenaPrepsana && Number(p.cenaEfekt) === 0;
+}
+
+/* Kolik řádků sekce je vypnutých — pro tichou poznámku u součtu, ať je to
+ * vidět i u sbalené sekce. */
+function vypnutychVSekci(rows) {
+  return (rows || []).filter(radekVypnutyNulou).length;
+}
+
+/* Jednotná věta do bubliny. Na jednom místě, ať se v OCK a v PROJ neliší. */
+const VYPNUTO_POPIS = 'Množství 0 je vědomá dohoda — položka se v této nabídce '
+  + 'neúčtuje. Tlačítkem ↺ vrátíte vypočtené množství a řádek se zase počítá.';
+const VYPNUTO_POPIS_PROJ = 'Nula je vědomá dohoda — položka se v této nabídce '
+  + 'neúčtuje. Doplněním hodin (u fixní částky přepsáním ceny) se zase počítá.';
+
 if (typeof module !== 'undefined' && module.exports)
-  module.exports = { PREPIS_MAPY, prepisySirotci, prepisyUklid, prepisyPrejmenuj, prepisHodnotaText };
+  module.exports = { PREPIS_MAPY, prepisySirotci, prepisyUklid, prepisyPrejmenuj, prepisHodnotaText,
+                     radekVypnutyNulou, polozkaProjVypnuta, vypnutychVSekci,
+                     VYPNUTO_POPIS, VYPNUTO_POPIS_PROJ };

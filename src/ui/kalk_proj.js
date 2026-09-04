@@ -305,7 +305,16 @@ function renderProj() {
           ? `<td class="admincol">${vychoziPolozkaChk(zobrazeniProjKlic(s.key, p), projVychoziZaklad(s.key, p),
               'zaškrtnuto = položka se v NOVÉ zakázce rovnou počítá (platí pro všechny)')}</td>`
           : '');
-      const tr = `<tr${p.vyrazeno ? ' class="vyrazeno"' : ''}${dz}>`;
+      /* Položka vypnutá nulou (nález V22, 4. 9. 2026): u hodinové znamená
+       * nula hodin (výchozí zadání je nese vyplněné, takže je to vědomý krok),
+       * u fixní PŘEPSANÁ částka 0 — nula rovnou z ceníku vypnutím není, to je
+       * neoceněná položka a hlásí ji jiný štítek. Stav se nesmí slévat
+       * s vyřazenou položkou, proto se třídy skládají. */
+      const vypnuta = (typeof polozkaProjVypnuta === 'function') && polozkaProjVypnuta(p);
+      const tridyR = (p.vyrazeno ? 'vyrazeno' : '') + (vypnuta ? ' vypnuto-nulou' : '');
+      const stitekVyp = vypnuta
+        ? ` <span class="pill vyp noprint" title="${esc(VYPNUTO_POPIS_PROJ)}">vypnuto (množství 0)</span>` : '';
+      const tr = `<tr${tridyR.trim() ? ` class="${tridyR.trim()}"` : ''}${dz}>`;
       const cena = p.naklad + marzeSekce(s, p.naklad);
 
       if (p.typ === 'hod') {
@@ -320,7 +329,7 @@ function renderProj() {
                title="sjednaná sazba jen pro tuto zakázku (prázdné = ${num(p.sazbaZCeniku)} Kč z ceníku)">
              ${p.sazbaPrepsana ? `<button class="mini noprint" onclick="pjPrepis(${i},${j},'sazbaPrepis','')" title="vrátit sazbu z ceníku (${num(p.sazbaZCeniku)} Kč)">↺</button>` : ''}`
           : num(p.sazbaKc);
-        return `${tr}<td>${nazev}</td>
+        return `${tr}<td>${nazev}${stitekVyp}</td>
           <td>${(col.admin || vlEd) ? `<input type="number" step="1" style="width:66px" value="${p.hodiny}" onchange="pjSet(${i}, 'polozky.${j}.hodiny', +this.value)">` : num(p.hodiny)}</td>
           <td>${col.admin ? `<input type="number" step="1" style="width:66px" value="${p.rezerva}" onchange="pjSet(${i}, 'polozky.${j}.rezerva', +this.value)">` : num(p.rezerva)}</td>
           <td>${num(p.hodinyCelkem)}</td>
@@ -341,7 +350,7 @@ function renderProj() {
         : (vlEd && !p.fixKey
           ? `<input type="number" step="500" style="width:86px" value="${esc(p.cena)}" title="částka této položky (jen pro tuto zakázku)" onchange="pjSet(${i}, 'polozky.${j}.cena', +this.value)">`
           : num(p.cenaEfekt));
-      return `${tr}<td>${nazev}</td>
+      return `${tr}<td>${nazev}${stitekVyp}</td>
         <td colspan="3" class="note" style="text-align:right">${p.fixKey
           ? (p.cenaPrepsana ? 'fixní částka – přepsáno pro tuto zakázku' : 'fixní částka (ceník PROJ)')
           : 'fixní částka'}</td>
@@ -423,7 +432,15 @@ function renderProj() {
        * (zadání 18. 8.) — „KOLAUDACE CELKEM (pro 1 ks výtahu)". */
       + `<tr class="sectot"><td colspan="${POPIS_SL}">${esc(nazevBezZavorek(s.nazev))} CELKEM${
           (String(s.nazev).match(/\s*(\([^)]*\))\s*$/) || [, ''])[1]
-            ? ' ' + esc((String(s.nazev).match(/\s*(\([^)]*\))\s*$/) || [, ''])[1]) : ''}</td>`
+            ? ' ' + esc((String(s.nazev).match(/\s*(\([^)]*\))\s*$/) || [, ''])[1]) : ''}${
+          /* Tichá poznámka o vypnutých položkách — ať je vidět i u sbalené
+           * sekce, kde se řádky nekreslí (4. 9. 2026). */
+          (() => {
+            const n = (typeof polozkaProjVypnuta === 'function')
+              ? vsechny.filter(x => polozkaProjVypnuta(x.p)).length : 0;
+            return n ? ` <span class="note" style="font-weight:400">· ${n} ${
+              n === 1 ? 'položka vypnuta' : (n < 5 ? 'položky vypnuty' : 'položek vypnuto')}</span>` : '';
+          })()}</td>`
       + penize(s.naklad + s.dopravaKc, s.marze, s.celkem)
       + prazdneAdmin + '</tr>';
   }).join('');

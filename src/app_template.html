@@ -332,6 +332,16 @@
   .zamek-lista.zamek-cteni { background:#eef4ff; border-color:#b9cdf0; color:#123a72; }
   .zamek-lista.zamek-cteni b { color:#123a72; }
   .zamek-lista.zamek-cteni button { pointer-events:auto; }
+  /* Řádek vypnutý ručním množstvím 0 (nález V22, 4. 9. 2026). Ztlumuje se
+     BARVOU TEXTU, ne opacity — opacity rodiče se násobí na potomky a světlala
+     by i zaškrtávátka admin sloupců (týž nález jako u .vyrazeno). Žádné
+     přeškrtnutí: položka není zrušená, jen se v téhle zakázce neúčtuje.
+     Ovládací prvky si drží plnou barvu, aby šla zase zapnout. */
+  tr.vypnuto-nulou > td { color:#8a94a6; }
+  tr.vypnuto-nulou > td .note { color:#a3abba; }
+  tr.vypnuto-nulou input, tr.vypnuto-nulou select, tr.vypnuto-nulou button,
+  tr.vypnuto-nulou textarea { opacity:1; color:var(--tmava, #17233a); }
+  tr.vypnuto-nulou input[type=number] { border-color:#f0b429; background:#fffdf5; }
   .strana-zamcena { opacity:.62; filter:grayscale(.55); }
   .strana-zamcena input, .strana-zamcena select, .strana-zamcena textarea,
   .strana-zamcena button { pointer-events:none; background:#f1f3f7; }
@@ -378,6 +388,9 @@
   .kpi-chk { transform:scale(.9); }
   .pill { display:inline-block; font-size:11px; padding:2px 8px; border-radius:99px; background:#e7efe9; color:var(--ok); font-weight:600; }
   .pill.warn { background:#fdf1e3; color:var(--warn); }
+  /* Vypnuto ručním množstvím 0 (4. 9. 2026) — jantarová, ať se neplete
+     s varovnou (oranžová) ani se stavovou (zelená). */
+  .pill.vyp { background:#fff4d6; color:#8a5a00; }
   .pill.stara { background:#fdecec; color:#b3261e; }   /* hlídka zastaralé verze (19. 8. 2026) */
   .pill.mut { background:#eef1f5; color:var(--mut); }
   .note { color:var(--mut); font-size:12px; margin:6px 0; }

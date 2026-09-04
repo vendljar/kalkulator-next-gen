@@ -207,7 +207,8 @@ const PROVERENO = {
       + 'sek.key je klíč sekce z pevného výčtu, p.kid je id z projKatalogNoveId()',
   },
   'kalk_ock.js': {
-    'col.admin ? pripNazev(x) : esc(x.nazev)': 'obě větve escapují – pripNazev skládá HTML přes esc() uvnitř',
+    'col.admin ? pripNazev(x) : esc(x.nazev) + vypnutoHtml(x)':
+      'obě větve escapují – pripNazev skládá HTML přes esc() uvnitř; vypnutoHtml je hotové HTML štítku (text je literál, popis přes esc())',
     'key': 'klíč jeklu z pevného výčtu profilů, ne uživatelský text',
     'label': 'popisek řádku / KPI psaný vývojářem (profRow, sumRadek, kpiLine)',
     'orig': 'o pár řádků výš: const orig = keyAttr(r.origNazev) – tedy escJs',
