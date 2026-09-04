@@ -253,8 +253,45 @@ function zajistiZamek(zak) {
   return zak;
 }
 
+/* ============================================================
+ * ZÁMEK OTEVŘENÉ ZAKÁZKY — JEN PRO ČTENÍ (nález V23-B, 4. 9. 2026)
+ *
+ * Jiná věc než zámek vytištěné nabídky nahoře. Ten je TRVALÝ a patří k datům
+ * (odeslaná nabídka je doklad). Tenhle je DOČASNÝ a patří k oknu: zakázka
+ * otevřená z databáze začíná jen ke čtení, ať si ji jde prohlédnout, aniž by
+ * se cokoli změnilo. Zadání J. V.: „stačí, aby si obchodník otevřel starší
+ * zahraniční nabídku ‚jen se podívat‘, a uložená nabídka je tiše přepsaná."
+ *
+ * KDO SMÍ ODEMKNOUT (rozhodnutí J. V. 4. 9. 2026: „obchodník může své zakázky
+ * odemykat"):
+ *   – administrátor a vedoucí kohokoli,
+ *   – obchodník zakázku, kterou sám založil (`zak.autor` = jeho e-mail),
+ *   – zakázku BEZ autora smí odemknout každý: starší soubory a zakázky
+ *     z doby před online databází autora nemají a jinak by je nešlo upravit,
+ *   – bez přihlášení (aplikace ze souboru) se neptáme vůbec — není koho.
+ *
+ * Odemčení NEOTVÍRÁ uzamčenou (vytištěnou) variantu: ta má svůj vlastní
+ * zámek a ten platí dál.
+ * ============================================================ */
+function zamekCteniSmiOdemknout(zak, ja) {
+  if (!ja || !ja.email) return true;                    // offline / bez přihlášení
+  if (ja.role === 'Administrátor' || ja.role === 'Vedoucí') return true;
+  const autor = String((zak && zak.autor) || '').trim().toLowerCase();
+  if (!autor) return true;                              // starší zakázka bez autora
+  return autor === String(ja.email).trim().toLowerCase();
+}
+
+/* Věta pro toho, kdo odemknout nesmí. Prázdno = smí. */
+function zamekCteniDuvod(zak, ja) {
+  if (zamekCteniSmiOdemknout(zak, ja)) return '';
+  const jmeno = String((zak && (zak.autorJmeno || zak.autor)) || '').trim();
+  return 'Tuhle nabídku založil ' + (jmeno || 'jiný obchodník')
+    + '. Upravit ji může on, vedoucí nebo administrátor.';
+}
+
 if (typeof module !== 'undefined')
   module.exports = { ZAMEK_DOKUMENTY, dokumentZamyka, dokumentPopis,
+                     zamekCteniSmiOdemknout, zamekCteniDuvod,
                      variantaPripona, dalsiPriponaVarianty, variantaCislo,
                      klonujVariantu, zamekInfo, variantaUzamcena,
                      variantaEditovatelna, zamkniVariantu, odemkniVariantu,

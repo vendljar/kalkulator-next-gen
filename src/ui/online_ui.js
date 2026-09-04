@@ -66,6 +66,16 @@ const ONLINE_STAV = {
   prehled: { hledat: '', druh: 'vse', vybrane: [] },
   auto: true,
   timer: null,
+  /* SÁM OD SEBE SE NIC NEUKLÁDÁ (nález V23-B, 4. 9. 2026).
+   * Autosave zapisoval při každé změně obsahu ZAK — tedy i tehdy, když
+   * zakázku změnila aplikace sama (srovnání s platným ceníkem hned po
+   * otevření). Stačilo si starší nabídku „jen otevřít" a uložená verze byla
+   * tiše přepsaná, bez jediného kliknutí a bez varování. Od téhle značky
+   * platí: zápis až po SKUTEČNÉ editaci uživatele. Nastavuje ji
+   * `onlineZmenaUzivatele()` z posluchačů na input/change a na kliknutí do
+   * ovládacího prvku; otevření zakázky i uložení ji zase shodí. */
+  zmenaUzivatele: false,
+  sledujeme: false,       // posluchače událostí jsou nasazené (jen jednou)
   hledat: '',
   uzivatele: [],
   uzivateleNacteno: false, // seznam účtů už byl (aspoň jednou) vyžádán
@@ -139,6 +149,29 @@ function onlineApi(cesta, telo, metoda) {
 }
 
 /* ---------- start a přihlášení ---------- */
+
+/* Uživatel opravdu něco udělal — od téhle chvíle smí autosave zapisovat.
+ * Záměrně se nesleduje `set()` ani jiná datová cesta: zakázkou hýbe i sama
+ * aplikace (přepočet, migrace, zrcadlení kurzu) a právě to se nemá ukládat.
+ * Sledují se proto UDÁLOSTI OD ČLOVĚKA. */
+function onlineZmenaUzivatele() { ONLINE_STAV.zmenaUzivatele = true; }
+
+/* Zavolá se jednou při startu (z onlineStart). Posluchače jsou v zachycovací
+ * fázi, aby je nezastavil žádný stopPropagation po cestě. */
+function onlineSledujUzivatele() {
+  if (ONLINE_STAV.sledujeme || typeof document === 'undefined') return;
+  ONLINE_STAV.sledujeme = true;
+  ['input', 'change'].forEach(t => document.addEventListener(t, onlineZmenaUzivatele, true));
+  /* Tlačítka mění data taky (přidat položku, ↺, zaškrtnutí v tabulce);
+   * pouhé přepnutí záložky ale změnou není — proto se ptáme na ovládací
+   * prvek, ne na jakýkoli klik. Samotná značka nestačí k zápisu: obsah
+   * zakázky se pořád musí lišit od toho, co je uložené. */
+  document.addEventListener('click', ev => {
+    const t = ev.target;
+    if (t && typeof t.closest === 'function' && t.closest('button, input, select, textarea'))
+      onlineZmenaUzivatele();
+  }, true);
+}
 
 function onlineStart() {
   if (!onlineMozne()) return;
@@ -694,6 +727,9 @@ async function onlineOtevri(soubor) {
     ONLINE_STAV.razitko = (typeof uloRazitko === 'function') ? uloRazitko(ZAK) : '';
     ONLINE_STAV.posledni = JSON.stringify(ZAK);
     ONLINE_STAV.kdyUlozeno = null;
+    /* Otevřená zakázka je JEN KE ČTENÍ, dokud ji uživatel vědomě neodemkne
+     * (zadání J. V. 4. 9. 2026). Zapíná se PŘED přepočtem i renderem. */
+    if (typeof zamekCteniZapni === 'function') zamekCteniZapni();
     if (typeof seznamReset === 'function') seznamReset();
     /* Otevřít se musí nad ceníkem, který právě platí – rozpracované varianty
      * se srovnají, uzamčené se nedotknou (stejné pravidlo jako u složky). */
@@ -703,6 +739,9 @@ async function onlineOtevri(soubor) {
     zavriOnline();
     render();
     if (typeof historieOznacUlozeno === 'function') historieOznacUlozeno();
+    /* Otevření není editace: značka se shodí AŽ TEĎ, po přepočtu i po
+     * překreslení, aby ji nenastavil klik, kterým se zakázka otevřela. */
+    ONLINE_STAV.zmenaUzivatele = false;
     return true;
   }).catch(e => { onlineZprava('Zakázku se nepodařilo otevřít: ' + e.message, 'varovani'); renderOnlinePanel(); return false; })
     .then(v => { ONLINE_STAV.pracuje = false; return v; });
@@ -1007,6 +1046,11 @@ function onlineUzAktivni(email, aktivni) {
  *    říká sám – synchronně by se render volal rekurzivně.
  * 2) automatické uložení online po chvíli klidu (stejný rytmus jako složka). */
 function onlineTik() {
+  /* Posluchače „uživatel opravdu něco udělal" se nasadí při prvním
+   * překreslení a jen jednou. Schválně tady, ne v `onlineStart()`: ten se
+   * nad souborem (file://) vůbec nespustí, a brána ukládání má fungovat
+   * stejně všude. */
+  onlineSledujUzivatele();
   /* Přihlašovací stránka a roh hlavičky se udržují při každém překreslení –
    * obě místa jen čtou stav, takže je to levné. */
   renderPrihlaseni();
@@ -1060,6 +1104,11 @@ function onlineTik() {
    * Hlavička se hlídá proto, aby v databázi nevznikaly záznamy
    * „bez-cisla-…", které se pak nedají najít. */
   if (!ONLINE_STAV.auto || !ONLINE_STAV.ja || ONLINE_STAV.pracuje) return;
+  /* Bez zásahu uživatele se nezapisuje (nález V23-B) — viz `zmenaUzivatele`. */
+  if (!ONLINE_STAV.zmenaUzivatele) return;
+  /* A v zamčené (jen ke čtení) nabídce se nezapisuje vůbec — druhá pojistka
+   * nad tou první, protože zamčené okno stejně žádnou editaci nepustí. */
+  if (typeof zamekCteniJe === 'function' && zamekCteniJe()) return;
   if (!ONLINE_STAV.soubor && !uloHlavickaVyplnena(ZAK)) return;
   let text = '';
   try { text = JSON.stringify(ZAK); } catch (e) { return; }

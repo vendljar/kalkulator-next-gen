@@ -29,6 +29,8 @@ global.zajistiZamek = zm.zajistiZamek;
 global.variantaCislo = zm.variantaCislo; global.variantaUzamcena = zm.variantaUzamcena;
 global.variantaEditovatelna = zm.variantaEditovatelna; global.zamekInfo = zm.zamekInfo;
 global.dokumentZamyka = zm.dokumentZamyka; global.dokumentPopis = zm.dokumentPopis;
+global.zamekCteniSmiOdemknout = zm.zamekCteniSmiOdemknout;
+global.zamekCteniDuvod = zm.zamekCteniDuvod;
 
 const { ZAMEK_DOKUMENTY, dokumentZamyka, dokumentPopis, variantaPripona,
         dalsiPriponaVarianty, variantaCislo, klonujVariantu, zamekInfo,
@@ -234,6 +236,32 @@ test('nevyplněné číslo zakázky zůstává předlohou',
 const kl = klonujVariantu(cista, cista.varianty[0].id);
 test('klon nevyplněné zakázky nekončí mezerou před tečkou',
   !/\s\./.test(variantaCislo(cista, kl)), variantaCislo(cista, kl));
+
+
+/* ---------- ZÁMEK OTEVŘENÉ ZAKÁZKY: kdo smí odemknout (4. 9. 2026) ----------
+ * Rozhodnutí J. V.: „obchodník může své zakázky odemykat." Vedoucí
+ * a administrátor kohokoli; zakázka bez autora (starší soubory, práce ze
+ * souboru bez přihlášení) se nesmí stát neupravitelnou. */
+{
+  const admin = { email: 'admin@eng.cz', role: 'Administrátor' };
+  const vedouci = { email: 'v@eng.cz', role: 'Vedoucí' };
+  const ja = { email: 'obchod@eng.cz', role: 'Obchodník' };
+  const kolega = { email: 'jiny@eng.cz', role: 'Obchodník' };
+  const moje = { autor: 'obchod@eng.cz', autorJmeno: 'Já' };
+  const cizi = { autor: 'jiny@eng.cz', autorJmeno: 'Kolega Novák' };
+  const bezAutora = {};
+
+  test('obchodník odemkne svou zakázku', zamekCteniSmiOdemknout(moje, ja));
+  test('velikost písmen v e-mailu nehraje roli',
+    zamekCteniSmiOdemknout({ autor: 'Obchod@ENG.cz' }, ja));
+  test('cizí zakázku obchodník neodemkne', !zamekCteniSmiOdemknout(cizi, ja));
+  test('a dozví se proč i po kom', /Kolega Novák/.test(zamekCteniDuvod(cizi, ja)));
+  test('vedoucí odemkne i cizí', zamekCteniSmiOdemknout(cizi, vedouci));
+  test('administrátor taky', zamekCteniSmiOdemknout(cizi, admin));
+  test('zakázka bez autora jde odemknout každému', zamekCteniSmiOdemknout(bezAutora, kolega));
+  test('bez přihlášení (ze souboru) se neptáme', zamekCteniSmiOdemknout(cizi, null));
+  test('kdo smí, nedostane žádné vysvětlení', zamekCteniDuvod(moje, ja) === '');
+}
 
 console.log(`\n${ok} prošlo, ${fail} selhalo`);
 process.exit(fail ? 1 : 0);

@@ -521,6 +521,8 @@ function get(path) { return path.split('.').reduce((o, k) => o[k], rootObj()); }
  * (číslo, zákazník, hlavička), ne obsah konkrétní varianty; ty musí jít
  * upravit i tehdy, když je některá varianta zamčená. */
 function set(path, v) {
+  /* Zámek čtení platí i na hlavičku (ZAK.*) — viz komentář u ZAMEK_CTENI. */
+  if (typeof zamekCteniStop === 'function' && zamekCteniStop()) return;
   if (!path.startsWith('ZAK.') && typeof zamekStop === 'function' && zamekStop()) return;
   const ks = path.split('.'); const last = ks.pop();
   ks.reduce((o, k) => o[k], rootObj())[last] = v;
@@ -1032,7 +1034,8 @@ function zakazkaHlavicka(ock) {
         ${archivBtn}
         <button class="mini" onclick="prepniTab('zakazka')">Přehled cenových nabídek →</button>
       </div>${zakUlozeniRadek()}`;
-    return `<div class="card zak-bar${radaTed === 'zahr' ? ' rada-zahr' : ''}">
+    return `<div class="card zak-bar${radaTed === 'zahr' ? ' rada-zahr' : ''}${
+      (typeof zamekCteniJe === 'function' && zamekCteniJe()) ? ' cteni-zamceno' : ''}">
         <div class="zak-bar-h">Zakázka a varianta${radaTed === 'zahr'
           ? ' <span class="rada-stitek">zahraniční ceník</span>' : ''}</div>
         <div class="body">${inner}</div></div>`
@@ -1057,7 +1060,8 @@ function zakazkaHlavicka(ock) {
       ${archivBtn}
       <button class="mini" onclick="prepniTab('zakazka')">Přehled cenových nabídek →</button>
     </div>${zakUlozeniRadek()}`;
-  return `<div class="card zak-bar${radaTed === 'zahr' ? ' rada-zahr' : ''}">
+  return `<div class="card zak-bar${radaTed === 'zahr' ? ' rada-zahr' : ''}${
+      (typeof zamekCteniJe === 'function' && zamekCteniJe()) ? ' cteni-zamceno' : ''}">
       <div class="zak-bar-h">Zakázka a varianta${radaTed === 'zahr'
         ? ' <span class="rada-stitek">zahraniční ceník</span>' : ''}</div>
       <div class="body">${inner}</div></div>`
@@ -1123,8 +1127,9 @@ function renderVerzePill() {
 
 function renderKalkHlavicka() {
   const el = document.getElementById('kalk-hlavicka');
-  if (el) el.innerHTML = zakazkaHlavicka(true) + zamekStranyLista('ock');
+  if (el) el.innerHTML = zamekCteniLista() + zakazkaHlavicka(true) + zamekStranyLista('ock');
   zamekStranyNasad('ock');
+  zamekCteniNasad('ock');
 }
 
 /* ---------- přepnutí řady ceníku (#181, 31. 8. 2026) ----------
@@ -1181,6 +1186,79 @@ async function cenikRadaPrepniUI(rada) {
     hlaska('Ceník je přepnutý na ' + nazev + '.\n\nBeze změny zůstalo, co jste si v téhle '
       + 'nabídce nastavil sám:\n' + vysl.chranene.map(x => '• ' + x.popis).join('\n')
       + '\n\nChcete-li i tady hodnotu z ceníku, přepište ji ručně.');
+}
+
+/* ---------- ZÁMEK OTEVŘENÉ ZAKÁZKY: JEN PRO ČTENÍ (4. 9. 2026) ----------
+ *
+ * Zadání J. V. spolu s nálezem V23: „zakázka má být po otevření uzamčená
+ * (read-only) a odemykat se vědomým krokem." Model (kdo smí odemknout) je
+ * v `zamek.js`; tady je stav okna a jeho kreslení.
+ *
+ * ZÁMEK PATŘÍ OKNU, NE DATŮM. Do zakázky se nezapisuje nic — po zavření
+ * a novém otevření je zakázka zase jen ke čtení, což je přesně to chtěné.
+ *
+ * CO ZŮSTÁVÁ ŽIVÉ: přepínání záložek, tisk, porovnání variant, hledání
+ * a samozřejmě tlačítko Odemknout. Blokuje se ZÁPIS DO DAT — a to včetně
+ * hlavičky: kdyby šla editovat, psal by do ní obchodník změny, které se
+ * (protože autosave v zamčeném stavu mlčí) nikam neuloží. To by byla horší
+ * past než ta, kterou zavíráme. */
+const ZAMEK_CTENI = { zamceno: false };
+
+function zamekCteniJe() { return !!ZAMEK_CTENI.zamceno; }
+
+/* Volá se po otevření ULOŽENÉ zakázky (online i ze složky). Obnovení
+ * rozpracované zálohy zamčené NENÍ — to je vlastní nedokončená práce,
+ * do které chce uživatel rovnou psát. */
+function zamekCteniZapni() { ZAMEK_CTENI.zamceno = true; }
+function zamekCteniVypni() { ZAMEK_CTENI.zamceno = false; }
+
+/* Vrací true, když je zápis kvůli zámku čtení zakázaný (a řekne to). */
+function zamekCteniStop() {
+  if (!zamekCteniJe()) return false;
+  if (typeof hlaska === 'function')
+    hlaska('Nabídka je otevřená jen ke čtení.\n\nAbyste v ní mohl něco změnit, '
+      + 'klikněte nahoře na „Odemknout k úpravám". Dokud je zamčená, nic se do '
+      + 'databáze neukládá — otevřít si ji a jen se podívat je bezpečné.');
+  return true;
+}
+
+function zamekCteniLista() {
+  if (!zamekCteniJe()) return '';
+  const ja = (typeof ONLINE_STAV !== 'undefined') ? ONLINE_STAV.ja : null;
+  const smi = (typeof zamekCteniSmiOdemknout !== 'function') || zamekCteniSmiOdemknout(ZAK, ja);
+  const duvod = (!smi && typeof zamekCteniDuvod === 'function') ? zamekCteniDuvod(ZAK, ja) : '';
+  return `<div class="zamek-lista zamek-cteni noprint">
+    <span class="ikona">🔒</span>
+    <span class="sp"><b>Nabídka je otevřená jen ke čtení.</b>
+      Nic se neukládá, dokud ji vědomě neodemknete.${duvod ? ' ' + esc(duvod) : ''}</span>
+    ${smi ? '<button class="mini" onclick="zamekCteniOdemkniUI()">Odemknout k úpravám</button>' : ''}
+  </div>`;
+}
+
+/* Třída na kontejnery s daty. Lišta ani hlavička okna v nich nejsou, takže
+ * tlačítko Odemknout zůstane klikatelné. */
+function zamekCteniNasad(strana) {
+  const zamceno = zamekCteniJe();
+  const ids = strana === 'ock'
+    ? ['kalk-souhrn', 'inputs', 'outputs', 'kalk-nabidka']
+    : ['proj-telo'];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('cteni-zamceno', zamceno);
+  });
+}
+
+function zamekCteniOdemkniUI() {
+  const ja = (typeof ONLINE_STAV !== 'undefined') ? ONLINE_STAV.ja : null;
+  if (typeof zamekCteniSmiOdemknout === 'function' && !zamekCteniSmiOdemknout(ZAK, ja)) {
+    hlaska(zamekCteniDuvod(ZAK, ja));
+    return;
+  }
+  if (typeof nahledStop === 'function' && nahledStop('odemčení nabídky k úpravám')) return;
+  zamekCteniVypni();
+  if (typeof onlineZprava === 'function')
+    onlineZprava('Nabídka je odemčená k úpravám — od téhle chvíle se změny zase ukládají samy.');
+  render();
 }
 
 /* ---------- zámek nepočítané strany zakázky (23. 8. 2026) ----------

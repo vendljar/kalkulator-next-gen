@@ -460,6 +460,7 @@ function renderProj() {
    * hlavička a šedá lišta nad ním zůstávají živé (viz zamekStranyLista). */
   document.getElementById('page-proj').innerHTML =
     zakazkaHlavicka(false) +
+    (typeof zamekCteniLista === 'function' ? zamekCteniLista() : '') +
     (typeof zamekStranyLista === 'function' ? zamekStranyLista('proj') : '') +
     `<div id="proj-telo">` +
     `<div class="card"><div class="body">${hlava}
@@ -489,4 +490,5 @@ function renderProj() {
      Doprava se počítá bez přirážky; sleva/přirážka sekce se počítá z ceny včetně dopravy (dle předlohy).</div>`
     + `</div>`;
   if (typeof zamekStranyNasad === 'function') zamekStranyNasad('proj');
+  if (typeof zamekCteniNasad === 'function') zamekCteniNasad('proj');
 }

@@ -347,10 +347,18 @@ test('dokud hlavička není vyplněná, samo se nic neplánuje',
   await page.evaluate(() => ONLINE_STAV.timer === null && ONLINE_STAV.soubor === ''));
 
 /* Vyplnění hlavičky = jediná podmínka. Od téhle chvíle si zakázku
- * ukládá aplikace sama; nikdo na nic klikat nemusí. */
-await page.evaluate(() => {
-  ZAK.cislo = '2026 - OPR - CN - 0777'; ZAK.nazevAkce = 'Samo do databáze'; render();
-});
+ * ukládá aplikace sama; nikdo na nic klikat nemusí.
+ *
+ * Hlavička se vyplňuje SKUTEČNÝM PSANÍM do polí, ne přiřazením do ZAK:
+ * od 4. 9. 2026 (nález V23-B) autosave zapisuje teprve tehdy, když uživatel
+ * opravdu něco udělal — samotná změna dat aplikací se neukládá, protože
+ * přesně tím se tiše přepisovaly otevřené zahraniční nabídky. */
+const poleHlavicky = (cesta) => page.locator(`#page-proj input[onchange*="'${cesta}'"]`).first();
+await poleHlavicky('ZAK.cislo').fill('2026 - OPR - CN - 0777');
+await poleHlavicky('ZAK.cislo').press('Tab');
+await poleHlavicky('ZAK.nazevAkce').fill('Samo do databáze');
+await poleHlavicky('ZAK.nazevAkce').press('Tab');
+await page.waitForTimeout(150);
 test('po vyplnění hlavičky se uložení naplánovalo samo',
   await page.evaluate(() => ONLINE_STAV.timer !== null));
 await page.waitForFunction(() => { try { return ONLINE_STAV.soubor !== ''; } catch (e) { return false; } },

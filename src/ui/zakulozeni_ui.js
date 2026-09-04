@@ -251,6 +251,9 @@ function zakNactiUI() {
  * do databáze jako záznam bez čísla. Po zapomenutí je nová zakázka ve stavu
  * „vyplnit" a čeká na hlavičku – přesně jak je zadáno. */
 function zakOdpojUlozeni() {
+  /* Nová zakázka se zakládá proto, aby se do ní psalo — zámek čtení, který
+   * zůstal po předchozí otevřené nabídce, se tu shodí (4. 9. 2026). */
+  if (typeof zamekCteniVypni === 'function') zamekCteniVypni();
   ONLINE_STAV.soubor = ''; ONLINE_STAV.razitko = ''; ONLINE_STAV.posledni = ''; ONLINE_STAV.kdyUlozeno = null;
   /* Nová zakázka = od téhle chvíle se po refreshi vracet není kam (31. 8. 2026). */
   if (typeof onlinePoslednizapamatuj === 'function') onlinePoslednizapamatuj('');

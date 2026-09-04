@@ -24,6 +24,11 @@ global.novaVarianta = zk.novaVarianta; global.novaVariantaData = zk.novaVarianta
 global.zadaniZCeniku = zk.zadaniZCeniku; global.zadaniRucniZnac = zk.zadaniRucniZnac;
 global.zadaniRucniZrus = zk.zadaniRucniZrus; global.zadaniRucniJe = zk.zadaniRucniJe;
 global.aktivniVarianta = zk.aktivniVarianta; global.ridiciVarianta = zk.ridiciVarianta;
+/* Nová zakázka nese v čísle PŘEDLOHU, ne skutečné číslo. Přepočet se na to
+ * od 4. 9. 2026 ptá (nález V23: rozdělaná zakázka si drží svou přirážku),
+ * takže i v Node musí být `hlavickaVyplneno` po ruce — jinak by se prázdná
+ * zakázka tvářila jako rozdělaná a #184 by se tiše vrátilo. */
+global.hlavickaVyplneno = zk.hlavickaVyplneno; global.ZAK_CISLO_PREDLOHA = zk.ZAK_CISLO_PREDLOHA;
 const { novaZakazka } = zk;
 const zm = require('./zamek.js');
 global.zajistiZamek = zm.zajistiZamek; global.variantaCislo = zm.variantaCislo;

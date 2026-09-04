@@ -75,6 +75,10 @@ function zamekChranFunkce() {
        * Ptá se dřív než zámek varianty: v náhledu neplatí ani to, co by
        * u vlastní odemčené varianty prošlo. */
       if (typeof nahledStop === 'function' && nahledStop(nazev)) return;
+      /* Zámek otevřené zakázky (jen ke čtení, 4. 9. 2026) — ptá se dřív než
+       * zámek varianty: v zamčeném okně neprojde ani to, co by u odemčené
+       * rozpracované varianty prošlo. */
+      if (typeof zamekCteniStop === 'function' && zamekCteniStop()) return;
       if (zamekStop()) return;
       return puvodni.apply(this, args);
     };

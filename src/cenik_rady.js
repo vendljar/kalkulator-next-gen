@@ -160,7 +160,38 @@ function cenikRadaVarianty(data) {
   return cenikRadaPlatna(data.cenik && data.cenik.rada);
 }
 
+/* ---------- ceník, který pro danou variantu PRÁVĚ PLATÍ (nález V23) ----------
+ *
+ * Automatický přepočet při otevření zakázky porovnával variantu vždycky
+ * s TUZEMSKÝM ceníkem, ať byla varianta jakákoli. U zahraniční zakázky se tím
+ * každá odchylka tvářila jako zastaralá cena a přepsala se tuzemskou —
+ * nabídka do Koblenz se sama podhodnotila o třetinu, přestože přepínač
+ * i štítek dál hlásily „Zahraničí". UI četlo řadu správně, přepočet ne;
+ * dva zdroje pravdy. Tohle je ten druhý a od 4. 9. 2026 se ptá na řadu.
+ *
+ * Vrací TÝŽ TVAR jako `cenikDnesniData()` — { cenik, proj: { cenik } } —,
+ * takže se dá podstrčit všude, kde se dnešní ceník používá. Pro tuzemskou
+ * řadu je to kopie beze změny; pro zahraniční kopie s vtisknutými odchylkami
+ * (včetně `PC.*`, které bydlí v ceníku projekce — proto celý objekt, ne jen
+ * ceník OCK jako v `cenikSlozRadu`). */
+function cenikDnesniProRadu(dnesni, zahr, rada) {
+  const zaklad = cenikRadaTuzemskaData(dnesni);
+  const kopie = x => JSON.parse(JSON.stringify(x || {}));
+  const out = { cenik: kopie(zaklad.cenik),
+                proj: { cenik: kopie(zaklad.proj && zaklad.proj.cenik) } };
+  const r = cenikRadaPlatna(rada);
+  const z = cenikZahrOciste(zahr);
+  out.cenik.rada = r;
+  out.cenik.jenZahr = Object.assign({}, z.jenZahr);
+  if (r !== 'zahr') return out;
+  Object.entries(z.ceny).forEach(([cesta, hodnota]) => {
+    if (typeof cenikNastavHodnotu === 'function') cenikNastavHodnotu(out, cesta, hodnota);
+  });
+  return out;
+}
+
 if (typeof module !== 'undefined')
   module.exports = { CENIK_RADY, CENIK_ZAHR, cenikRadaPlatna, cenikRadaNazev, cenikRadaPopis,
                      cenikZahrPrazdny, cenikZahrOciste, cenikZahrPrazdna,
-                     cenikSlozRadu, cenikRadaRozdily, cenikRadaPrepni, cenikRadaVarianty };
+                     cenikSlozRadu, cenikRadaRozdily, cenikRadaPrepni, cenikRadaVarianty,
+                     cenikRadaTuzemskaData, cenikDnesniProRadu };

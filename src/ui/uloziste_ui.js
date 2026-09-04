@@ -342,7 +342,8 @@ function uloSrovnejSPlatnymCenikem() {
   const info = (typeof progPlatnaVerzeInfo === 'function')
     ? progPlatnaVerzeInfo() : { verze: null, platnoOd: '' };
   const r = cenikPrepoctiRozpracovane(ZAK, cenikDnesniData(), Object.assign(
-    { build: (typeof buildVerze === 'function') ? buildVerze() : '' }, info));
+    { zahr: (typeof CENIK_ZAHR !== 'undefined') ? CENIK_ZAHR : null,
+      build: (typeof buildVerze === 'function') ? buildVerze() : '' }, info));
   /* Srovnaná značka je taky změna: zakázka spočítaná bez připojené složky si
    * v ceníku varianty nese „nejsou to ostrá data" a po otevření nad platným
    * ceníkem by jinak dál svítila červená lišta a dokument by byl zablokovaný. */
@@ -380,6 +381,7 @@ async function uloOtevriZeSlozky(soubor) {
     ULO_STAV.razitko = uloRazitko(zak);
     ULO_STAV.posledni = JSON.stringify(ZAK);
     ULO_STAV.kdyUlozeno = null;
+    if (typeof zamekCteniZapni === 'function') zamekCteniZapni();   // jen ke čtení (4. 9. 2026)
     if (typeof seznamReset === 'function') seznamReset();
     /* Zakázka ze složky se otevírá s platným ceníkem: rozpracované varianty
      * se srovnají s tím, co platí dnes (zadání 31. 7. 2026). Uzamčené

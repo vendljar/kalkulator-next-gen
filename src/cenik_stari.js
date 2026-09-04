@@ -405,9 +405,12 @@ function cenikPrepocti(v, dnesni, opts) {
   const vyber = opts.cesty ? new Set(opts.cesty) : null;
   /* Zakázkové hodnoty (přirážka, sazba DPH) se automaticky nepřepisují —
    * jsou to rozhodnutí obchodníka k téhle zakázce. Na výslovný pokyn
-   * (opts.cesty, tedy „přepočítej tyhle položky") se přepsat dají. */
+   * (opts.cesty, tedy „přepočítej tyhle položky") se přepsat dají.
+   * `opts.chranena` dovoluje volajícímu pravidlo zpřísnit — u ROZDĚLANÉ
+   * zakázky jsou zakázkové hodnoty rozhodnutím vždycky (nález V23). */
+  const chranena = (typeof opts.chranena === 'function') ? opts.chranena : cenikChranena;
   const rozdily = cenikRozdily(v.data, dnesni)
-    .filter(r => (vyber ? vyber.has(r.cesta) : !cenikChranena(v.data, r.cesta)));
+    .filter(r => (vyber ? vyber.has(r.cesta) : !chranena(v.data, r.cesta)));
   rozdily.forEach(r => cenikNastavHodnotu(v.data, r.cesta, r.nova));
   /* Přepočet po vybraných položkách (dohodnutá cena skla zůstává) nechává
    * ceník jako směs: část z nové verze, část z původní dohody. Takový ceník
@@ -416,7 +419,7 @@ function cenikPrepocti(v, dnesni, opts) {
    * Verze se proto zapíše, jen když po přepočtu nezůstal žádný rozdíl. */
   /* Do „co ještě zbývá" se zakázkové hodnoty nepočítají: jinak by odlišná
    * přirážka navždy brala variantě číslo verze ceníku, ze které počítala. */
-  const zbyva = cenikRozdily(v.data, dnesni).filter(r => !cenikChranena(v.data, r.cesta)).length;
+  const zbyva = cenikRozdily(v.data, dnesni).filter(r => !chranena(v.data, r.cesta)).length;
   v.data.cenikRazitko = cenikRazitkoNovy(v.data,
     zbyva ? Object.assign({}, opts, { verze: null, platnoOd: '' }) : opts);
   /* Značka se srovnává jen tehdy, když po přepočtu nezůstal rozdíl – tedy když
@@ -450,8 +453,37 @@ function cenikPrepoctiRozpracovane(zak, dnesni, opts) {
                      orazitkovano: 0, znacky: 0, varianty: [] };
   if (!zak || !Array.isArray(zak.varianty)) return vysledek;
 
+  /* ROZDĚLANÁ ZAKÁZKA (nález V23, 4. 9. 2026). Zakázka, která už má číslo
+   * nabídky nebo název akce, je něčí práce: přirážka a sazba DPH v ní jsou
+   * ROZHODNUTÍ obchodníka a automatika je nepřepisuje ani tehdy, když u nich
+   * chybí ruční značka (#177). Prázdná nová zakázka je opak — do té se
+   * ceníková přirážka natáhnout MÁ, jinak by v ní zůstala nula (#184).
+   * Test je týž jako u ochrany zálohy v `uloZalohaSmiPrepsat` — a POZOR:
+   * `uloCisloVyplneno` je nutnost, ne ozdoba. Nová zakázka nese v čísle
+   * PŘEDLOHU („2026 - OPR - CN - "), takže obyčejné „není prázdné" by ji
+   * prohlásilo za rozdělanou a přirážka by se do ní z ceníku nikdy
+   * nenatáhla (#184). */
+  const vyplneno = (x) => {
+    if (typeof hlavickaVyplneno === 'function') return hlavickaVyplneno(x);
+    if (typeof uloCisloVyplneno === 'function') return uloCisloVyplneno(x);
+    const s = String(x == null ? '' : x).trim();
+    const p = (typeof ZAK_CISLO_PREDLOHA === 'string') ? ZAK_CISLO_PREDLOHA.trim() : '';
+    return s !== '' && s !== p;
+  };
+  const rozdelana = vyplneno(zak.cislo) || vyplneno(zak.nazevAkce);
+  const chranena = rozdelana
+    ? ((data, cesta) => cenikPatriZakazce(cesta))
+    : cenikChranena;
+
   zak.varianty.forEach(v => {
     if (!v || !v.data) return;
+    /* Ceník se bere PODLE ŘADY VARIANTY: zahraniční varianta se srovnává
+     * se zahraniční řadou, ne s tuzemskou. Bez toho se každá odchylka
+     * tvářila jako zastaralá cena (jádro nálezu V23). */
+    const dnesniV = (typeof cenikDnesniProRadu === 'function'
+      && typeof cenikRadaVarianty === 'function')
+      ? cenikDnesniProRadu(dnesni, opts.zahr, cenikRadaVarianty(v.data))
+      : dnesni;
 
     if (typeof variantaUzamcena === 'function' && variantaUzamcena(v)) {
       vysledek.zamcene++;
@@ -467,13 +499,13 @@ function cenikPrepoctiRozpracovane(zak, dnesni, opts) {
     /* Odlišná přirážka nebo sazba DPH není důvod k přepočtu — viz
      * CENIK_ZAKAZKOVE. Bez téhle podmínky by zakázka do Německa (40 %)
      * spustila přepočet při každém otevření. */
-    const rozdily = cenikRozdily(v.data, dnesni).filter(r => !cenikChranena(v.data, r.cesta));
+    const rozdily = cenikRozdily(v.data, dnesniV).filter(r => !chranena(v.data, r.cesta));
     if (!rozdily.length) {
       /* Ceny už sedí, ale značka sedět nemusí: přesně tak vypadá varianta
        * spočítaná bez připojené složky, do které se pak ostrý ceník dostal
        * jinudy. Bez tohohle řádku by ta varianta zůstala označená napořád –
        * rozdíl žádný, takže by se sem už nikdy nedostala oprava. */
-      const zn = cenikSrovnejZnacky(v.data, dnesni);
+      const zn = cenikSrovnejZnacky(v.data, dnesniV);
       vysledek.znacky += zn;
       const r = v.data.cenikRazitko;
       const verzeTed = cenikVerzeCislo(r && r.verze);
@@ -488,7 +520,7 @@ function cenikPrepoctiRozpracovane(zak, dnesni, opts) {
       return;
     }
 
-    const r = cenikPrepocti(v, dnesni, opts);
+    const r = cenikPrepocti(v, dnesniV, Object.assign({}, opts, { chranena }));
     vysledek.prepocteno++;
     vysledek.zmen += r.zmen;
     vysledek.znacky += (r.znacky || 0);

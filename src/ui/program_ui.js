@@ -78,7 +78,8 @@ function progSrovnejNedotcene(verzeInfo) {
   if (typeof cenikPrepoctiRozpracovane !== 'function'
     || typeof cenikDnesniData !== 'function') return 0;
   const r = cenikPrepoctiRozpracovane(ZAK, cenikDnesniData(), Object.assign(
-    { build: (typeof buildVerze === 'function') ? buildVerze() : '' },
+    { zahr: (typeof CENIK_ZAHR !== 'undefined') ? CENIK_ZAHR : null,
+      build: (typeof buildVerze === 'function') ? buildVerze() : '' },
     verzeInfo || progPlatnaVerzeInfo()));
   /* Do počtu změn patří i samotné srovnání značky „tohle nejsou ostrá data".
    * Varianta spočítaná bez připojené složky má ceny i značku z prázdného

@@ -324,6 +324,14 @@
   /* Zamčená (nepočítaná) strana zakázky — 23. 8. 2026. Buňky zešednou
      a nejdou do nich klikat; hlavička a lišta zůstávají živé, protože
      číslo nabídky a přepnutí zámku se musí dát vyplnit i tady. */
+  /* Zámek otevřené zakázky (jen ke čtení, 4. 9. 2026). Ztlumí se DATA;
+     lišta se zámkem stojí mimo ně, takže tlačítko Odemknout zůstává živé. */
+  .cteni-zamceno { opacity:.72; }
+  .cteni-zamceno input, .cteni-zamceno select, .cteni-zamceno textarea,
+  .cteni-zamceno button:not(.noprint-ok) { pointer-events:none; background:#f4f6f9; }
+  .zamek-lista.zamek-cteni { background:#eef4ff; border-color:#b9cdf0; color:#123a72; }
+  .zamek-lista.zamek-cteni b { color:#123a72; }
+  .zamek-lista.zamek-cteni button { pointer-events:auto; }
   .strana-zamcena { opacity:.62; filter:grayscale(.55); }
   .strana-zamcena input, .strana-zamcena select, .strana-zamcena textarea,
   .strana-zamcena button { pointer-events:none; background:#f1f3f7; }

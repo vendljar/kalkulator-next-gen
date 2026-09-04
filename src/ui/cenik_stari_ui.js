@@ -21,6 +21,18 @@ function cenikDnesniData() {
            proj: { cenik: (typeof DEFAULT_CENIK_PROJ !== 'undefined') ? DEFAULT_CENIK_PROJ : {} } };
 }
 
+/* Dnešní ceník PRO KONKRÉTNÍ VARIANTU — tedy s ohledem na to, jestli počítá
+ * tuzemsky, nebo do zahraničí (nález V23, 4. 9. 2026). Hlídání zastaralých cen
+ * i ruční přepočet se do té doby ptaly vždycky tuzemského ceníku, takže
+ * u zahraniční zakázky hlásily rozdíl na každé odchylce a přepočtem ji
+ * přepsaly tuzemskou cenou. */
+function cenikDnesniProVariantu(v) {
+  const d = cenikDnesniData();
+  if (typeof cenikDnesniProRadu !== 'function' || typeof cenikRadaVarianty !== 'function') return d;
+  const zahr = (typeof CENIK_ZAHR !== 'undefined') ? CENIK_ZAHR : null;
+  return cenikDnesniProRadu(d, zahr, cenikRadaVarianty(v && v.data));
+}
+
 /* Verze ceníku, která teď platí (#39). Bez načtené složky žádná není –
  * `progPlatnaVerzeInfo` v tom případě vrací prázdno a přehled o verzích
  * mlčí, místo aby si nějaké číslo domyslel. */
@@ -32,7 +44,7 @@ function cenikPlatnaVerzeInfo() {
 function cenikPrehledAkt() {
   const v = (typeof aktivniVarianta === 'function') ? aktivniVarianta(ZAK) : null;
   if (!v) return null;
-  return cenikPrehled(v, cenikDnesniData(),
+  return cenikPrehled(v, cenikDnesniProVariantu(v),
     Object.assign({ datum: ZAK && ZAK.datum }, cenikPlatnaVerzeInfo()));
 }
 
@@ -201,7 +213,7 @@ function prepocetProved() {
   }
   /* Krok zpět se nikde nezapisuje ručně – historieTik() na konci render()
    * si snímek pořídí sám, takže Ctrl+Z funguje i po přepočtu. */
-  const r = cenikPrepocti(v, cenikDnesniData(), Object.assign({
+  const r = cenikPrepocti(v, cenikDnesniProVariantu(v), Object.assign({
     cesty: Array.from(PREPOCET_VYBER),
     build: (typeof buildVerze === 'function') ? buildVerze() : '',
   }, cenikPlatnaVerzeInfo()));
