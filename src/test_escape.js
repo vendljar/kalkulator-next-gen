@@ -250,6 +250,8 @@ const PROVERENO = {
   },
   'online_ui.js': {
     'hlaska': 'hotový úsek HTML `<div class="…">${esc(ONLINE_STAV.hlaska)}</div>`',
+    'duvod': 'hotový úsek HTML `<div class="note">${esc(důvody přeskočení)}</div>` '
+      + '– skládá se o dva řádky výš a text jde přes esc() (obnova databáze, V26)',
   },
   'poznamky_ui.js': {
     'd.kod': 'kód druhu poznámky z pevného číselníku',

@@ -48,6 +48,7 @@ import vypocet from './functions/vypocet.mjs';
 import zaloha from './functions/zaloha.mjs';
 import zalohaNocni from './functions/zaloha_nocni.mjs';
 import zalohaVynuceno from './functions/zaloha_vynuceno.mjs';
+import obnova from './functions/obnova.mjs';
 import zdravi from './functions/zdravi.mjs';
 import zobrazeni from './functions/zobrazeni.mjs';
 import zakazniciFn from './functions/zakaznici.mjs';
@@ -363,6 +364,16 @@ const MATICE = [
   { fn: zalohaVynuceno, nazev: 'vynucená záloha — pořízení (POST /api/zaloha_vynuceno)', metoda: 'POST',
     url: 'http://x/api/zaloha_vynuceno', telo: () => ({ duvod: 'matice' }),
     proc: 'zálohu vyvolává správce; běžný uživatel by tím jen zatěžoval server',
+    prava: JEN_ADMIN },
+
+  { fn: obnova, soubor: 'obnova.mjs', nazev: 'obnova databáze ze zálohy (POST /api/obnova)',
+    metoda: 'POST', url: 'http://x/api/obnova',
+    /* Náhled nad prázdnou zálohou: matice zkouší PRÁVA, ne obnovu samotnou —
+     * proto zdroj, který projde vždycky a nic nezapíše. */
+    telo: () => ({ zdroj: 'soubor', nahled: true,
+                   zaloha: { porizena: new Date().toISOString(), zakazky: {} } }),
+    proc: 'jediná cesta, která umí jedním požadavkem přepsat celou databázi — '
+      + 'opak zálohy a stejně citlivá; nikdo pod administrátorem se k ní nesmí dostat',
     prava: JEN_ADMIN },
 
 

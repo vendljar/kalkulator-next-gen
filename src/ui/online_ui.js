@@ -53,6 +53,12 @@ const ONLINE_STAV = {
   rejstrik: [],      // rejstřík online zakázek
   otisky: [],        // souhrny záloh databáze (jen administrátor; bez dat)
   otiskyNacteno: false,
+  /* Obnova databáze (V26, 7. 9. 2026). Drží se tu i celý načtený soubor
+   * zálohy — je to jen paměť okna, nikam se neukládá a odhlášením zmizí.
+   * `nahled` je odpověď serveru na `nahled: true`: co by se stalo. Obnovit
+   * jde AŽ po náhledu, proto se při každé změně volby maže. */
+  obnova: { otevreno: false, zdroj: 'soubor', den: '', jmeno: '', zaloha: null,
+            rezim: 'doplnit', nahled: null, pracuje: false, hlaska: '', hlaskaTyp: '' },
   soubor: '',        // pod jakým jménem je otevřená zakázka online
   razitko: '',
   posledni: '',      // co jsme naposledy zapsali (proti zbytečným zápisům)
@@ -863,6 +869,184 @@ function onlineZalohaDoSlozkyAuto() {
   }).catch(() => false);
 }
 
+/* ---------- OBNOVA DATABÁZE ZE ZÁLOHY (nález V26, 7. 9. 2026) ----------
+ *
+ * Do 7. 9. 2026 šla záloha jen ven. Tohle je cesta zpátky — a protože je to
+ * jediné tlačítko v aplikaci, které umí přepsat celou databázi, vede přes
+ * NÁHLED: server na `nahled: true` nic nezapíše a jen spočítá, co by se stalo.
+ * Teprve pak se rozsvítí tlačítko Obnovit. Každá změna volby náhled zahazuje,
+ * aby nešlo obnovit podle čísel, která platila pro jiný zdroj nebo režim. */
+
+function onlineObnovaPrepni() {
+  const o = ONLINE_STAV.obnova;
+  o.otevreno = !o.otevreno;
+  if (o.otevreno && jeAdminOnline() && !ONLINE_STAV.otiskyNacteno) onlineOtiskyNacti().then(render);
+  render();
+}
+
+/* Každá změna volby zahazuje náhled — čísla platí vždycky jen pro tu
+ * kombinaci zdroje a režimu, pro kterou se počítala. */
+function onlineObnovaVolba(co, hodnota) {
+  const o = ONLINE_STAV.obnova;
+  o[co] = hodnota; o.nahled = null; o.hlaska = '';
+  render();
+}
+
+function onlineObnovaSoubor() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.json,application/json';
+  inp.onchange = () => {
+    const f = inp.files && inp.files[0];
+    if (!f) return;
+    const fr = new FileReader();
+    fr.onload = () => {
+      const o = ONLINE_STAV.obnova;
+      let d = null;
+      try { d = JSON.parse(String(fr.result)); } catch (e) { d = null; }
+      /* Cizí soubor se sem nepustí ani na náhled: kdyby se do zálohy trefil
+       * omylem export zakázky, náhled by hlásil nesmysly. */
+      if (!d || typeof d !== 'object' || !d.porizena) {
+        o.zaloha = null; o.jmeno = ''; o.nahled = null;
+        o.hlaska = 'Soubor „' + f.name + '" není záloha z této aplikace (chybí razítko pořízení).';
+        o.hlaskaTyp = 'chyba'; render(); return;
+      }
+      o.zdroj = 'soubor'; o.zaloha = d; o.jmeno = f.name; o.nahled = null;
+      o.hlaska = 'Načteno ze souboru ' + f.name + ' (pořízeno '
+        + new Date(d.porizena).toLocaleString('cs-CZ') + '). Prohlédněte si náhled.';
+      o.hlaskaTyp = '';
+      render();
+    };
+    fr.readAsText(f);
+  };
+  inp.click();
+}
+
+function onlineObnovaTelo(nahled) {
+  const o = ONLINE_STAV.obnova;
+  const t = { rezim: o.rezim, nahled: !!nahled };
+  if (o.zdroj === 'otisk') { t.zdroj = 'otisk'; t.den = o.den; }
+  else { t.zdroj = 'soubor'; t.zaloha = o.zaloha; t.jmeno = o.jmeno; }
+  if (!nahled) t.potvrzeni = 'OBNOVIT';
+  return t;
+}
+
+function onlineObnovaNahled() {
+  const o = ONLINE_STAV.obnova;
+  if (o.zdroj === 'soubor' && !o.zaloha) {
+    o.hlaska = 'Nejdřív vyberte soubor zálohy.'; o.hlaskaTyp = 'varovani'; render(); return Promise.resolve(false);
+  }
+  if (o.zdroj === 'otisk' && !o.den) {
+    o.hlaska = 'Vyberte den serverového otisku.'; o.hlaskaTyp = 'varovani'; render(); return Promise.resolve(false);
+  }
+  o.pracuje = true; o.hlaska = ''; render();
+  return onlineApi('/api/obnova', onlineObnovaTelo(true))
+    .then(x => { o.nahled = x; o.hlaska = ''; return true; })
+    .catch(e => { o.nahled = null; o.hlaska = 'Náhled se nepodařilo pořídit: ' + e.message; o.hlaskaTyp = 'chyba'; return false; })
+    .then(v => { o.pracuje = false; render(); return v; });
+}
+
+async function onlineObnovaProved() {
+  const o = ONLINE_STAV.obnova;
+  if (!o.nahled) { o.hlaska = 'Nejdřív si nechte zobrazit náhled.'; o.hlaskaTyp = 'varovani'; render(); return false; }
+  const p = o.nahled.plan || {};
+  const zmen = Object.keys(p).reduce((a, k) => a + (p[k].novych || 0) + (p[k].prepsanych || 0), 0);
+  if (!await potvrd('Obnovit databázi ze zdroje „' + (o.nahled.zdroj || '') + '"?\n\n'
+    + zmen + ' záznamů se zapíše (' + (o.rezim === 'prepsat' ? 'přepsat vše' : 'jen doplnit chybějící') + ').\n'
+    + 'Před obnovou se sám pořídí otisk současného stavu, takže se dá vrátit.\n'
+    + 'Uzamčené (odeslané) nabídky obnova nepřepíše.')) return false;
+  o.pracuje = true; render();
+  return onlineApi('/api/obnova', onlineObnovaTelo(false))
+    .then(x => {
+      o.nahled = x; o.hlaska = x.zprava || 'Obnoveno.'; o.hlaskaTyp = '';
+      /* Po obnově se aplikace musí podívat na svět znovu: ceník, firemní
+       * údaje, matice i rejstřík jsou po zápisu jiné, než co drží okno. */
+      return Promise.resolve()
+        .then(() => (typeof onlineNactiProgram === 'function') ? onlineNactiProgram() : null)
+        .then(() => (typeof onlineNactiFirmu === 'function') ? onlineNactiFirmu() : null)
+        .then(() => (typeof onlineNactiRejstrik === 'function') ? onlineNactiRejstrik() : null)
+        .then(() => onlineOtiskyNacti())
+        .then(() => true);
+    })
+    .catch(e => { o.hlaska = 'Obnova se nepovedla: ' + e.message; o.hlaskaTyp = 'chyba'; return false; })
+    .then(v => { o.pracuje = false; render(); return v; });
+}
+
+const OBNOVA_POPIS = {
+  program: 'ceník a katalog', firma: 'firemní údaje', zobrazeni: 'matice zobrazení',
+  zakaznici: 'zákazníci', sablony: 'šablony dokumentů', podpisy: 'podpisy',
+  uzivatele: 'uživatelské účty', zakazky: 'zakázky',
+};
+
+function onlineObnovaNahledHtml() {
+  const n = ONLINE_STAV.obnova.nahled;
+  if (!n) return '';
+  const p = n.plan || {};
+  const radky = Object.keys(p).filter(k => {
+    const x = p[k];
+    return x.novych || x.prepsanych || x.bezeZmeny || x.preskocenych || (x.duvody || []).length;
+  }).map(k => {
+    const x = p[k];
+    const duvod = (x.duvody || []).length
+      ? `<div class="note">${esc((x.duvody || []).slice(0, 5).join(' · '))}</div>` : '';
+    return `<tr><td>${esc(OBNOVA_POPIS[k] || k)}</td>
+      <td style="text-align:right">${x.novych || 0}</td>
+      <td style="text-align:right">${x.prepsanych || 0}</td>
+      <td style="text-align:right">${x.bezeZmeny || 0}</td>
+      <td style="text-align:right">${x.preskocenych || 0}</td></tr>
+      ${duvod ? `<tr><td colspan="5">${duvod}</td></tr>` : ''}`;
+  }).join('');
+  if (!radky) return '<div class="note">V záloze není nic, co by šlo obnovit.</div>';
+  return `<table style="margin-top:8px">
+    <tr><th>Část</th><th>Nových</th><th>Přepsaných</th><th>Beze změny</th><th>Přeskočeno</th></tr>
+    ${radky}</table>
+    <div class="note">Zdroj: ${esc(n.zdroj || '')}${n.porizena
+    ? ' · pořízeno ' + esc(new Date(n.porizena).toLocaleString('cs-CZ')) : ''}.
+    Obnova nikdy nemaže: záznam, který v záloze není, na serveru zůstane.</div>`;
+}
+
+function onlineObnovaHtml() {
+  const o = ONLINE_STAV.obnova;
+  if (!o.otevreno) return '';
+  const dis = o.pracuje ? 'disabled' : '';
+  const otisky = (ONLINE_STAV.otisky || []).map(x =>
+    `<option value="${esc(x.den)}" ${o.den === x.den ? 'selected' : ''}>${esc(x.den)}
+      — ${esc(onlinePocetText(x.pocetZakazek))}, ${x.pocetUctu} účtů</option>`).join('');
+  const hlaska = o.hlaska
+    ? `<div class="${zapisTridaHlasky(o.hlaskaTyp)}">${esc(o.hlaska)}</div>` : '';
+  return `<div class="std-panel noprint" style="margin-top:10px;padding:0 12px 12px">
+    <div class="hd" style="padding:8px 0">Obnova databáze ze zálohy</div>
+    ${hlaska}
+    <div class="row"><label>Zdroj</label>
+      <select ${dis} onchange="onlineObnovaVolba('zdroj', this.value)">
+        <option value="soubor" ${o.zdroj === 'soubor' ? 'selected' : ''}>nahraný soubor zálohy</option>
+        <option value="otisk" ${o.zdroj === 'otisk' ? 'selected' : ''}>serverový otisk</option>
+      </select></div>
+    ${o.zdroj === 'soubor'
+    ? `<div class="btns"><button ${dis} onclick="onlineObnovaSoubor()">Vybrat soubor zálohy…</button>
+         <span class="note">${o.jmeno ? esc(o.jmeno) : 'zatím nevybrán'}</span></div>
+       <div class="note">Stažená záloha <b>nenese otisky hesel</b> — účty z ní obnovit nejdou.
+         Pro plnou obnovu včetně účtů použijte serverový otisk.</div>`
+    : `<div class="row"><label>Otisk ze dne</label>
+         <select ${dis} onchange="onlineObnovaVolba('den', this.value)">
+           <option value="">— vyberte —</option>${otisky}</select></div>`}
+    <div class="row"><label>Režim</label>
+      <select ${dis} onchange="onlineObnovaVolba('rezim', this.value)">
+        <option value="doplnit" ${o.rezim === 'doplnit' ? 'selected' : ''}>doplnit jen chybějící</option>
+        <option value="prepsat" ${o.rezim === 'prepsat' ? 'selected' : ''}>přepsat vším ze zálohy</option>
+      </select></div>
+    ${onlineObnovaNahledHtml()}
+    <div class="btns" style="margin-top:8px">
+      <button ${dis} onclick="onlineObnovaNahled()">Zobrazit náhled</button>
+      <button class="primary" ${o.nahled && !o.pracuje ? '' : 'disabled'}
+        title="${o.nahled ? 'zapíše do databáze; předtím se sám pořídí otisk současného stavu'
+    : 'nejdřív si nechte zobrazit náhled'}" onclick="onlineObnovaProved()">Obnovit databázi</button>
+      <button class="mini" ${dis} onclick="onlineObnovaPrepni()">Zavřít</button>
+    </div>
+    <div class="note">Vytištěné (uzamčené) nabídky obnova nikdy nepřepíše — zakázku, která by
+      o zámek nebo o data uzamčené varianty přišla, přeskočí a vypíše.</div>
+  </div>`;
+}
+
 /* ---------- správa účtů (jen administrátor) ---------- */
 
 function onlineUzivateleNacti() {
@@ -1578,7 +1762,9 @@ function renderOnlineKarta() {
            title="pořídí otisk celé databáze na serveru – stejný, jaký si server bere každou noc">Zálohovat teď</button>
          ${typeof ULO_STAV !== 'undefined' && ULO_STAV.pripraveno
     ? `<button onclick="onlineZaloha(true)" ${ONLINE_STAV.pracuje ? 'disabled' : ''}>Odlít zálohu do složky (Disk)</button>` : ''}
-         <button onclick="onlineZaloha(false)" ${ONLINE_STAV.pracuje ? 'disabled' : ''}>Stáhnout zálohu</button>` : '';
+         <button onclick="onlineZaloha(false)" ${ONLINE_STAV.pracuje ? 'disabled' : ''}>Stáhnout zálohu</button>
+         <button onclick="onlineObnovaPrepni()" ${ONLINE_STAV.pracuje ? 'disabled' : ''}
+           title="nalít zálohu nebo serverový otisk zpátky do databáze – přes náhled a s otiskem před obnovou">Obnovit ze zálohy…</button>` : '';
     const zalohaRadek = jeAdminOnline()
       ? `<div class="note" id="online-zalohy">${esc(onlineOtiskPopis())}</div>` : '';
     telo = `${hlaska}${zalohaRadek}
@@ -1588,6 +1774,7 @@ function renderOnlineKarta() {
         ${adminTlacitka}
         <button onclick="onlineOdhlas()">Odhlásit</button>
       </div>
+      ${jeAdminOnline() ? onlineObnovaHtml() : ''}
       <div class="row" style="margin-top:10px"><label>Ukládat online samo po chvíli klidu</label>
         <input type="checkbox" ${ONLINE_STAV.auto ? 'checked' : ''} onchange="onlineAutoPrepni(this.checked)"><span class="u"></span></div>
       <div class="note">Zakázky i platný ceník žijí na serveru – ke stejným datům se dostanete

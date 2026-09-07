@@ -21,6 +21,7 @@ import zaloha from './functions/zaloha.mjs';
 import analytika from './functions/analytika.mjs';
 import zalohaNocni from './functions/zaloha_nocni.mjs';
 import zalohaVynuceno from './functions/zaloha_vynuceno.mjs';
+import obnova from './functions/obnova.mjs';
 import { ADMIN_EMAIL } from './lib/sdilene.mjs';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
@@ -462,6 +463,127 @@ const DOCX2 = 'UEsDBBQABgAIAAAAIQ' + 'B'.repeat(400);   // jiná data = jiný ot
   test('analytika: záloha ke stažení analytiku NEVOZÍ', zalA.zaloha.analytika === undefined);
   const kodZaloh = kodSouboru.get('functions/zaloha.mjs') + kodSouboru.get('lib/zalohovani.mjs');
   test('analytika: zálohovací kód úložiště analytiky vůbec nezná', !kodZaloh.includes('analytika'));
+}
+
+/* 12) OBNOVA DATABÁZE ZE ZÁLOHY (nález V26, 7. 9. 2026)
+ * =====================================================
+ * Hlášeno J. V.: „online databázi umím stáhnout, ale nedokážu ji hromadně
+ * nahrát zpět." Do 7. 9. neexistoval endpoint, který by zálohu přijal.
+ * Sada projde celý cyklus: záloha → ztráta dat → náhled → obnova, a hlavně
+ * pojistky, bez kterých by obnova byla nebezpečnější než její absence. */
+{
+  const sZak = await globalThis.__TEST_ULOZISTE('zakazky');
+  const sProg = await globalThis.__TEST_ULOZISTE('program');
+  const sZal = await globalThis.__TEST_ULOZISTE('zalohy');
+  const sUziv = await globalThis.__TEST_ULOZISTE('uzivatele');
+
+  /* druhá zakázka BEZ zámku — na ní se zkouší vlastní obnova */
+  const zak2 = zk.novaZakazka(); zak2.cislo = '2026 - OPR - CN - 0778'; zak2.nazevAkce = 'Obnova test';
+  const ul2 = await (await post(zakazky, 'http://x/api/zakazky', { zakazka: zak2 }, cookieObch)).json();
+  const den = (await (await post(zalohaVynuceno, 'http://x/api/zaloha_vynuceno', {}, cookie)).json()).den;
+  const zdroj = await sZal.cti(den);
+  test('obnova: otisk před zkouškou nese obě zakázky',
+    Object.keys(zdroj.zakazky).length === 2, Object.keys(zdroj.zakazky).join(','));
+  /* Otisk před obnovou se ukládá pod DNEŠNÍM dnem (viz obnova.mjs), takže
+   * obnova z dnešního otisku ten slot přepíše stavem před obnovou — obě
+   * verze si vymění místo. Pro zkoušky režimů proto potřebujeme zdroj, který
+   * se pod rukama nemění; odkládá se pod vlastní klíč. */
+  await sZal.zapis('2020-01-01', zdroj);
+
+  /* --- práva a odmítnutí --- */
+  test('obnova: obchodník ji nespustí',
+    (await post(obnova, 'http://x/api/obnova', { zdroj: 'otisk', den, nahled: true }, cookieObch)).status === 403);
+  const cizi = await post(obnova, 'http://x/api/obnova',
+    { zdroj: 'soubor', zaloha: { neco: 1 }, nahled: true }, cookie);
+  test('obnova: cizí soubor se odmítne (400)', cizi.status === 400);
+  const bezPotvrzeni = await post(obnova, 'http://x/api/obnova', { zdroj: 'otisk', den }, cookie);
+  test('obnova: bez výslovného potvrzení se nic nezapíše (428)', bezPotvrzeni.status === 428);
+  test('obnova: neznámý den otisku je 404',
+    (await post(obnova, 'http://x/api/obnova', { zdroj: 'otisk', den: '1999-01-01', nahled: true }, cookie)).status === 404);
+
+  /* --- náhled NIC nezapisuje --- */
+  await sZak.smaz('z/' + ul2.soubor);
+  const nah = await (await post(obnova, 'http://x/api/obnova',
+    { zdroj: 'otisk', den: '2020-01-01', nahled: true, rezim: 'doplnit' }, cookie)).json();
+  test('obnova: náhled hlásí chybějící zakázku jako novou',
+    nah.ok && nah.nahled === true && nah.plan.zakazky.novych === 1, JSON.stringify(nah.plan.zakazky));
+  test('obnova: náhled sám nic nezapsal', (await sZak.cti('z/' + ul2.soubor)) === null);
+
+  /* --- uzamčená nabídka se nikdy nepřepíše --- */
+  const podvrh = JSON.parse(JSON.stringify(zdroj));
+  const klicZamcene = Object.keys(podvrh.zakazky).find(k => k !== ul2.soubor);
+  podvrh.zakazky[klicZamcene].varianty[0].data.ock.zadani.sirka = 9.99;
+  await sZal.zapis('2020-01-02', podvrh);
+  const nahZamek = await (await post(obnova, 'http://x/api/obnova',
+    { zdroj: 'otisk', den: '2020-01-02', nahled: true, rezim: 'prepsat' }, cookie)).json();
+  test('obnova: zakázka s uzamčenou nabídkou se přeskočí i v režimu „přepsat"',
+    nahZamek.plan.zakazky.preskocenych === 1
+    && /uzamčené varianty/.test(nahZamek.plan.zakazky.duvody.join(' ')),
+    JSON.stringify(nahZamek.plan.zakazky));
+
+  /* --- vlastní obnova --- */
+  const cenikPred = JSON.stringify(await sProg.cti('db'));
+  await sProg.zapis('db', null);
+  const prov = await (await post(obnova, 'http://x/api/obnova',
+    { zdroj: 'otisk', den: '2020-01-01', rezim: 'doplnit', potvrzeni: 'OBNOVIT' }, cookie)).json();
+  test('obnova: proběhne a vrátí souhrn', prov.ok === true && prov.zapisu >= 2, JSON.stringify(prov.plan));
+  test('obnova: chybějící zakázka je zpátky', !!(await sZak.cti('z/' + ul2.soubor)));
+  test('obnova: ceník je zpátky beze změny', JSON.stringify(await sProg.cti('db')) === cenikPred);
+  test('obnova: rejstřík se přestaví ze skutečného obsahu úložiště',
+    ((await sZak.cti('_rejstrik')).zakazky || []).length === 2);
+  test('obnova: před obnovou se sám pořídil otisk', !!prov.otiskPred && !!prov.otiskPred.den);
+  test('obnova: účty se z otisku obnovují i s otisky hesel',
+    (await sUziv.cti(ADMIN_EMAIL)).heslo.includes(':'));
+
+  /* --- režimy: doplnit nesahá na existující, přepsat ano --- */
+  const zmenena = JSON.parse(JSON.stringify(await sZak.cti('z/' + ul2.soubor)));
+  zmenena.nazevAkce = 'RUČNÍ ZMĚNA PO ZÁLOZE';
+  await sZak.zapis('z/' + ul2.soubor, zmenena);
+  await post(obnova, 'http://x/api/obnova',
+    { zdroj: 'otisk', den: '2020-01-01', rezim: 'doplnit', potvrzeni: 'OBNOVIT' }, cookie);
+  test('obnova „doplnit": novější ruční změnu nepřepíše',
+    (await sZak.cti('z/' + ul2.soubor)).nazevAkce === 'RUČNÍ ZMĚNA PO ZÁLOZE');
+  await post(obnova, 'http://x/api/obnova',
+    { zdroj: 'otisk', den: '2020-01-01', rezim: 'prepsat', potvrzeni: 'OBNOVIT' }, cookie);
+  test('obnova „přepsat": zakázku vrátí do stavu ze zálohy',
+    (await sZak.cti('z/' + ul2.soubor)).nazevAkce === 'Obnova test');
+
+  /* --- obnova NIKDY nemaže --- */
+  const navic = zk.novaZakazka(); navic.cislo = '2026 - OPR - CN - 0779'; navic.nazevAkce = 'Vznikla po záloze';
+  const ul3 = await (await post(zakazky, 'http://x/api/zakazky', { zakazka: navic }, cookieObch)).json();
+  await post(obnova, 'http://x/api/obnova',
+    { zdroj: 'otisk', den: '2020-01-01', rezim: 'prepsat', potvrzeni: 'OBNOVIT' }, cookie);
+  test('obnova: zakázka, která v záloze není, na serveru zůstane',
+    !!(await sZak.cti('z/' + ul3.soubor)));
+
+  /* Dokumentovaná výměna: obnova z DNEŠNÍHO otisku ho přepíše stavem před
+   * obnovou, takže v tom slotu leží cesta zpátky, ne to, co se právě nasadilo. */
+  await post(zalohaVynuceno, 'http://x/api/zaloha_vynuceno', {}, cookie);   // dnešní otisk = teď
+  await sZak.smaz('z/' + ul3.soubor);                                       // ztráta po otisku
+  const predVymenou = JSON.stringify(await sZal.cti(den));
+  const vymena = await (await post(obnova, 'http://x/api/obnova',
+    { zdroj: 'otisk', den, rezim: 'doplnit', potvrzeni: 'OBNOVIT' }, cookie)).json();
+  test('obnova z dnešního otisku vrátí ztracenou zakázku',
+    vymena.ok && !!(await sZak.cti('z/' + ul3.soubor)), JSON.stringify(vymena.plan.zakazky));
+  test('a týž slot pak drží stav před obnovou (cesta zpátky)',
+    JSON.stringify(await sZal.cti(den)) !== predVymenou);
+
+  /* --- ze staženého souboru účty obnovit nejdou (nejsou v něm hesla) --- */
+  const zalSoub = (await (await get(zaloha, 'http://x/api/zaloha', cookie)).json()).zaloha;
+  const nahSoub = await (await post(obnova, 'http://x/api/obnova',
+    { zdroj: 'soubor', zaloha: zalSoub, jmeno: 'zaloha.json', nahled: true, rezim: 'prepsat' }, cookie)).json();
+  test('obnova ze souboru: účty se přeskočí a řekne se proč',
+    nahSoub.uctyMajiHesla === false && nahSoub.plan.uzivatele.novych === 0
+    && /otisky hesel/.test(nahSoub.plan.uzivatele.duvody.join(' ')),
+    JSON.stringify(nahSoub.plan.uzivatele));
+  test('obnova ze souboru: ostatní části obnovit jde',
+    nahSoub.plan.zakazky.bezeZmeny >= 2, JSON.stringify(nahSoub.plan.zakazky));
+
+  /* --- vybrané části --- */
+  const jenCenik = await (await post(obnova, 'http://x/api/obnova',
+    { zdroj: 'otisk', den: '2020-01-01', nahled: true, casti: ['program'] }, cookie)).json();
+  test('obnova: dá se obnovit jen vybraná část',
+    jenCenik.casti.length === 1 && jenCenik.plan.zakazky === undefined, JSON.stringify(jenCenik.casti));
 }
 
 console.log(`\n${ok} prošlo, ${fail} selhalo`);
