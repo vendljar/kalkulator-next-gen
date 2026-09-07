@@ -385,7 +385,7 @@ function porovnaniPolozkyTisk() {
     tr.skup th{text-align:left;background:#f6f8fc;font-weight:700}
     .bar{position:sticky;top:0;background:#fff;border-bottom:1px solid #e5e9f0;padding:8px 0;margin-bottom:8px}
     .bar button{font:13px "Segoe UI";padding:6px 14px;border:1px solid #1d4ed8;background:#1d4ed8;color:#fff;border-radius:6px;cursor:pointer}
-    @page{size:A4 landscape;margin:12mm} @media print{.noprint{display:none} body{margin:0;max-width:none}}</style></head><body>
+    @page{size:A4 landscape;margin:0} @media print{.noprint{display:none} body{margin:0;max-width:none;padding:12mm}}</style></head><body>
     <div class="bar noprint"><button onclick="window.print()">🖨 ${esc(T('Tisk / Uložit jako PDF'))}</button></div>
     <h1>${esc(T('Detail položek'))}${ZAK.cislo ? ' – ' + esc(ZAK.cislo) : ''}</h1>
     <div class="sub">${esc(ZAK.nazevAkce || '')}${ZAK.objednatel ? ' · ' + esc(ZAK.objednatel) : ''} ·
@@ -432,7 +432,7 @@ function porovnaniTisk() {
     .tag{font-weight:400;font-size:11px;color:#1d4ed8}
     .bar{position:sticky;top:0;background:#fff;border-bottom:1px solid #e5e9f0;padding:8px 0;margin-bottom:8px}
     .bar button{font:13px "Segoe UI";padding:6px 14px;border:1px solid #1d4ed8;background:#1d4ed8;color:#fff;border-radius:6px;cursor:pointer}
-    @page{size:A4 landscape;margin:12mm} @media print{.noprint{display:none} body{margin:0;max-width:none}}</style></head><body>
+    @page{size:A4 landscape;margin:0} @media print{.noprint{display:none} body{margin:0;max-width:none;padding:12mm}}</style></head><body>
     <div class="bar noprint"><button onclick="window.print()">🖨 ${esc(T('Tisk / Uložit jako PDF'))}</button></div>
     <h1>${esc(T('Porovnání variant'))}${ZAK.cislo ? ' – ' + esc(ZAK.cislo) : ''}</h1>
     <div class="sub">${esc(ZAK.nazevAkce || '')}${ZAK.objednatel ? ' · ' + esc(ZAK.objednatel) : ''}</div>
@@ -645,7 +645,10 @@ async function nabidkaNahled() {
     ${dokHlavickaCss()}
     .bar{position:sticky;top:0;background:#fff;border-bottom:1px solid #e5e9f0;padding:8px 0;margin-bottom:8px}
     .bar button{font:13px "Segoe UI";padding:6px 14px;border:1px solid #1d4ed8;background:#1d4ed8;color:#fff;border-radius:6px;cursor:pointer}
-    @page{size:A4;margin:14mm} @media print{.noprint{display:none} body{margin:0}}</style></head><body>
+    /* margin:0 — Chrome tiskne svou hlavičku (čas, název stránky) a patičku
+       (about:blank) DO OKRAJE STRÁNKY; s nulovým okrajem nemá kam. Okraj
+       dokumentu proto dělá padding uvnitř body (5. 9. 2026, zadání J. V.). */
+    @page{size:A4;margin:0} @media print{.noprint{display:none} body{margin:0;padding:14mm}}</style></head><body>
     <div class="bar noprint"><button onclick="window.print()">🖨 ${esc(P('Tisk / Uložit jako PDF'))}</button></div>
     ${logoHtml}
     <h1>${esc(P('Podklady nabídky'))} ${esc(p.CISLO_NABIDKY)}</h1>
@@ -797,8 +800,8 @@ async function nabidkaOckDokument() {
   const cenaHtml = `<table class="rekap">
       ${slevaRadky}
       <tr class="tot"><td><b>${esc(P('Výtahová šachta (bez DPH)'))}</b></td><td class="castka"><b>${esc(p.CENA_BEZ_DPH)}</b></td></tr>
-      <tr><td>${esc(P('DPH'))} ${esc(p.DPH_SAZBA)} % (${esc(p.DPH_NAZEV)} ${esc(P('sazba'))})</td><td class="castka">${esc(p.DPH_KC)}</td></tr>
-      <tr class="tot"><td><b>${esc(P('CELKEM za nabídku (včetně DPH)'))}</b></td><td class="castka"><b>${esc(p.CENA_S_DPH)}</b></td></tr>
+      <tr class="dph-radek"><td>${esc(P('DPH'))} ${esc(p.DPH_SAZBA)} % (${esc(p.DPH_NAZEV)} ${esc(P('sazba'))})</td><td class="castka">${esc(p.DPH_KC)}</td></tr>
+      <tr class="tot dph-radek"><td><b>${esc(P('CELKEM za nabídku (včetně DPH)'))}</b></td><td class="castka"><b>${esc(p.CENA_S_DPH)}</b></td></tr>
     </table>`;
 
   const nadpisPripl = `<h2>${esc('II. ' + P('ROZŠÍŘENÍ CENOVÉ NABÍDKY – PŘÍPLATKY'))}</h2>`;
@@ -835,7 +838,10 @@ async function nabidkaOckDokument() {
     .bar button{font:13px "Segoe UI";padding:6px 14px;border:1px solid #1d4ed8;background:#1d4ed8;color:#fff;border-radius:6px;cursor:pointer}
     ${dokHlavickaCss()}
     ${tiskListaCss()}
-    @page{size:A4;margin:14mm} @media print{.noprint{display:none} body{margin:0}}</style></head><body>
+    /* margin:0 — Chrome tiskne svou hlavičku (čas, název stránky) a patičku
+       (about:blank) DO OKRAJE STRÁNKY; s nulovým okrajem nemá kam. Okraj
+       dokumentu proto dělá padding uvnitř body (5. 9. 2026, zadání J. V.). */
+    @page{size:A4;margin:0} @media print{.noprint{display:none} body{margin:0;padding:14mm}}</style></head><body>
     ${tiskListaHtml({
       tisk: P('Tisk / Uložit jako PDF'),
       upravy: P('Upravit text před tiskem'),
@@ -843,7 +849,7 @@ async function nabidkaOckDokument() {
       pozn: P('Nabídku lze před uložením do PDF ručně upravit; do kalkulace se změny nepropíšou.'),
       zamekTyp: 'nabidkaTisk',
     })}
-    <div id="dok">
+    <div id="dok" class="bez-dph">
     ${logoHtml}
     <h1>${esc(P('CENOVÁ NABÍDKA'))} ${esc(p.CISLO_NABIDKY)}</h1>
     <table class="hlav">

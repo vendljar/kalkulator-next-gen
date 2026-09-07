@@ -271,7 +271,10 @@ function kryciTiskPohled(verze) {
     .bar{position:sticky;top:0;background:#fff;border-bottom:1px solid #e5e9f0;padding:8px 0;margin-bottom:8px;z-index:5}
     .bar button{font:13px "Segoe UI";padding:6px 14px;border:1px solid #1d4ed8;background:#1d4ed8;color:#fff;border-radius:6px;cursor:pointer}
     ${tiskListaCss()}
-    @page{size:A4;margin:12mm} @media print{.noprint{display:none} body{margin:0}}</style></head>
+    /* margin:0 — Chrome tiskne svou hlavičku (čas, název stránky) a patičku
+       (about:blank) DO OKRAJE STRÁNKY; s nulovým okrajem nemá kam. Okraj
+       dokumentu proto dělá padding uvnitř body (5. 9. 2026, zadání J. V.). */
+    @page{size:A4;margin:0} @media print{.noprint{display:none} body{margin:0;padding:12mm}}</style></head>
     <body>${tiskListaHtml({ pozn: 'Verze ' + d.verzeNazev + ' — uložte jako samostatný soubor (' + d.nazevSouboru + '.pdf).' })}
     <div id="dok"><section><h1>${e2(d.nadpis)}</h1>${sekHtml}</section></div>
     ${tiskListaSkript()}</body></html>`);

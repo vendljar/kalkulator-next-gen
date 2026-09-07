@@ -59,7 +59,7 @@ const NABIDKA_PROJ_DEF = [
   { typ: 'rozsah', nadpis: 'ZAMĚŘENÍ A ZPRACOVÁNÍ VÝSTUPŮ (ZA)', sekce: 'zamereni', radky: [
     ['Stavebně technický průzkum a zaměření', 'zajištění původní dokumentace stavby v potřebném rozsahu od investora nebo z archivu stavebního úřadu', 'zamereni'],
     ['Stavebně technický průzkum a zaměření', 'detailní zaměření 3D skenerem dotčených částí objektu (ověření reálných rozměrů pro eliminaci chyby původní PD k objektu)'],
-    ['Stavebně technický průzkum a zaměření', 'zpracování výstupu ze zaměření', 'zamereni'],
+    ['Stavebně technický průzkum a zaměření', 'zpracování výstupu ze zaměření', 'zamereni:Výstup'],
     ['Stavebně technický průzkum a zaměření', 'vizuální prohlídka objektu stavebně technických návazností, které mají vliv na úpravu výtahové šachty v objektu'],
     ['Stavebně technický průzkum a zaměření', 'pořízení detailní fotodokumentace', 'zamereni'],
   ] },
@@ -81,7 +81,7 @@ const NABIDKA_PROJ_DEF = [
     ['Studie proveditelnosti – část 1', '', 'studie'],
     ['Stavebně technický průzkum a zaměření', 'zajištění původní dokumentace stavby v potřebném rozsahu od investora nebo z archivu stavebního úřadu', 'studie'],
     ['Stavebně technický průzkum a zaměření', 'detailní zaměření 3D skenerem dotčených částí objektu', 'studie'],
-    ['Stavebně technický průzkum a zaměření', 'zpracování výstupu ze zaměření', 'studie'],
+    ['Stavebně technický průzkum a zaměření', 'zpracování výstupu ze zaměření', 'studie'],  /* část 1 studie – vlastní položka to není */
     ['Stavebně technický průzkum a zaměření', 'vizuální prohlídka objektu stavebně technických návazností', 'studie'],
     ['Stavebně technický průzkum a zaměření', 'pořízení detailní fotodokumentace', 'studie'],
     ['Studie proveditelnosti – část 2', '', 'studie'],
@@ -122,21 +122,33 @@ const NABIDKA_PROJ_DEF = [
     ['Stavební část projektu', 'bourací dokumentace – zakreslení rozsahu a postupu bouracích prací'],
     ['Stavební část projektu', 'dokumentace nového stavu – návrh umístění výtahu u objektu, návrh šachty a stavebních úprav'],
     ['Stavební část projektu', 'průvodní, souhrnná a technická zpráva'],
-    ['Dokumentace pro povolení záměru – část 2', ''],
-    ['Požárně bezpečnostní řešení', 'posouzení nové konstrukce z požárního hlediska a případné rozdělení objektu na nové požární úseky'],
-    ['Požárně bezpečnostní řešení', 'stanovení požadavků na novou konstrukci, technologii a požární úseky dle stávajících norem'],
-    ['Požárně bezpečnostní řešení', 'technická zpráva požárně bezpečnostního řešení'],
-    ['Dokumentace pro povolení záměru – část 3', ''],
-    ['Statický výpočet realizovatelnosti záměru', 'statické výpočty nových konstrukcí'],
-    ['Statický výpočet realizovatelnosti záměru', 'posouzení reakcí výtahu na okolní konstrukce'],
-    ['Statický výpočet realizovatelnosti záměru', 'statické posouzení souvisejících stavebních úprav'],
-    ['Statický výpočet realizovatelnosti záměru', 'technická zpráva statika'],
-    ['Dokumentace pro povolení záměru – část 4', ''],
-    ['Elektro projekt', 'návrh nového rozvodu a hlavního jističe pro připojení výtahové technologie'],
-    ['Elektro projekt', 'technická zpráva elektro v rozsahu pro stavební povolení'],
+    /* Části 2–4 se tisknou jen tehdy, když se ta KONKRÉTNÍ POLOŽKA kalkulace
+     * počítá (5. 9. 2026). Do té doby stačilo, že má cenu celá sekce DPZ —
+     * nabídka pak slibovala i to, co obchodník v kalkulaci vyřadil. */
+    ['Dokumentace pro povolení záměru – část 2', '', 'dpz:PBŘ'],
+    ['Požárně bezpečnostní řešení', 'posouzení nové konstrukce z požárního hlediska a případné rozdělení objektu na nové požární úseky', 'dpz:PBŘ'],
+    ['Požárně bezpečnostní řešení', 'stanovení požadavků na novou konstrukci, technologii a požární úseky dle stávajících norem', 'dpz:PBŘ'],
+    ['Požárně bezpečnostní řešení', 'technická zpráva požárně bezpečnostního řešení', 'dpz:PBŘ'],
+    ['Dokumentace pro povolení záměru – část 3', '', 'dpz:Statika'],
+    ['Statický výpočet realizovatelnosti záměru', 'statické výpočty nových konstrukcí', 'dpz:Statika'],
+    ['Statický výpočet realizovatelnosti záměru', 'posouzení reakcí výtahu na okolní konstrukce', 'dpz:Statika'],
+    ['Statický výpočet realizovatelnosti záměru', 'statické posouzení souvisejících stavebních úprav', 'dpz:Statika'],
+    ['Statický výpočet realizovatelnosti záměru', 'technická zpráva statika', 'dpz:Statika'],
+    ['Dokumentace pro povolení záměru – část 4', '', 'dpz:Elektro projekt'],
+    ['Elektro projekt', 'návrh nového rozvodu a hlavního jističe pro připojení výtahové technologie', 'dpz:Elektro projekt'],
+    ['Elektro projekt', 'technická zpráva elektro v rozsahu pro stavební povolení', 'dpz:Elektro projekt'],
+    /* Studie osvitu je položka ceníku bez vlastního odstavce ve VZORu —
+     * je-li zapnutá, řekne se to jednou větou, ať zákazník ví, co platí. */
+    ['Dokumentace pro povolení záměru – část 5', '', 'dpz:Studie osvitu (Praha 4 a 6)'],
+    ['Studie osvitu', 'posouzení oslunění a denního osvětlení dotčených prostor (požadavek Prahy 4 a 6)', 'dpz:Studie osvitu (Praha 4 a 6)'],
   ] },
+  /* Výčet za „včetně" se skládá z položek, které se OPRAVDU počítají
+   * (5. 9. 2026) — jinak by u ceny stálo „včetně ELEKTRO PROJEKTU" i tehdy,
+   * když se elektro neúčtuje. `popisZ` je seznam [klíč položky, název do věty]. */
   { typ: 'cena', nadpis: 'CENA ZA DOKUMENTACI PRO POVOLENÍ ZÁMĚRU (DPZ)', sekce: 'dpz',
-    popis: 'Zpracování projektu pro DPZ, včetně PBŘ, STATIKY a ELEKTRO PROJEKTU',
+    popis: 'Zpracování projektu pro DPZ', popisPredpona: 'včetně',
+    popisZ: [['dpz:PBŘ', 'PBŘ'], ['dpz:Statika', 'STATIKY'],
+             ['dpz:Elektro projekt', 'ELEKTRO PROJEKTU'], ['dpz:Studie osvitu (Praha 4 a 6)', 'STUDIE OSVITU']],
     hvezdicka: 'Cena je platná v případě návaznosti na STUDII PROVEDITELNOSTI.' },
 
   /* ---------------- INŽENÝRSKÁ ČINNOST ---------------- */
@@ -158,15 +170,16 @@ const NABIDKA_PROJ_DEF = [
     ['Stavební prováděcí část', 'popis a postup provádění stavebních prací'],
     ['Stavební prováděcí část', 'výpis nových prvků'],
     ['Stavební prováděcí část', 'realizační technická zpráva'],
-    ['Dokumentace pro provedení stavby – část 2', ''],
-    ['Statická prováděcí část', 'výkresy armování, detaily kotvících prvků atd.'],
-    ['Statická prováděcí část', 'statická realizační zpráva'],
-    ['Dokumentace pro provedení stavby – část 3', ''],
-    ['Elektro prováděcí projekt', 'realizační projekt elektro pro návrh nového rozvodu a hlavního jističe pro připojení výtahové technologie'],
-    ['Elektro prováděcí projekt', 'realizační technická zpráva elektro'],
+    ['Dokumentace pro provedení stavby – část 2', '', 'dps:Statika'],
+    ['Statická prováděcí část', 'výkresy armování, detaily kotvících prvků atd.', 'dps:Statika'],
+    ['Statická prováděcí část', 'statická realizační zpráva', 'dps:Statika'],
+    ['Dokumentace pro provedení stavby – část 3', '', 'dps:Elektro projekt'],
+    ['Elektro prováděcí projekt', 'realizační projekt elektro pro návrh nového rozvodu a hlavního jističe pro připojení výtahové technologie', 'dps:Elektro projekt'],
+    ['Elektro prováděcí projekt', 'realizační technická zpráva elektro', 'dps:Elektro projekt'],
   ] },
   { typ: 'cena', nadpis: 'CENA ZA DOKUMENTACI PRO PROVEDENÍ STAVBY (DPS)', sekce: 'dps',
-    popis: 'Zpracování podle částí 1–3' },
+    popis: 'Zpracování prováděcí dokumentace', popisPredpona: 'včetně',
+    popisZ: [['dps:Statika', 'STATICKÉ ČÁSTI'], ['dps:Elektro projekt', 'ELEKTRO PROJEKTU']] },
 
   /* ---------------- EZC ---------------- */
   { typ: 'seznam', nadpis: 'EKONOMICKÁ ZADÁVACÍ ČÁST (EZC)', sekce: 'ezc', radky: [
@@ -369,7 +382,40 @@ function nabidkaProjData(zak, varianta, lang) {
    * své odstavce), tiskový náhled sekci vynechá celou. Bloky a řádky nesou
    * příslušnost k sekci (b.sekce, 3. prvek řádku) — co ji nemá, je obecné
    * a zůstává vždy. */
-  const vRozsahu = k => !!cenaSekce(k);
+  /* POLOŽKOVÉ VYPÍNÁNÍ TEXTŮ (5. 9. 2026, hlášeno J. V.: „přestože mám ve
+   * výpočtu elektroprojekt škrtnutý, zobrazuje se mi v cenové nabídce").
+   *
+   * Do 5. 9. se rozsah řídil jen SEKCÍ: když měla sekce cenu, vytiskl se celý
+   * její text — včetně částí, které obchodník v kalkulaci vyřadil. U DPZ tak
+   * nabídka slibovala elektro projekt, který se neúčtoval; a naopak, kdyby se
+   * to řešilo vypuštěním celé sekce, zmizel by i zbytek dokumentace.
+   *
+   * Klíč `sekce:Název položky` proto říká „ukaž se, jen když se TAHLE položka
+   * počítá". Položka se počítá, když není vyřazená a něco stojí — nula je
+   * podle pravidla „vypnuto množstvím" totéž co vyřazení, jen z druhé strany.
+   * Název se porovnává na PŮVODNÍ znění z DEFAULT_ZADANI_PROJ; přejmenovanou
+   * položku (obchodník smí název přepsat) najde i tak, protože se hledá
+   * i podle `origNazev`. */
+  const polozkyMapa = {};
+  (r.sekce || []).forEach(s => {
+    (s.polozky || []).forEach(p => {
+      const jmena = [p.origNazev, p.nazev].filter(Boolean).map(x => String(x).trim().toLowerCase());
+      const pocita = !p.vyrazeno && Math.abs(+p.naklad || 0) > 0;
+      jmena.forEach(j => {
+        const klic = s.key + ':' + j;
+        polozkyMapa[klic] = polozkyMapa[klic] || pocita;
+      });
+    });
+  });
+  const polozkaVRozsahu = klic => {
+    const i = klic.indexOf(':');
+    const sekce = klic.slice(0, i);
+    const jmeno = klic.slice(i + 1).trim().toLowerCase();
+    /* Neznámý název (položku někdo z kalkulace smazal) se bere jako
+     * nepočítaný — text bez ceny je horší než chybějící text. */
+    return !!cenaSekce(sekce) && !!polozkyMapa[sekce + ':' + jmeno];
+  };
+  const vRozsahu = k => (String(k).indexOf(':') > 0) ? polozkaVRozsahu(String(k)) : !!cenaSekce(k);
   /* `jenSe` = podmínka VIDITELNOSTI nezávislá na tom, odkud se bere částka.
    * Bez ní by šlo říct jen „ukaž se, když má tahle sekce cenu", což u částí
    * jedné dokumentace nestačí (viz CENA ZA STUDII – část 1). */
@@ -438,7 +484,19 @@ function nabidkaProjData(zak, varianta, lang) {
     const pausal = b.pausal ? NABIDKA_PROJ_SAZBY[b.pausal] : null;
     const hodnota = pausal != null ? mena.na(pausal) : cenaSekce(b.sekce);
     const neuvedena = pausal == null && !hodnota;
-    return { typ: 'cena', nadpis: P(b.nadpis), popis: P(b.popis), sekce: b.sekce || null,
+    /* Výčet „včetně …" se skládá z POČÍTANÝCH položek (5. 9. 2026). Když se
+     * nepočítá žádná, věta se ukončí za základním popisem — půlka výčtu nebo
+     * „včetně" bez pokračování by vypadaly jako chyba. */
+    let popis = P(b.popis);
+    if (b.popisZ) {
+      const casti = b.popisZ.filter(([klic]) => vRozsahu(klic)).map(([, jmeno]) => P(jmeno));
+      if (casti.length) {
+        const vycet = casti.length === 1 ? casti[0]
+          : casti.slice(0, -1).join(', ') + ' ' + P('a') + ' ' + casti[casti.length - 1];
+        popis += ', ' + P(b.popisPredpona || 'včetně') + ' ' + vycet;
+      }
+    }
+    return { typ: 'cena', nadpis: P(b.nadpis), popis, sekce: b.sekce || null,
       castka: neuvedena ? P('není součástí této nabídky') : kc(hodnota)
         + (b.jednotka ? ' / ' + P(b.jednotka) : ''),
       neuvedena: neuvedena,

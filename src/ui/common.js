@@ -1543,7 +1543,11 @@ function spocitejVariantu(v) {
 
 /* CSS pro lištu a vizuální označení rozepsaného dokumentu (do <style> náhledu) */
 function tiskListaCss() {
-  return `#dok.editace{outline:2px dashed #93b4f7;outline-offset:8px;border-radius:6px;background:#fdfeff}
+  return `/* Řádky s DPH se ve výchozím stavu netisknou (5. 9. 2026) — dokument
+     nese třídu bez-dph, kterou sundá přepínač v liště. Skrývá se tím
+     i řádek „Celkem s DPH"; obojí je označené třídou dph-radek. */
+    #dok.bez-dph .dph-radek{display:none}
+    #dok.editace{outline:2px dashed #93b4f7;outline-offset:8px;border-radius:6px;background:#fdfeff}
     #dok.editace:focus{outline-color:#1d4ed8}
     .bar .stav{margin-left:12px;color:#6b7686;font-size:11.5px}
     .bar label.edit{margin-left:12px;font-size:12.5px;display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none}
@@ -1594,8 +1598,16 @@ function tiskListaHtml(o) {
   /* #33 – deset otázek, které by položil kolega přes rameno. Tady je poslední
    * místo, kde je ještě co zastavit; bez čísel, náhled odchází ven. */
   const kontroly = (typeof kontrolyTiskLista === 'function') ? kontrolyTiskLista() : '';
+  /* Přepínač zobrazení DPH (5. 9. 2026, zadání J. V.). Nabídka se generuje
+   * BEZ DPH — zákazník ji dostává v cenách bez daně a řádky s DPH mátly.
+   * Zapnout je jde jedním zaškrtnutím; volba platí pro tenhle výtisk, do
+   * zakázky se nezapisuje (je to způsob zobrazení, ne rozhodnutí o ceně). */
+  const dphChk = o.dph === false ? '' :
+    `<label class="edit"><input type="checkbox" id="tiskDphCheck" onchange="tiskDph(this.checked)">
+       ${esc(o.dphPopisek || 'Zobrazit DPH a cenu s DPH')}</label>`;
   return `${ukazka}${varovani}${stari}${marze}${kontroly}<div class="bar noprint">
     <button onclick="window.print()">🖨 ${esc(btnTisk)}</button>
+    ${dphChk}
     <label class="edit"><input type="checkbox" id="tiskEditCheck" onchange="tiskEditace(this.checked)"> ✏️ ${esc(btnUpravy)}</label>
     <button class="sek" onclick="tiskVratPuvodni()">↺ ${esc(btnVratit)}</button>
     <span class="stav" id="tiskStav">${esc(pozn)}</span>
@@ -1630,6 +1642,8 @@ function tiskListaSkript(hlasky, zamek) {
     + 'try{if(window.opener&&!window.opener.closed&&typeof window.opener.zamekPoTisku==="function"){'
     + 'window.opener.zamekPoTisku(TISK_ZAMEK.typ,TISK_ZAMEK.varId);tiskStav(TISK_HLASKY.zamceno);}}catch(e){}}\n'
     + 'window.addEventListener("beforeprint",tiskZamkni);\n'
+    + 'function tiskDph(zap){var d=document.getElementById("dok");if(!d)return;'
+    + 'if(zap)d.classList.remove("bez-dph");else d.classList.add("bez-dph");}\n'
     + 'function tiskEditace(zap){var d=document.getElementById("dok");if(!d)return;'
     + 'if(TISK_PUVODNI===null)TISK_PUVODNI=d.innerHTML;'
     + 'd.contentEditable=zap?"true":"false";'
@@ -1700,7 +1714,7 @@ function dokPodpisHtml(prekl) {
   return `<div class="podpis-blok" style="margin:28px 0 10px;page-break-inside:avoid">
     <div style="font-size:11px;color:#6b7686;text-transform:uppercase;letter-spacing:.03em">${esc(P('Vypracoval'))}</div>
     ${obr.ZPRAC_PODPIS ? `<img src="${esc(obr.ZPRAC_PODPIS)}" alt=""
-      style="max-height:168px;max-width:500px;display:block;margin:10px 0 4px">` : ''}
+      style="max-height:336px;max-width:1000px;width:auto;display:block;margin:10px 0 4px">` : ''}
     <div style="font-weight:700">${esc(p.ZPRAC_JMENO || '')}</div>
     ${kontakt ? `<div style="font-size:12px;color:#42506b">${esc(kontakt)}</div>` : ''}
   </div>`;

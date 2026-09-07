@@ -237,8 +237,8 @@ function nabidkaProjNahled() {
       ${p.PROJ_SLEVA_KC ? `<tr><td>${esc(P('Cena před slevou'))}</td><td class="castka">${esc(p.PROJ_CENA_PRED_SLEVOU)}</td></tr>
       <tr><td>${esc(P('Sleva'))} ${esc(p.PROJ_SLEVA_PROC)} %</td><td class="castka">− ${esc(p.PROJ_SLEVA_KC)}</td></tr>` : ''}
       <tr class="tot"><td><b>${esc(P('CELKEM bez DPH'))}</b></td><td class="castka"><b>${esc(p.PROJ_CELKEM_BEZ_DPH)}</b></td></tr>
-      <tr><td>${esc(P('DPH'))} ${esc(p.PROJ_DPH_SAZBA)} %</td><td class="castka">${esc(p.PROJ_DPH_KC)}</td></tr>
-      <tr class="tot"><td><b>${esc(P('CELKEM s DPH'))}</b></td><td class="castka"><b>${esc(p.PROJ_CELKEM_S_DPH)}</b></td></tr>
+      <tr class="dph-radek"><td>${esc(P('DPH'))} ${esc(p.PROJ_DPH_SAZBA)} %</td><td class="castka">${esc(p.PROJ_DPH_KC)}</td></tr>
+      <tr class="tot dph-radek"><td><b>${esc(P('CELKEM s DPH'))}</b></td><td class="castka"><b>${esc(p.PROJ_CELKEM_S_DPH)}</b></td></tr>
     </table>` : '';
 
   // logo a patička jsou společné pro nabídku OCK i PROJ (common.js) – vždy uvedeny
@@ -271,7 +271,10 @@ function nabidkaProjNahled() {
     .bar{position:sticky;top:0;background:#fff;border-bottom:1px solid #e5e9f0;padding:8px 0;margin-bottom:8px;z-index:5}
     .bar button{font:13px "Segoe UI";padding:6px 14px;border:1px solid #1d4ed8;background:#1d4ed8;color:#fff;border-radius:6px;cursor:pointer}
     ${tiskListaCss()}
-    @page{size:A4;margin:14mm} @media print{.noprint{display:none} body{margin:0}}</style></head><body>
+    /* margin:0 — Chrome tiskne svou hlavičku (čas, název stránky) a patičku
+       (about:blank) DO OKRAJE STRÁNKY; s nulovým okrajem nemá kam. Okraj
+       dokumentu proto dělá padding uvnitř body (5. 9. 2026, zadání J. V.). */
+    @page{size:A4;margin:0} @media print{.noprint{display:none} body{margin:0;padding:14mm}}</style></head><body>
     ${tiskListaHtml({
       tisk: P('Tisk / Uložit jako PDF'),
       upravy: P('Upravit text před tiskem'),
@@ -279,7 +282,7 @@ function nabidkaProjNahled() {
       pozn: P('Nabídku lze před uložením do PDF ručně upravit; do kalkulace se změny nepropíšou.'),
       zamekTyp: 'nabidkaProjTisk',
     })}
-    <div id="dok">
+    <div id="dok" class="bez-dph">
     ${logoHtml}
     <h1>${esc(P('CENOVÁ NABÍDKA'))} ${esc(p.CISLO_NABIDKY)}</h1>
     <table class="hlav">
